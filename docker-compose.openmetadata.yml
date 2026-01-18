@@ -1,0 +1,220 @@
+# OpenMetadata Stack for PMS-IC
+# Usage: docker compose -f docker-compose.yml -f docker-compose.openmetadata.yml up -d
+#
+# This uses the official OpenMetadata docker quickstart approach with proper migration handling.
+
+services:
+  # ============================================
+  # OpenMetadata Database Migration (runs once)
+  # ============================================
+  openmetadata-migrate:
+    image: openmetadata/server:1.4.0
+    container_name: pms-openmetadata-migrate
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        echo "Running OpenMetadata database migrations..."
+        cd /opt/openmetadata
+        ./bootstrap/bootstrap_storage.sh migrate-all
+        echo "Migration completed successfully!"
+    environment:
+      DB_DRIVER_CLASS: org.postgresql.Driver
+      DB_SCHEME: postgresql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      OM_DATABASE: openmetadata_db
+      DB_USER: ${POSTGRES_USER:-pms_user}
+      DB_USER_PASSWORD: ${POSTGRES_PASSWORD:-pms_password}
+      DB_USE_SSL: "false"
+      SEARCH_TYPE: elasticsearch
+      ELASTICSEARCH_HOST: openmetadata-elasticsearch
+      ELASTICSEARCH_PORT: 9200
+      ELASTICSEARCH_SCHEME: http
+    depends_on:
+      openmetadata-elasticsearch:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - pms-network
+
+  # ============================================
+  # OpenMetadata Server
+  # ============================================
+  openmetadata:
+    image: openmetadata/server:1.4.0
+    container_name: pms-openmetadata
+    environment:
+      OPENMETADATA_CLUSTER_NAME: openmetadata
+      SERVER_HOST_API_URL: http://localhost:8585/api
+      SERVER_ADMIN_PORT: 8586
+      SERVER_PORT: 8585
+
+      # Authentication
+      AUTHENTICATION_PROVIDER: basic
+      AUTHENTICATION_PUBLIC_KEYS: '[http://localhost:8585/api/v1/system/config/jwks]'
+      AUTHENTICATION_AUTHORITY: http://localhost:8585/api/v1/system/config/jwks
+      AUTHENTICATION_CLIENT_ID: open-metadata
+      AUTHENTICATION_CALLBACK_URL: http://localhost:8585/callback
+
+      # Authorization
+      AUTHORIZER_CLASS_NAME: org.openmetadata.service.security.DefaultAuthorizer
+      AUTHORIZER_REQUEST_FILTER: org.openmetadata.service.security.JwtFilter
+      AUTHORIZER_ADMIN_PRINCIPALS: '[admin]'
+      AUTHORIZER_PRINCIPAL_DOMAIN: open-metadata.org
+
+      # Database (PostgreSQL - reuse existing PMS PostgreSQL)
+      DB_DRIVER_CLASS: org.postgresql.Driver
+      DB_SCHEME: postgresql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      OM_DATABASE: openmetadata_db
+      DB_USER: ${POSTGRES_USER:-pms_user}
+      DB_USER_PASSWORD: ${POSTGRES_PASSWORD:-pms_password}
+      DB_USE_SSL: "false"
+
+      # Search Engine (Elasticsearch)
+      SEARCH_TYPE: elasticsearch
+      ELASTICSEARCH_HOST: openmetadata-elasticsearch
+      ELASTICSEARCH_PORT: 9200
+      ELASTICSEARCH_SCHEME: http
+      ELASTICSEARCH_USER: ""
+      ELASTICSEARCH_PASSWORD: ""
+
+      # Pipeline Service
+      PIPELINE_SERVICE_CLIENT_ENABLED: "false"
+
+      # Logging
+      LOG_LEVEL: INFO
+
+    ports:
+      - "8585:8585"
+      - "8586:8586"
+    depends_on:
+      openmetadata-migrate:
+        condition: service_completed_successfully
+      openmetadata-elasticsearch:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - pms-network
+    volumes:
+      - openmetadata_data:/opt/openmetadata/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8585/api/v1/system/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 180s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  # ============================================
+  # Elasticsearch (Search Engine)
+  # ============================================
+  openmetadata-elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.10.2
+    container_name: pms-openmetadata-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - xpack.security.enabled=false
+      - cluster.name=openmetadata-cluster
+    volumes:
+      - openmetadata_es_data:/usr/share/elasticsearch/data
+    networks:
+      - pms-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -qE '\"status\":\"(green|yellow)\"'"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+        reservations:
+          memory: 1G
+
+  # ============================================
+  # OpenMetadata Ingestion (Optional - for automation)
+  # ============================================
+  openmetadata-ingestion:
+    image: openmetadata/ingestion:1.4.0
+    container_name: pms-openmetadata-ingestion
+    profiles:
+      - ingestion  # Only start with --profile ingestion
+    environment:
+      OPENMETADATA_SERVER_HOST: openmetadata
+      OPENMETADATA_SERVER_PORT: 8585
+
+      # PMS PostgreSQL Connection
+      PMS_POSTGRES_HOST: postgres
+      PMS_POSTGRES_PORT: 5432
+      PMS_POSTGRES_DB: ${POSTGRES_DB:-pms_db}
+      PMS_POSTGRES_USER: ${POSTGRES_USER:-pms_user}
+      PMS_POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pms_password}
+
+      # PMS Neo4j Connection
+      PMS_NEO4J_URI: ${NEO4J_URI:-bolt://neo4j:7687}
+      PMS_NEO4J_USER: ${NEO4J_USER:-neo4j}
+      PMS_NEO4J_PASSWORD: ${NEO4J_PASSWORD:-pmspassword123}
+    depends_on:
+      openmetadata:
+        condition: service_healthy
+    volumes:
+      - ./openmetadata/ingestion:/opt/airflow/dags:ro
+    networks:
+      - pms-network
+    ports:
+      - "8587:8080"
+
+  # ============================================
+  # Lineage Event Consumer (Redis Streams -> Neo4j/OpenMetadata)
+  # ============================================
+  lineage-consumer:
+    build:
+      context: ./openmetadata/ingestion
+      dockerfile: Dockerfile.lineage
+    container_name: pms-lineage-consumer
+    environment:
+      # Redis connection
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      LINEAGE_STREAM: lineage:events
+
+      # Neo4j connection
+      NEO4J_URI: ${NEO4J_URI:-bolt://neo4j:7687}
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-pmspassword123}
+
+      # OpenMetadata connection
+      OPENMETADATA_URL: http://openmetadata:8585
+      OM_JWT_TOKEN: ${OM_JWT_TOKEN:-}
+
+      # Consumer configuration
+      CONSUMER_MODE: all  # all, neo4j, or openmetadata
+      LOG_LEVEL: INFO
+    depends_on:
+      redis:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    networks:
+      - pms-network
+    restart: unless-stopped
+
+# ============================================
+# Volumes
+# ============================================
+volumes:
+  openmetadata_data:
+    driver: local
+  openmetadata_es_data:
+    driver: local

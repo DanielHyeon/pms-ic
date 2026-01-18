@@ -1,0 +1,47 @@
+FROM python:3.11-slim-bullseye
+
+WORKDIR /app
+
+# System dependencies for CPU-optimized build
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    python3-venv \
+    build-essential \
+    curl \
+    git \
+    libgl1 \
+    libglib2.0-0 \
+    poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python dependencies installation (CPU version without CUDA)
+COPY requirements-cpu.txt .
+
+# Install llama-cpp-python from pre-built wheel for CPU
+# Install cmake and set environment for better pthread linking
+RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel cmake ninja \
+    && CMAKE_ARGS="-DGGML_NATIVE=OFF -DLLAMA_BUILD_TOOLS=OFF" \
+       CXXFLAGS="-pthread" LDFLAGS="-pthread" \
+       python3 -m pip install --no-cache-dir llama-cpp-python>=0.3.5 || \
+       python3 -m pip install --no-cache-dir llama-cpp-python==0.2.90 \
+    && python3 -m pip install --no-cache-dir -r requirements-cpu.txt \
+    && python3 -m pip install --no-cache-dir --no-deps "mineru" 2>/dev/null || true
+
+# Application code
+COPY app.py .
+COPY chat_workflow.py .
+COPY document_parser.py .
+COPY pdf_ocr_pipeline.py .
+COPY rag_service_neo4j.py .
+COPY load_ragdata_pdfs_neo4j.py .
+COPY test_query_refinement.py .
+COPY test_query_refinement_simple.py .
+
+# Model directories
+RUN mkdir -p /app/models /models /data /output \
+    && echo '{"models-dir": "/app/models"}' > /root/mineru.json
+
+EXPOSE 8000
+
+CMD ["python3", "app.py"]

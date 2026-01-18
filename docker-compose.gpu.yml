@@ -1,0 +1,64 @@
+# GPU configuration for LLM service
+# Requirements:
+#   - NVIDIA Driver 535+
+#   - Docker 24.0+
+#   - NVIDIA Container Toolkit installed and Docker runtime configured
+#
+# Setup instructions:
+#   1. Install NVIDIA Container Toolkit: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+#   2. Configure Docker runtime: sudo nvidia-ctk runtime configure --runtime=docker
+#   3. Restart Docker: sudo systemctl restart docker
+#   4. Run: docker-compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+
+services:
+  llm-service:
+    build:
+      context: ./llm-service
+      dockerfile: Dockerfile.gpu
+    container_name: pms-llm-service-gpu
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all              # Use all available GPUs
+              capabilities: [gpu]     # Request GPU capability
+    shm_size: 16g                      # Increase shared memory for GPU operations
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./llm-service:/app
+    networks:
+      - pms-network
+    environment:
+      MODEL_PATH: /app/models/google.gemma-3-12b-pt.Q5_K_M.gguf
+      PORT: 8000
+      MAX_TOKENS: 2048              # Increased for longer elaboration responses
+      TEMPERATURE: 0.7
+      TOP_P: 0.9
+      LLM_N_GPU_LAYERS: 35          # Reduced for RTX 4070 12GB
+      LLM_N_CTX: 4096               # Increased context for elaboration requests
+      LLM_N_THREADS: 6              # Fewer threads for GPU
+      EMBEDDING_DEVICE: cpu          # CPU for embeddings (GPU memory reserved for LLM)
+      MINERU_DEVICE: cpu             # CPU for document parsing (used rarely)
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      VECTOR_DB: neo4j
+      NEO4J_URI: ${NEO4J_URI:-bolt://neo4j:7687}
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-pmspassword123}
+      USE_GRAPH_RAG: true
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s             # Longer startup time for GPU initialization
+
+networks:
+  pms-network:
+    driver: bridge

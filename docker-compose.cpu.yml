@@ -1,0 +1,47 @@
+version: '3.8'
+
+# CPU-only configuration for LLM service
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.cpu.yml up -d
+
+services:
+  llm-service:
+    build:
+      context: ./llm-service
+      dockerfile: Dockerfile.cpu
+    container_name: pms-llm-service-cpu
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./llm-service:/app
+    networks:
+      - pms-network
+    environment:
+      MODEL_PATH: /app/models/google.gemma-3-12b-pt.Q5_K_M.gguf
+      PORT: 8000
+      MAX_TOKENS: 128
+      TEMPERATURE: 0.7
+      TOP_P: 0.9
+      LLM_N_GPU_LAYERS: 0          # CPU mode: disable GPU layers
+      LLM_N_CTX: 2048              # Reduced for CPU performance
+      LLM_N_THREADS: 8             # Use available CPU threads
+      EMBEDDING_DEVICE: cpu         # CPU inference for embeddings
+      MINERU_DEVICE: cpu            # CPU inference for document parsing
+      VECTOR_DB: neo4j
+      NEO4J_URI: ${NEO4J_URI:-bolt://neo4j:7687}
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-pmspassword123}
+      USE_GRAPH_RAG: true
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+networks:
+  pms-network:
+    driver: bridge
