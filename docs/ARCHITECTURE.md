@@ -1,7 +1,7 @@
 # PMS Insurance Claims - 시스템 아키텍처 문서
 
-> **버전**: 2.2
-> **최종 업데이트**: 2026-01-17
+> **버전**: 2.3
+> **최종 업데이트**: 2026-01-19
 > **작성자**: PMS Insurance Claims Team
 
 ---
@@ -13,11 +13,16 @@
 3. [백엔드 (Spring Boot)](#3-백엔드-spring-boot)
 4. [프론트엔드 (React)](#4-프론트엔드-react)
 5. [LLM 서비스 (Flask + LangGraph)](#5-llm-서비스-flask--langgraph)
-6. [데이터베이스 스키마](#6-데이터베이스-스키마)
-7. [API 설계](#7-api-설계)
-8. [보안 아키텍처](#8-보안-아키텍처)
-9. [데이터 계보 (Lineage) 아키텍처](#9-데이터-계보-lineage-아키텍처)
-10. [배포 및 인프라](#10-배포-및-인프라)
+6. [L0/L1/L2 아키텍처](#6-l0l1l2-아키텍처)
+7. [Two-Track Workflow](#7-two-track-workflow)
+8. [Hybrid RAG 시스템](#8-hybrid-rag-시스템)
+9. [PostgreSQL-Neo4j 동기화](#9-postgresql-neo4j-동기화)
+10. [데이터베이스 스키마](#10-데이터베이스-스키마)
+11. [API 설계](#11-api-설계)
+12. [보안 아키텍처](#12-보안-아키텍처)
+13. [데이터 계보 (Lineage) 아키텍처](#13-데이터-계보-lineage-아키텍처)
+14. [PMS 모니터링](#14-pms-모니터링)
+15. [배포 및 인프라](#15-배포-및-인프라)
 
 ---
 
@@ -634,11 +639,21 @@ Lineage UI는 **React Flow**와 **Dagre** 라이브러리를 사용하여 데이
 ```
 llm-service/
 ├── app.py                       # Flask 메인 애플리케이션
-├── chat_workflow.py             # LangGraph 워크플로우
+├── chat_workflow.py             # LangGraph 워크플로우 (v1 - fallback)
+├── chat_workflow_v2.py          # Two-Track LangGraph 워크플로우 (v2)
 ├── rag_service_neo4j.py         # Neo4j GraphRAG 서비스
+├── hybrid_rag.py                # Hybrid RAG (Document + Graph)
+├── policy_engine.py             # L0 Policy Engine
+├── model_gateway.py             # L1/L2 Model Gateway
+├── context_snapshot.py          # Now/Next/Why Snapshots
+├── pms_monitoring.py            # PMS-specific Metrics
+├── pg_neo4j_sync.py             # PostgreSQL → Neo4j Sync
 ├── document_parser.py           # MinerU 문서 파서
 ├── pdf_ocr_pipeline.py          # PDF OCR 파이프라인
 ├── load_ragdata_pdfs_neo4j.py   # RAG 데이터 로더
+├── run_sync.py                  # Manual sync script
+├── config/
+│   └── constants.py             # Configuration constants
 ├── requirements.txt
 └── Dockerfile
 ```
@@ -755,7 +770,8 @@ class RAGServiceNeo4j:
 | 엔드포인트 | 메서드 | 설명 |
 |------------|--------|------|
 | `/health` | GET | 헬스 체크 |
-| `/api/chat` | POST | 채팅 요청 처리 |
+| `/api/chat` | POST | 채팅 요청 처리 (v1) |
+| `/api/chat/v2` | POST | Two-Track 채팅 (v2) |
 | `/api/documents` | POST | 문서 추가 (RAG 인덱싱) |
 | `/api/documents/<id>` | DELETE | 문서 삭제 |
 | `/api/documents/stats` | GET | 컬렉션 통계 |
@@ -763,12 +779,397 @@ class RAGServiceNeo4j:
 | `/api/model/current` | GET | 현재 모델 정보 |
 | `/api/model/change` | PUT | 모델 변경 |
 | `/api/model/available` | GET | 사용 가능한 모델 목록 |
+| `/api/sync/full` | POST | PostgreSQL → Neo4j 전체 동기화 |
+| `/api/sync/incremental` | POST | PostgreSQL → Neo4j 증분 동기화 |
+| `/api/metrics/track-a` | GET | Track A 메트릭 조회 |
+| `/api/metrics/track-b` | GET | Track B 메트릭 조회 |
 
 ---
 
-## 6. 데이터베이스 스키마
+## 6. L0/L1/L2 아키텍처
 
-### 6.1 PostgreSQL 스키마 구조
+### 6.1 개요
+
+PMS 최적화를 위한 3계층 아키텍처로, 각 계층이 명확한 책임을 분담합니다.
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         L0 (Policy Engine)                                │
+│  ┌───────────────┐ ┌───────────────┐ ┌───────────────┐ ┌───────────────┐ │
+│  │ Permission/   │ │   PII Mask    │ │  Scrum Rules  │ │   Response    │ │
+│  │ Scope Check   │ │               │ │  (WIP Limit)  │ │   Limits      │ │
+│  └───────────────┘ └───────────────┘ └───────────────┘ └───────────────┘ │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                    ┌───────────────┴───────────────┐
+                    ▼                               ▼
+          ┌─────────────────┐             ┌─────────────────┐
+          │   L1 (Fast)     │             │   L2 (Quality)  │
+          │   LFM2 2.6B     │             │  Gemma-3-12B    │
+          │   p95 < 500ms   │             │  30-90s allowed │
+          └─────────────────┘             └─────────────────┘
+```
+
+### 6.2 L0 Policy Engine
+
+**파일:** `llm-service/policy_engine.py`
+
+모든 LLM 호출 전에 실행되는 정책 검증 레이어:
+
+| 컴포넌트 | 역할 | 설정 |
+|----------|------|------|
+| **PIIMasker** | 전화번호, 이메일, 주민번호, 카드번호 마스킹 | `ENABLE_PII_MASKING=true` |
+| **ScopeValidator** | 프로젝트/사용자 접근 권한 검증 | `ENABLE_SCOPE_VALIDATION=true` |
+| **ScrumRuleEnforcer** | WIP 제한, 스프린트 범위 규칙 | `DEFAULT_WIP_LIMIT=5` |
+| **ResponseLimiter** | 요청/응답 길이 제한 | `MAX_RESPONSE_LENGTH=4000` |
+| **ContentFilter** | SQL Injection, XSS 패턴 차단 | `ENABLE_CONTENT_FILTERING=true` |
+
+**사용 예시:**
+
+```python
+from policy_engine import get_policy_engine
+
+engine = get_policy_engine()
+result = engine.check_request(
+    message="프로젝트 A의 태스크 현황을 알려줘",
+    user_id="user-123",
+    project_id="proj-456",
+    user_projects=["proj-456", "proj-789"],
+)
+
+if not result.passed:
+    return {"error": result.blocked_reason}
+
+# PII 마스킹된 메시지 사용
+message = result.modified_message or original_message
+```
+
+### 6.3 L1 Model (Fast)
+
+**모델:** LFM2-2.6B-Uncensored (Q6_K 양자화)
+
+| 설정 | 값 | 설명 |
+|------|----|----|
+| `L1_MODEL_PATH` | `./models/LFM2-2.6B-Uncensored-X64.i1-Q6_K.gguf` | 모델 경로 |
+| `L1_N_CTX` | 4096 | 컨텍스트 길이 |
+| `L1_MAX_TOKENS` | 1200 | 최대 생성 토큰 |
+| `TEMPERATURE` | 0.35 | 낮은 온도로 일관성 유지 |
+
+**사용 케이스:** FAQ, 상태 조회, 오늘의 태스크, 간단한 질문
+
+### 6.4 L2 Model (Quality)
+
+**모델:** Gemma-3-12B (Q5_K_M 양자화)
+
+| 설정 | 값 | 설명 |
+|------|----|----|
+| `L2_MODEL_PATH` | `./models/google.gemma-3-12b-pt.Q5_K_M.gguf` | 모델 경로 |
+| `L2_N_CTX` | 4096 | 컨텍스트 길이 |
+| `L2_MAX_TOKENS` | 3000 | 상세 응답용 토큰 |
+| `TEMPERATURE` | 0.35 | 일관된 출력 |
+
+**사용 케이스:** 주간보고서, 스프린트 계획, 영향도 분석, 회고
+
+### 6.5 Model Gateway
+
+**파일:** `llm-service/model_gateway.py`
+
+```python
+from model_gateway import get_model_gateway, ModelTier
+
+gateway = get_model_gateway()
+
+# 모델 로드
+gateway.load_l1()  # LFM2
+gateway.load_l2()  # Gemma-3-12B
+
+# Tier별 생성
+result_fast = gateway.generate_fast(prompt)      # L1 사용
+result_quality = gateway.generate_quality(prompt) # L2 사용
+
+# 자동 Fallback
+result = gateway.generate(
+    prompt=prompt,
+    tier=ModelTier.L1,
+    fallback_to_other_tier=True  # L1 없으면 L2로 폴백
+)
+```
+
+---
+
+## 7. Two-Track Workflow
+
+### 7.1 개요
+
+요청 특성에 따라 두 가지 트랙으로 분기하는 LangGraph 워크플로우:
+
+```
+                              ┌─────────────────┐
+                              │  classify_track │
+                              └────────┬────────┘
+                                       │
+                      ┌────────────────┴────────────────┐
+                      ▼                                 ▼
+            ┌─────────────────┐               ┌─────────────────┐
+            │    Track A      │               │    Track B      │
+            │  (High-freq)    │               │  (High-value)   │
+            │  p95 < 500ms    │               │  30-90s allowed │
+            └────────┬────────┘               └────────┬────────┘
+                     │                                  │
+     ┌───────────────┼───────────────┐                 │
+     ▼               ▼               ▼                 ▼
+┌─────────┐   ┌──────────┐   ┌──────────┐      ┌──────────┐
+│ policy  │──►│   RAG    │──►│ Answer   │      │ compile  │
+│  check  │   │ (Hybrid) │   │  (L1)    │      │ (3-pkg)  │
+└─────────┘   └──────────┘   └──────────┘      └────┬─────┘
+                                    │               │
+                                    ▼               ▼
+                              ┌──────────┐   ┌──────────┐
+                              │ monitor  │   │ Execute  │
+                              │          │   │  (L2)    │
+                              └──────────┘   └────┬─────┘
+                                                  │
+                                                  ▼
+                                            ┌──────────┐
+                                            │  Verify  │
+                                            └────┬─────┘
+                                                 │
+                                                 ▼
+                                            ┌──────────┐
+                                            │ monitor  │
+                                            └──────────┘
+```
+
+### 7.2 Track 분류 기준
+
+**Track B 트리거 키워드:**
+
+```python
+HIGH_VALUE_KEYWORDS = [
+    # Korean
+    "주간보고", "월간보고", "스프린트계획", "영향도분석",
+    "회고", "레트로", "리파인먼트", "분석해", "요약해",
+    # English
+    "weekly report", "sprint plan", "impact analysis",
+    "retrospective", "refinement", "analyze", "summarize",
+]
+```
+
+**추가 Track B 조건:**
+- 메시지 길이 > 200자
+
+### 7.3 Track A 플로우
+
+```
+classify_track → policy_check → rag_search → verify_rag_quality
+                                                    │
+                                    ┌───────────────┼───────────────┐
+                                    ▼               ▼               ▼
+                              (품질 낮음)     (품질 OK)
+                              refine_query → rag_search   generate_response_l1 → monitor
+```
+
+**목표 지표:**
+- p95 Latency: < 500ms
+- Cache Hit Rate: > 70%
+- Verification: 10% 샘플링
+
+### 7.4 Track B 플로우
+
+```
+classify_track → policy_check → rag_search → compile_context → generate_response_l2 → verify_response → monitor
+```
+
+**목표 지표:**
+- 생성 시간: 30-90초 허용
+- Evidence Link Rate: 필수
+- Verification: 100% (항상 검증)
+
+### 7.5 Context Snapshot (Now/Next/Why)
+
+**파일:** `llm-service/context_snapshot.py`
+
+Track B 응답 생성 시 3-패키지 컨텍스트를 컴파일:
+
+| Snapshot | 내용 | 최대 항목 |
+|----------|------|----------|
+| **Now** | 현재 스프린트, 오늘 태스크, 활성 블로커, 높은 리스크 | 태스크 10개, 블로커 5개 |
+| **Next** | 다가오는 마일스톤, 대기 중 리뷰, 보류 결정 | 마일스톤 5개, 리뷰 5개 |
+| **Why** | 최근 변경사항, 최근 결정, 프로젝트 컨텍스트 | 변경 10개, 결정 5개 |
+
+```python
+from context_snapshot import get_snapshot_manager
+
+manager = get_snapshot_manager()
+snapshot = manager.generate_snapshot(
+    project_id="proj-123",
+    user_id="user-456",
+)
+
+# LLM 컨텍스트로 변환
+context_text = snapshot.to_text()
+```
+
+---
+
+## 8. Hybrid RAG 시스템
+
+### 8.1 개요
+
+문서 기반 RAG와 그래프 기반 RAG를 결합한 하이브리드 검색 시스템:
+
+**파일:** `llm-service/hybrid_rag.py`
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Hybrid RAG Service                            │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                       │
+│  ┌─────────────────┐         ┌─────────────────────────────────────┐│
+│  │ Strategy        │         │ Query: "TSK-123의 의존성은?"       ││
+│  │ Selector        │◄────────│                                     ││
+│  └────────┬────────┘         └─────────────────────────────────────┘│
+│           │                                                          │
+│           ▼                                                          │
+│  ┌─────────────────────────────────────────────────────────────────┐│
+│  │               Strategy Selection                                 ││
+│  │  • DOCUMENT_ONLY: 정책, 가이드 질문                             ││
+│  │  • GRAPH_ONLY: 엔티티 관계 질문                                 ││
+│  │  • HYBRID: 복합 질문 (기본값)                                    ││
+│  │  • DOCUMENT_FIRST: 문서 우선, 부족시 그래프                     ││
+│  │  • GRAPH_FIRST: 그래프 우선, 부족시 문서                        ││
+│  └─────────────────────────────────────────────────────────────────┘│
+│           │                                                          │
+│           ▼                                                          │
+│  ┌────────────────┐         ┌────────────────┐                      │
+│  │ Document RAG   │         │  Graph RAG     │                      │
+│  │ (Vector Search)│         │ (Cypher Query) │                      │
+│  │                │         │                │                      │
+│  │ • 정책 문서     │         │ • Task 의존성   │                      │
+│  │ • 회의록       │         │ • Sprint 구조   │                      │
+│  │ • 가이드       │         │ • Blocker 체인  │                      │
+│  └────────┬───────┘         └────────┬───────┘                      │
+│           │                          │                               │
+│           └──────────┬───────────────┘                               │
+│                      ▼                                               │
+│           ┌────────────────┐                                         │
+│           │ Result Merger  │                                         │
+│           │ (Weighted)     │                                         │
+│           │ Doc: 0.6       │                                         │
+│           │ Graph: 0.4     │                                         │
+│           └────────────────┘                                         │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 8.2 전략 선택 패턴
+
+| 쿼리 패턴 | 선택 전략 | 예시 |
+|-----------|----------|------|
+| 관계 키워드 (의존, 블로커) | GRAPH_FIRST | "이 태스크의 블로커는?" |
+| 문서 키워드 (정책, 가이드) | DOCUMENT_ONLY | "변경관리 정책 알려줘" |
+| 엔티티 ID (TSK-123) | GRAPH_FIRST | "TSK-123 상태는?" |
+| 복합 질문 | HYBRID | "스프린트 진행 현황과 리스크" |
+
+### 8.3 Graph RAG 쿼리
+
+```cypher
+// Task 의존성 조회
+MATCH (t:Task {id: $id})-[:DEPENDS_ON]->(dep:Task)
+RETURN dep.title, dep.status
+
+// Blocker 체인 조회
+MATCH path = (t:Task {id: $id})-[:BLOCKED_BY*1..5]->(blocker:Task)
+RETURN [n IN nodes(path) | {id: n.id, title: n.title}] as chain
+
+// Sprint 태스크 조회
+MATCH (s:Sprint)-[:HAS_TASK]->(t:Task)
+WHERE s.status = 'ACTIVE'
+RETURN s.name, collect(t.title) as tasks
+```
+
+---
+
+## 9. PostgreSQL-Neo4j 동기화
+
+### 9.1 개요
+
+PostgreSQL의 PMS 엔티티를 Neo4j로 실시간 동기화하여 GraphRAG에 활용:
+
+**파일:** `llm-service/pg_neo4j_sync.py`
+
+```
+┌─────────────────┐                    ┌─────────────────┐
+│   PostgreSQL    │                    │     Neo4j       │
+│                 │     Sync Service   │                 │
+│ ┌─────────────┐ │    ┌──────────┐   │ ┌─────────────┐ │
+│ │ auth.users  │─┼───►│          │───┼►│ (:User)     │ │
+│ └─────────────┘ │    │          │   │ └─────────────┘ │
+│ ┌─────────────┐ │    │  PG-Neo4j│   │ ┌─────────────┐ │
+│ │project.     │─┼───►│  Sync    │───┼►│ (:Project)  │ │
+│ │ projects    │ │    │  Service │   │ │ (:Phase)    │ │
+│ │ phases      │ │    │          │   │ │ (:Issue)    │ │
+│ └─────────────┘ │    │          │   │ └─────────────┘ │
+│ ┌─────────────┐ │    │          │   │ ┌─────────────┐ │
+│ │task.        │─┼───►│          │───┼►│ (:Sprint)   │ │
+│ │ sprints     │ │    │          │   │ │ (:Task)     │ │
+│ │ tasks       │ │    │          │   │ │ (:UserStory)│ │
+│ │ user_stories│ │    └──────────┘   │ └─────────────┘ │
+│ └─────────────┘ │                    │                 │
+└─────────────────┘                    └─────────────────┘
+```
+
+### 9.2 동기화 엔티티
+
+| PostgreSQL 테이블 | Neo4j 노드 | 관계 |
+|-------------------|------------|------|
+| `auth.users` | `(:User)` | - |
+| `project.projects` | `(:Project)` | - |
+| `project.phases` | `(:Phase)` | `(:Project)-[:HAS_PHASE]->(:Phase)` |
+| `project.issues` | `(:Issue)` | `(:Project)-[:HAS_ISSUE]->(:Issue)` |
+| `project.deliverables` | `(:Deliverable)` | `(:Phase)-[:HAS_DELIVERABLE]->(:Deliverable)` |
+| `task.sprints` | `(:Sprint)` | `(:Project)-[:HAS_SPRINT]->(:Sprint)` |
+| `task.tasks` | `(:Task)` | `(:Sprint)-[:HAS_TASK]->(:Task)` |
+| `task.user_stories` | `(:UserStory)` | `(:Sprint)-[:HAS_STORY]->(:UserStory)` |
+
+### 9.3 동기화 설정
+
+```bash
+# .env
+SYNC_ENABLED=true
+SYNC_FULL_INTERVAL_HOURS=24      # 전체 동기화 주기
+SYNC_INCREMENTAL_INTERVAL_MINUTES=5  # 증분 동기화 주기
+```
+
+### 9.4 수동 동기화 실행
+
+```bash
+# Docker 컨테이너 내에서
+docker exec -it pms-llm-service python run_sync.py full
+docker exec -it pms-llm-service python run_sync.py incremental
+```
+
+### 9.5 동기화 결과 예시
+
+```
+Sync completed: success=True
+Total duration: 815.62ms
+
+Entity results:
+  User: 11 synced [OK]
+  Project: 2 synced [OK]
+  Sprint: 0 synced [OK]
+  Phase: 12 synced [OK]
+  Task: 0 synced [OK]
+
+Relationship results:
+  HAS_PHASE: 12 synced [OK]
+```
+
+---
+
+## 10. 데이터베이스 스키마
+
+### 10.1 PostgreSQL 스키마 구조
 
 ```sql
 -- 스키마 생성 (MSA 전환 대비)
@@ -784,7 +1185,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";  -- 텍스트 검색 최적화
 ```
 
-### 6.2 ERD (Entity Relationship Diagram)
+### 10.2 ERD (Entity Relationship Diagram)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -915,7 +1316,7 @@ CREATE EXTENSION IF NOT EXISTS "pg_trgm";  -- 텍스트 검색 최적화
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 6.3 Neo4j 그래프 스키마
+### 10.3 Neo4j 그래프 스키마
 
 ```cypher
 // 노드 타입
@@ -947,15 +1348,15 @@ CREATE CONSTRAINT FOR (cat:Category) REQUIRE cat.name IS UNIQUE
 
 ---
 
-## 7. API 설계
+## 11. API 설계
 
-### 7.1 REST API 규칙
+### 11.1 REST API 규칙
 
 - **Base URL**: `http://localhost:8083/api`
 - **인증**: `Authorization: Bearer <JWT_TOKEN>`
 - **응답 형식**: JSON
 
-### 7.2 주요 API 엔드포인트
+### 11.2 주요 API 엔드포인트
 
 #### 인증 API
 
@@ -1037,7 +1438,7 @@ CREATE CONSTRAINT FOR (cat:Category) REQUIRE cat.name IS UNIQUE
 | `page` | int | 페이지 번호 (0-based) |
 | `size` | int | 페이지 크기 (기본: 20) |
 
-### 7.3 응답 형식
+### 11.3 응답 형식
 
 **성공 응답**
 
@@ -1072,9 +1473,9 @@ CREATE CONSTRAINT FOR (cat:Category) REQUIRE cat.name IS UNIQUE
 
 ---
 
-## 8. 보안 아키텍처
+## 12. 보안 아키텍처
 
-### 8.1 JWT 인증 흐름
+### 12.1 JWT 인증 흐름
 
 ```
 1. 로그인 요청
@@ -1099,7 +1500,7 @@ CREATE CONSTRAINT FOR (cat:Category) REQUIRE cat.name IS UNIQUE
    JwtAuthenticationFilter → 서명/만료 검증 → SecurityContext 설정
 ```
 
-### 8.2 역할 기반 접근 제어 (RBAC)
+### 12.2 역할 기반 접근 제어 (RBAC)
 
 | 역할 | 설명 | 주요 권한 |
 |------|------|----------|
@@ -1112,7 +1513,7 @@ CREATE CONSTRAINT FOR (cat:Category) REQUIRE cat.name IS UNIQUE
 | AUDITOR | 감사자 | 감사 로그 조회 |
 | ADMIN | 시스템 관리자 | 사용자/권한 관리 |
 
-### 8.3 환경변수 기반 시크릿 관리
+### 12.3 환경변수 기반 시크릿 관리
 
 ```bash
 # .env (git에서 제외)
@@ -1123,13 +1524,13 @@ NEO4J_PASSWORD=secure_neo4j_password
 
 ---
 
-## 9. 데이터 계보 (Lineage) 아키텍처
+## 13. 데이터 계보 (Lineage) 아키텍처
 
-### 9.1 개요
+### 13.1 개요
 
 PMS-IC는 요구사항 추적성(Requirement Traceability)을 위해 **Outbox Pattern + Redis Streams** 기반의 데이터 계보 시스템을 구현합니다. 이를 통해 Requirement → UserStory → Task 간의 관계를 실시간으로 추적하고, OpenMetadata 및 Neo4j에 동기화합니다.
 
-### 9.2 Lineage 아키텍처 다이어그램
+### 13.2 Lineage 아키텍처 다이어그램
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -1195,7 +1596,7 @@ PMS-IC는 요구사항 추적성(Requirement Traceability)을 위해 **Outbox Pa
         └──────────────────┘    └──────────────────┘
 ```
 
-### 9.3 Lineage 이벤트 타입
+### 13.3 Lineage 이벤트 타입
 
 | 이벤트 타입 | 설명 | 페이로드 예시 |
 |------------|------|---------------|
@@ -1208,7 +1609,7 @@ PMS-IC는 요구사항 추적성(Requirement Traceability)을 위해 **Outbox Pa
 | `TASK_CREATED` | 태스크 생성 | `{id, projectId, title, assigneeId}` |
 | `TASK_STATUS_CHANGED` | 태스크 상태 변경 | `{id, oldStatus, newStatus}` |
 
-### 9.4 Neo4j Lineage 스키마
+### 13.4 Neo4j Lineage 스키마
 
 ```cypher
 // Lineage Node Types
@@ -1226,7 +1627,7 @@ MATCH path = (r:Requirement {id: $reqId})-[:DERIVES*..2]->()-[:BREAKS_DOWN_TO*..
 RETURN path
 ```
 
-### 9.5 Outbox 테이블 스키마
+### 13.5 Outbox 테이블 스키마
 
 ```sql
 CREATE TABLE IF NOT EXISTS project.outbox_events (
@@ -1248,7 +1649,7 @@ CREATE INDEX idx_outbox_status_created ON project.outbox_events(status, created_
 CREATE INDEX idx_outbox_retry ON project.outbox_events(status, retry_count, created_at);
 ```
 
-### 9.6 설정 (application.yml)
+### 13.6 설정 (application.yml)
 
 ```yaml
 lineage:
@@ -1262,7 +1663,7 @@ lineage:
     name: lineage:events     # Redis stream name
 ```
 
-### 9.7 Consumer 실행
+### 13.7 Consumer 실행
 
 ```bash
 # Start lineage consumers (via docker-compose)
@@ -1276,9 +1677,91 @@ python lineage_consumer.py --consumer openmetadata --group openmetadata-sync
 
 ---
 
-## 10. 배포 및 인프라
+## 14. PMS 모니터링
 
-### 10.1 Docker Compose 서비스
+### 14.1 개요
+
+PMS 특화 메트릭 수집 및 분석 시스템으로, Two-Track 워크플로우의 성능과 품질을 추적합니다.
+
+**파일:** `llm-service/pms_monitoring.py`
+
+### 14.2 Track A 메트릭
+
+| 메트릭 | 설명 | 목표 |
+|--------|------|------|
+| `p95_latency_ms` | 95번째 백분위 응답시간 | < 500ms |
+| `cache_hit_rate` | 캐시 히트율 | > 70% |
+| `avg_tool_calls` | 평균 도구 호출 횟수 | 최소화 |
+| `additional_question_rate` | 추가 질문 발생률 | 정보 부족 지표 |
+| `hallucination_report_rate` | 환각 신고율 | < 5% |
+
+### 14.3 Track B 메트릭
+
+| 메트릭 | 설명 | 목표 |
+|--------|------|------|
+| `avg_generation_time_s` | 평균 생성 시간 | 30-90초 |
+| `p95_generation_time_s` | 95번째 백분위 생성시간 | < 90초 |
+| `evidence_link_rate` | 증거 링크 포함률 | 100% |
+| `omission_rate` | 누락 정보 비율 | < 10% |
+
+### 14.4 알림 설정
+
+```python
+# 알림 트리거 조건
+ALERTS = {
+    "track_a_latency": {
+        "condition": "p95_latency_ms > 500",
+        "severity": "warning",
+    },
+    "track_a_cache": {
+        "condition": "cache_hit_rate < 0.70",
+        "severity": "info",
+    },
+    "hallucination": {
+        "condition": "hallucination_report_rate > 0.05",
+        "severity": "critical",
+    },
+    "track_b_generation": {
+        "condition": "p95_generation_time_s > 90",
+        "severity": "warning",
+    },
+    "omission": {
+        "condition": "omission_rate > 0.10",
+        "severity": "warning",
+    },
+}
+```
+
+### 14.5 사용 예시
+
+```python
+from pms_monitoring import get_pms_collector, RequestMetric, Track
+
+collector = get_pms_collector()
+
+# 메트릭 기록
+collector.record(RequestMetric(
+    request_id="req-123",
+    track=Track.A,
+    timestamp=datetime.now(),
+    latency_ms=150.0,
+    success=True,
+    cache_hit=True,
+))
+
+# 집계 조회
+metrics = collector.get_combined_metrics()
+alerts = collector.get_alerts()
+
+# JSON 내보내기
+collector.export_to_json("/var/log/pms_metrics.json")
+```
+
+---
+
+## 15. 배포 및 인프라
+
+### 15.1 Docker Compose 서비스
 
 | 서비스 | 이미지 | 포트 | 역할 |
 |--------|--------|------|------|
@@ -1294,7 +1777,7 @@ python lineage_consumer.py --consumer openmetadata --group openmetadata-sync
 | pgadmin | dpage/pgadmin4 | 5050 | DB 관리 도구 |
 | redis-commander | rediscommander | 8082 | Redis 관리 도구 |
 
-### 10.2 실행 명령어
+### 15.2 실행 명령어
 
 ```bash
 # 전체 서비스 시작
@@ -1313,7 +1796,7 @@ docker-compose down
 docker-compose down -v
 ```
 
-### 10.3 헬스체크
+### 15.3 헬스체크
 
 | 서비스 | 헬스체크 엔드포인트 |
 |--------|---------------------|
@@ -1324,7 +1807,7 @@ docker-compose down -v
 | Neo4j | `http://localhost:7474` |
 | OpenMetadata | `/api/v1/system/version` |
 
-### 10.4 볼륨 구성
+### 15.4 볼륨 구성
 
 | 볼륨 | 용도 |
 |------|------|
@@ -1340,6 +1823,8 @@ docker-compose down -v
 
 ### A. 환경 변수 목록
 
+#### 기본 설정
+
 | 변수명 | 설명 | 기본값 |
 |--------|------|--------|
 | SPRING_PROFILES_ACTIVE | Spring 프로파일 | dev |
@@ -1348,12 +1833,30 @@ docker-compose down -v
 | POSTGRES_PASSWORD | DB 비밀번호 | pms_password |
 | JWT_SECRET | JWT 서명 키 | - |
 | AI_SERVICE_URL | LLM 서비스 URL | http://llm-service:8000 |
-| MODEL_PATH | LLM 모델 경로 | ./models/google.gemma-3-12b-pt.Q5_K_M.gguf |
 | NEO4J_URI | Neo4j 연결 URI | bolt://neo4j:7687 |
 | NEO4J_USER | Neo4j 사용자 | neo4j |
 | NEO4J_PASSWORD | Neo4j 비밀번호 | pmspassword123 |
-| OPENMETADATA_URL | OpenMetadata API URL | `http://openmetadata:8585` |
+| OPENMETADATA_URL | OpenMetadata API URL | http://openmetadata:8585 |
 | OM_JWT_TOKEN | OpenMetadata JWT 토큰 | - |
+
+#### Two-Track LLM 설정 (L1/L2)
+
+| 변수명 | 설명 | 기본값 |
+|--------|------|--------|
+| L1_MODEL_PATH | L1 (Fast) 모델 경로 | ./models/LFM2-2.6B-Uncensored-X64.i1-Q6_K.gguf |
+| L2_MODEL_PATH | L2 (Quality) 모델 경로 | ./models/google.gemma-3-12b-pt.Q5_K_M.gguf |
+| L1_N_CTX | L1 컨텍스트 크기 | 4096 |
+| L2_N_CTX | L2 컨텍스트 크기 | 4096 |
+| L1_MAX_TOKENS | L1 최대 출력 토큰 | 1200 |
+| L2_MAX_TOKENS | L2 최대 출력 토큰 | 3000 |
+
+#### PG-Neo4j 동기화 설정
+
+| 변수명 | 설명 | 기본값 |
+|--------|------|--------|
+| SYNC_ENABLED | 자동 동기화 활성화 | true |
+| SYNC_FULL_INTERVAL_HOURS | 전체 동기화 주기 (시간) | 24 |
+| SYNC_INCREMENTAL_INTERVAL_MINUTES | 증분 동기화 주기 (분) | 5 |
 
 ### B. 포트 매핑
 

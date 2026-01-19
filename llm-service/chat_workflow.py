@@ -424,18 +424,42 @@ class ChatWorkflow:
             state["debug_info"]["prompt_length"] = 0
             return state
 
-        # 2. RAG 문서 없음 → 범위 밖 질문
+        # 2. RAG 문서 없음 → 도메인 키워드 확인 후 LLM으로 답변 또는 범위 밖 처리
         if len(retrieved_docs) == 0:
-            logger.info("  → No RAG docs, out of scope")
-            reply = (
-                "죄송합니다. 해당 질문은 제가 가진 프로젝트 관리 지식 범위를 벗어납니다. "
-                "프로젝트 일정, 진척, 예산, 리스크, 이슈, 또는 애자일 방법론에 대해 질문해주세요."
-            )
-            confidence = 0.7
-            state["response"] = reply
-            state["confidence"] = confidence
-            state["debug_info"]["prompt_length"] = 0
-            return state
+            # PMS/애자일 도메인 키워드 목록
+            domain_keywords = [
+                # 스크럼/애자일
+                "스크럼", "scrum", "애자일", "agile", "스프린트", "sprint",
+                "백로그", "backlog", "데일리", "daily", "스탠드업", "standup",
+                "레트로", "retro", "회고", "플래닝", "planning", "포커", "poker",
+                "칸반", "kanban", "번다운", "burndown", "velocity", "벨로시티",
+                # 프로젝트 관리 일반
+                "wbs", "간트", "gantt", "마일스톤", "milestone", "pmo",
+                "리스크", "risk", "이슈", "issue", "태스크", "task",
+                "일정", "schedule", "예산", "budget", "자원", "resource",
+                "범위", "scope", "품질", "quality", "이해관계자", "stakeholder",
+                # 역할
+                "pm", "po", "product owner", "scrum master", "스크럼마스터",
+            ]
+
+            message_lower = message.lower()
+            is_domain_question = any(kw in message_lower for kw in domain_keywords)
+
+            if is_domain_question:
+                # 도메인 관련 질문이면 LLM이 일반 지식으로 답변
+                logger.info("  → No RAG docs, but domain question detected - using LLM knowledge")
+                # RAG 없이 LLM으로 답변 생성 (아래 코드로 진행)
+            else:
+                logger.info("  → No RAG docs and not domain question, out of scope")
+                reply = (
+                    "죄송합니다. 해당 질문은 제가 가진 프로젝트 관리 지식 범위를 벗어납니다. "
+                    "프로젝트 일정, 진척, 예산, 리스크, 이슈, 또는 애자일 방법론에 대해 질문해주세요."
+                )
+                confidence = 0.7
+                state["response"] = reply
+                state["confidence"] = confidence
+                state["debug_info"]["prompt_length"] = 0
+                return state
 
         # 3. RAG 문서 있음 → LLM으로 답변 생성
         logger.info(f"  → Generating LLM response with {len(retrieved_docs)} RAG docs")
