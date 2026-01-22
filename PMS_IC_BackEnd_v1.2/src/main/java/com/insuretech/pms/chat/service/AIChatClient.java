@@ -64,7 +64,7 @@ public class AIChatClient {
         WebClient webClient = webClientBuilder.baseUrl(aiServiceUrl).build();
 
         Map<String, Object> response = webClient.post()
-                .uri("/api/chat")
+                .uri("/api/chat/v2")
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(Map.class)

@@ -511,11 +511,25 @@ class TwoTrackWorkflow:
                 # Generation parameters
                 temperature = float(os.getenv("TEMPERATURE", "0.35"))
                 top_p = float(os.getenv("TOP_P", "0.90"))
-                max_tokens = int(os.getenv("MAX_TOKENS", "1800"))
+                base_max_tokens = int(os.getenv("MAX_TOKENS", "1800"))
 
-                # L2 can use more tokens for detailed reports
+                # Dynamic max_tokens based on track and question type
                 if use_l2:
+                    # Track B: detailed reports need more tokens
                     max_tokens = int(os.getenv("L2_MAX_TOKENS", "3000"))
+                else:
+                    # Track A: optimize for simple questions
+                    message_lower = message.lower()
+                    is_simple_question = any(kw in message_lower for kw in [
+                        "무엇", "뭐야", "뭔가요", "이란", "정의", "설명해", "알려줘", "대해"
+                    ])
+                    is_short_question = len(message) < 30
+
+                    if is_simple_question and is_short_question:
+                        max_tokens = min(base_max_tokens, 600)
+                        logger.info(f"  → Track A: reduced max_tokens={max_tokens} for simple question")
+                    else:
+                        max_tokens = base_max_tokens
 
                 response = llm(
                     prompt,

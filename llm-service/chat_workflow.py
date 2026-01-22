@@ -42,6 +42,62 @@ class ChatState(TypedDict):
 class ChatWorkflow:
     """LangGraph 기반 채팅 워크플로우"""
 
+    # Pre-compiled regex patterns for _clean_response optimization
+    # These are compiled once at class load time instead of every call
+    RE_TRIPLE_QUOTE_BLOCK = re.compile(r"'''[\s\S]*?'''")
+    RE_TRIPLE_DQUOTE_BLOCK = re.compile(r'"""[\s\S]*?"""')
+    RE_THINK_BLOCK = re.compile(r"<think>[\s\S]*?</think>")
+    RE_MODEL_HEADER = re.compile(r"^.*?(Llama Forge Model|Gemma|LFM2|Qwen|로컬 LLM).*?\n=+\n.*?\n", re.MULTILINE | re.IGNORECASE)
+    RE_SEPARATOR_HEADER = re.compile(r"^.*?=+\n.*?\n", re.MULTILINE)
+    RE_META_PATTERNS = [
+        re.compile(r"제공된 정보로.*?완벽하게 답변했습니다.*?", re.IGNORECASE | re.DOTALL),
+        re.compile(r"제공된 정보로.*?답변했습니다.*?", re.IGNORECASE | re.DOTALL),
+        re.compile(r"이제 사용자님의 요청대로.*?제공", re.IGNORECASE | re.DOTALL),
+        re.compile(r"이제 사용자의 요청대로.*?제공", re.IGNORECASE | re.DOTALL),
+        re.compile(r"사용자님의 요청대로.*?설명.*?제공", re.IGNORECASE | re.DOTALL),
+        re.compile(r"사용자의 요청대로.*?설명.*?제공", re.IGNORECASE | re.DOTALL),
+        re.compile(r"요청대로.*?한국어로.*?제공", re.IGNORECASE | re.DOTALL),
+        re.compile(r"요청하신.*?한국어로.*?제공", re.IGNORECASE | re.DOTALL),
+    ]
+    RE_MODEL_NAME_LINE = re.compile(r"(llama forge model|gemma|lfm2|로컬 llm).*?===", re.IGNORECASE)
+    RE_SEPARATOR_LINE = re.compile(r"^=+$")
+    RE_META_INFO_LINE = re.compile(r"제공된 정보로.*?답변했습니다", re.IGNORECASE)
+    RE_META_REQUEST_LINE = re.compile(r"이제 사용자.*?요청대로", re.IGNORECASE)
+    RE_META_KOREAN_LINE = re.compile(r"요청.*?한국어로.*?제공", re.IGNORECASE)
+    RE_PERFECT_ANSWER = re.compile(r"완벽하게 답변했습니다", re.IGNORECASE)
+    RE_MODEL_IN_LINE = re.compile(r"(llama forge model|gemma|lfm2|로컬 llm)", re.IGNORECASE)
+    RE_INCOMPLETE_TAG = re.compile(r'<[^>]*$')
+    RE_INCOMPLETE_TOKEN = re.compile(r'\|[^>]*$')
+    RE_MODEL_IDENTITY_PATTERNS = [
+        re.compile(r"너(는|의)\s*(이름|모델)"),
+        re.compile(r"당신(은|의)\s*(이름|모델)"),
+        re.compile(r"(무슨|어떤|뭔)\s*모델"),
+        re.compile(r"모델\s*(이름|명)"),
+        re.compile(r"(what|which)\s*model", re.IGNORECASE),
+        re.compile(r"your\s*name", re.IGNORECASE),
+    ]
+
+    # Wrong model names to filter
+    WRONG_MODEL_NAMES = frozenset(["니콜라스", "nicolas", "알렉스", "alex", "사라", "sara",
+                                   "gpt-4", "chatgpt", "claude", "gemini", "palm", "gpt4"])
+
+    # Correct model name markers
+    CORRECT_MODEL_MARKERS = frozenset(["Llama", "Gemma", "Qwen", "로컬 LLM", "LFM2"])
+
+    # Unwanted prompt patterns
+    UNWANTED_PATTERNS = frozenset([
+        "현재 질문에 대한 답변을 작성해 주세요",
+        "현재 질문에 대한 답변을 작성해주세요",
+        "답변을 작성해 주세요",
+        "답변을 작성해주세요",
+        "Please write an answer",
+        "Write an answer",
+        "답변은 3~6문장",
+        "핵심 정의",
+        "목적/배경",
+        "간단한 예시",
+    ])
+
     def __init__(self, llm: Llama, rag_service: Optional[RAGService] = None, model_path: Optional[str] = None):
         self.llm = llm
         self.rag_service = rag_service
@@ -512,9 +568,25 @@ class ChatWorkflow:
                 top_p = float(os.getenv("TOP_P", "0.90"))
                 min_p = float(os.getenv("MIN_P", "0.12"))
                 repeat_penalty = float(os.getenv("REPEAT_PENALTY", "1.10"))
-                max_tokens = int(os.getenv("MAX_TOKENS", "1800"))
+                base_max_tokens = int(os.getenv("MAX_TOKENS", "1800"))
 
-                # LLM 추론
+                # Dynamic max_tokens based on question type (optimization)
+                # Simple definition questions need fewer tokens for faster response
+                message_lower = message.lower()
+                is_simple_question = any(kw in message_lower for kw in [
+                    "무엇", "뭐야", "뭔가요", "이란", "이란?", "란?", "정의",
+                    "설명해", "알려줘", "대해", "what is", "what's", "explain"
+                ])
+                is_short_question = len(message) < 30
+
+                if intent == "casual" or (is_simple_question and is_short_question):
+                    max_tokens = min(base_max_tokens, 600)  # Faster for simple questions
+                    logger.info(f"  → Using reduced max_tokens={max_tokens} for simple question")
+                else:
+                    max_tokens = base_max_tokens
+                    logger.info(f"  → Using full max_tokens={max_tokens}")
+
+                # LLM inference
                 response = self.llm(
                     prompt,
                     max_tokens=max_tokens,
@@ -528,24 +600,13 @@ class ChatWorkflow:
 
                 reply = response["choices"][0]["text"].strip()
 
-                # 원본 응답 로깅 (디버깅용)
+                # Log raw response for debugging
                 logger.info(f"Raw model response: {repr(reply)}")
 
-                # 후처리
+                # Post-processing (includes model name validation)
                 reply = self._clean_response(reply)
 
-                # 클리닝 후 응답 로깅
                 logger.info(f"Cleaned response: {repr(reply)}")
-                
-                # 잘못된 모델 이름이 포함되어 있는지 추가 검증
-                wrong_names = ["니콜라스", "nicolas", "알렉스", "alex", "사라", "sara", 
-                              "gpt-4", "chatgpt", "claude", "gemini", "palm"]
-                reply_lower_check = reply.lower()
-                has_wrong_name = any(wrong in reply_lower_check for wrong in wrong_names)
-                
-                if has_wrong_name:
-                    logger.warning(f"Detected wrong model name in response, replacing with: {correct_name}")
-                    reply = f"저는 {correct_name} 모델입니다."
             except Exception as e:
                 logger.error(f"Response generation failed: {e}")
                 reply = "죄송합니다. 응답 생성 중 오류가 발생했습니다."
@@ -759,224 +820,156 @@ class ChatWorkflow:
         return "\n".join(prompt_parts)
 
     def _clean_response(self, reply: str) -> str:
-        """응답 정리"""
+        """응답 정리 (Optimized with pre-compiled regex patterns)"""
 
-        # 모델이 자기 대화를 시작하는 패턴에서 첫 응답만 추출
+        # Extract first response from self-dialogue patterns
         for stop_pattern in ["질문:", "\nmodel", "학년\n데요"]:
             if stop_pattern in reply:
                 reply = reply.split(stop_pattern)[0].strip()
 
-        # "네, 알겠습니다" 시작 패턴 제거
+        # Remove "네, 알겠습니다" prefix
         if reply.startswith("네, 알겠습니다"):
             reply = reply[len("네, 알겠습니다"):].strip()
             if reply.startswith(".") or reply.startswith("。"):
                 reply = reply[1:].strip()
 
-        # Gemma 특수 토큰 제거
+        # Remove Gemma special tokens (fast string operations)
         reply = reply.replace("<start_of_turn>", "").replace("<end_of_turn>", "")
-        # im_end 토큰 제거 (깨지는 문자 방지)
         reply = reply.replace("<|im_end|>", "").replace("|im_end|>", "").replace("<|im_end", "")
 
-        # 삼중 따옴표로 감싸진 블록 제거 (모델 이름, 구분선, 질문 등 포함)
-        reply = re.sub(r"'''[\s\S]*?'''", "", reply)
-        reply = re.sub(r'"""[\s\S]*?"""', "", reply)
+        # Remove triple-quoted blocks using pre-compiled patterns
+        reply = self.RE_TRIPLE_QUOTE_BLOCK.sub("", reply)
+        reply = self.RE_TRIPLE_DQUOTE_BLOCK.sub("", reply)
         if reply.startswith("'''") or reply.startswith('"""'):
             reply = reply[3:].lstrip()
         if reply.endswith("'''") or reply.endswith('"""'):
             reply = reply[:-3].rstrip()
-        
-        # Qwen3 thinking 토큰 제거
-        reply = re.sub(r"<think>[\s\S]*?</think>", "", reply)
 
-        # 모델 이름과 구분선이 포함된 앞부분 제거
-        # 예: "Llama Forge Model 2 (LFM2)\n===\n질문내용"
-        reply = re.sub(r"^.*?(Llama Forge Model|Gemma|LFM2|Qwen|로컬 LLM).*?\n=+\n.*?\n", "", reply, flags=re.MULTILINE | re.IGNORECASE)
-        reply = re.sub(r"^.*?=+\n.*?\n", "", reply, flags=re.MULTILINE)
-        
-        # 불필요한 role 레이블 제거
+        # Remove Qwen3 thinking tokens
+        reply = self.RE_THINK_BLOCK.sub("", reply)
+
+        # Remove model name headers
+        reply = self.RE_MODEL_HEADER.sub("", reply)
+        reply = self.RE_SEPARATOR_HEADER.sub("", reply)
+
+        # Remove role labels (fast string operations)
         if reply.startswith("model"):
             reply = reply[5:].strip()
         if reply.startswith("assistant"):
             reply = reply[9:].strip()
 
-        # 프롬프트 형식 태그 제거
-        reply = reply.replace("<think>", "")
-        reply = reply.replace("system", "")
-        reply = reply.replace("사용자:", "")
-        reply = reply.replace("user:", "")
-        reply = reply.replace("USER", "")
-        reply = reply.replace("_assistant", "")
-        reply = reply.replace("assistant", "")
-        
-        # "현재 질문에 대한 답변을 작성해 주세요" 같은 프롬프트 텍스트 제거
-        unwanted_patterns = [
-            "현재 질문에 대한 답변을 작성해 주세요",
-            "현재 질문에 대한 답변을 작성해주세요",
-            "답변을 작성해 주세요",
-            "답변을 작성해주세요",
-            "Please write an answer",
-            "Write an answer",
-            "답변은 3~6문장",
-            "핵심 정의",
-            "목적/배경",
-            "간단한 예시",
-        ]
-        
-        # 메타 설명 텍스트 제거 (뒤에 붙는 불필요한 설명)
-        meta_patterns = [
-            r"제공된 정보로.*?완벽하게 답변했습니다.*?",
-            r"제공된 정보로.*?답변했습니다.*?",
-            r"이제 사용자님의 요청대로.*?제공",
-            r"이제 사용자의 요청대로.*?제공",
-            r"사용자님의 요청대로.*?설명.*?제공",
-            r"사용자의 요청대로.*?설명.*?제공",
-            r"요청대로.*?한국어로.*?제공",
-            r"요청하신.*?한국어로.*?제공",
-        ]
-        for pattern in meta_patterns:
-            reply = re.sub(pattern, "", reply, flags=re.IGNORECASE | re.DOTALL)
-        
-        # 잘못된 모델 이름 필터링 (모델 이름 질문인 경우)
-        wrong_model_names = ["니콜라스", "nicolas", "알렉스", "alex", "사라", "sara", 
-                            "gpt-4", "chatgpt", "claude", "gemini", "palm", "gpt4"]
-        
-        # 정확한 모델 이름 가져오기
-        correct_name = "로컬 LLM"
-        if self.model_path:
-            import os
-            model_file = os.path.basename(self.model_path)
-            if "lfm2" in model_file.lower():
-                correct_name = "Llama Forge Model 2 (LFM2)"
-            elif "gemma" in model_file.lower():
-                correct_name = "Gemma 3"
-            elif "qwen" in model_file.lower():
-                correct_name = "Qwen3-8B"
-        
-        # 잘못된 모델 이름이 포함된 경우 강제로 교체
+        # Remove prompt format tags
+        for tag in ["<think>", "system", "사용자:", "user:", "USER", "_assistant", "assistant"]:
+            reply = reply.replace(tag, "")
+
+        # Remove meta description text using pre-compiled patterns
+        for pattern in self.RE_META_PATTERNS:
+            reply = pattern.sub("", reply)
+
+        # Get correct model name
+        correct_name = self._get_correct_model_name()
+
+        # Check for wrong model names
         reply_lower = reply.lower()
-        found_wrong_name = False
-        for wrong_name in wrong_model_names:
-            if wrong_name.lower() in reply_lower:
-                found_wrong_name = True
-                # 정확한 모델 이름으로 완전히 교체
-                reply = f"저는 {correct_name} 모델입니다."
-                break
-        
-        # Model name keyword detection - only trigger when asking about the model itself
-        # Check for explicit model identity questions, not general use of "name" word
-        # Keywords like "이름" can appear in normal context (e.g., "sprint's name"), so be more specific
-        model_identity_patterns = [
-            r"너(는|의)\s*(이름|모델)",  # "너는 이름", "너의 모델"
-            r"당신(은|의)\s*(이름|모델)",  # "당신은 이름", "당신의 모델"
-            r"(무슨|어떤|뭔)\s*모델",  # "무슨 모델", "어떤 모델"
-            r"모델\s*(이름|명)",  # "모델 이름", "모델명"
-            r"(what|which)\s*model",  # English patterns
-            r"your\s*name",
-        ]
-        import re as regex_module
-        has_model_identity_question = any(regex_module.search(pattern, reply_lower) for pattern in model_identity_patterns)
-        has_correct_name = any(correct in reply for correct in ["Llama", "Gemma", "Qwen", "로컬 LLM", "LFM2"])
-
-        if has_model_identity_question and not has_correct_name:
-            # This is a model identity question with wrong/missing answer - replace
+        if any(wrong_name in reply_lower for wrong_name in self.WRONG_MODEL_NAMES):
             reply = f"저는 {correct_name} 모델입니다."
-        for pattern in unwanted_patterns:
-            reply = reply.replace(pattern, "")
-            # 대소문자 구분 없이 제거
-            reply = re.sub(re.escape(pattern), "", reply, flags=re.IGNORECASE)
+        else:
+            # Check for model identity questions using pre-compiled patterns
+            has_model_identity_question = any(p.search(reply_lower) for p in self.RE_MODEL_IDENTITY_PATTERNS)
+            has_correct_name = any(marker in reply for marker in self.CORRECT_MODEL_MARKERS)
 
-        # assistant 접두어 정리
+            if has_model_identity_question and not has_correct_name:
+                reply = f"저는 {correct_name} 모델입니다."
+
+        # Remove unwanted patterns
+        for pattern in self.UNWANTED_PATTERNS:
+            reply = reply.replace(pattern, "")
+
+        # Clean lines
         cleaned_lines = []
         for line in reply.splitlines():
             stripped = line.strip()
             lower = stripped.lower()
-            
-            # 모델 이름과 구분선이 포함된 줄 제거
-            if re.search(r"(llama forge model|gemma|lfm2|로컬 llm).*?===", lower) or re.search(r"^=+$", stripped):
-                stripped = ""
-            # 삼중 따옴표로 시작하거나 끝나는 줄 제거
-            elif stripped.startswith("'''") or stripped.endswith("'''") or stripped.startswith('"""') or stripped.endswith('"""'):
-                stripped = ""
-            # 불필요한 패턴 제거
-            elif lower.startswith("assistant:") or lower.startswith("assistant："):
+
+            # Skip lines with model names and separators
+            if self.RE_MODEL_NAME_LINE.search(lower) or self.RE_SEPARATOR_LINE.match(stripped):
+                continue
+            # Skip triple-quoted lines
+            if stripped.startswith("'''") or stripped.endswith("'''") or stripped.startswith('"""') or stripped.endswith('"""'):
+                continue
+            # Clean assistant prefix
+            if lower.startswith("assistant:") or lower.startswith("assistant："):
                 stripped = stripped.split(":", 1)[1].strip() if ":" in stripped else ""
-            elif lower == "assistant" or lower == "system" or lower == "user":
-                stripped = ""
-            elif stripped.startswith("사용자:") or stripped.startswith("사용자："):
-                stripped = ""
-            elif stripped.startswith("system") or stripped.startswith("user"):
-                stripped = ""
-            elif "<think>" in stripped.lower():
-                stripped = ""
-            elif any(pattern in stripped for pattern in unwanted_patterns):
-                stripped = ""
-            # 메타 설명 텍스트가 포함된 줄 제거
-            elif re.search(r"제공된 정보로.*?답변했습니다", lower) or re.search(r"이제 사용자.*?요청대로", lower) or re.search(r"요청.*?한국어로.*?제공", lower):
-                stripped = ""
-            
+            # Skip role labels
+            if lower in ("assistant", "system", "user"):
+                continue
+            if stripped.startswith("사용자:") or stripped.startswith("사용자："):
+                continue
+            if stripped.startswith("system") or stripped.startswith("user"):
+                continue
+            if "<think>" in lower:
+                continue
+            if any(pattern in stripped for pattern in self.UNWANTED_PATTERNS):
+                continue
+            # Skip meta description lines
+            if self.RE_META_INFO_LINE.search(lower) or self.RE_META_REQUEST_LINE.search(lower) or self.RE_META_KOREAN_LINE.search(lower):
+                continue
+
             if stripped:
                 cleaned_lines.append(stripped)
-        
+
         if cleaned_lines:
             reply = "\n".join(cleaned_lines)
         else:
-            # 모든 줄이 제거된 경우 원본에서 첫 번째 의미있는 줄만 사용
-            lines = reply.splitlines()
-            for line in lines:
+            # Use first meaningful line from original
+            for line in reply.splitlines():
                 stripped = line.strip()
                 if stripped and not any(unwanted in stripped.lower() for unwanted in ["system", "user", "assistant", "사용자", "<redacted"]):
                     reply = stripped
                     break
 
-        # 응답 앞부분에서 모델 이름과 구분선 제거
-        # 예: "Llama Forge Model 2 (LFM2)\n===\n질문내용\n\n답변내용" -> "답변내용"
+        # Remove model name headers from start
         lines = reply.splitlines()
         start_idx = 0
         for i, line in enumerate(lines):
             stripped = line.strip()
-            # 모델 이름이나 구분선이 있는 줄은 건너뛰기
-            if re.search(r"(llama forge model|gemma|lfm2|로컬 llm)", stripped, re.IGNORECASE) or re.match(r"^=+$", stripped):
+            if self.RE_MODEL_IN_LINE.search(stripped) or self.RE_SEPARATOR_LINE.match(stripped):
                 start_idx = i + 1
-            # 사용자 질문처럼 보이는 줄도 건너뛰기 (질문으로 끝나는 경우)
             elif (stripped.endswith("?") or stripped.endswith("주세요") or stripped.endswith("해주세요")) and i < len(lines) - 1:
                 start_idx = i + 1
             else:
                 break
-        
+
         if start_idx > 0:
             reply = "\n".join(lines[start_idx:]).strip()
-        
-        # 응답 뒷부분에서 메타 설명 제거
+
+        # Remove meta descriptions from end
         lines = reply.splitlines()
         end_idx = len(lines)
         for i in range(len(lines) - 1, -1, -1):
             line = lines[i].strip()
-            # 메타 설명 패턴이 있으면 그 줄부터 끝까지 제거
-            if re.search(r"제공된 정보로.*?답변했습니다", line, re.IGNORECASE) or \
-               re.search(r"이제 사용자.*?요청대로", line, re.IGNORECASE) or \
-               re.search(r"요청.*?한국어로.*?제공", line, re.IGNORECASE) or \
-               re.search(r"완벽하게 답변했습니다", line, re.IGNORECASE):
+            if self.RE_META_INFO_LINE.search(line) or self.RE_META_REQUEST_LINE.search(line) or \
+               self.RE_META_KOREAN_LINE.search(line) or self.RE_PERFECT_ANSWER.search(line):
                 end_idx = i
                 break
-        
+
         if end_idx < len(lines):
             reply = "\n".join(lines[:end_idx]).strip()
 
-        # 중복 응답 방지
+        # Remove duplicate responses
         if "<start_of_turn>" in reply:
             reply = reply.split("<start_of_turn>")[0].strip()
-        
-        # im_end 토큰이 남아있으면 제거
+
         if "<|im_end|>" in reply:
             reply = reply.split("<|im_end|>")[0].strip()
         if "|im_end|>" in reply:
             reply = reply.split("|im_end|>")[0].strip()
 
-        # 과도하게 긴 응답 제한
+        # Limit overly long responses
         if "\n\n\n" in reply:
             reply = reply.split("\n\n\n")[0].strip()
 
-        # 반복되는 패턴 제거 (같은 문단이 여러 번 나오는 경우)
+        # Remove duplicate lines
         lines = reply.split('\n')
         seen_lines = set()
         unique_lines = []
@@ -985,45 +978,50 @@ class ChatWorkflow:
             if line_stripped and line_stripped not in seen_lines:
                 seen_lines.add(line_stripped)
                 unique_lines.append(line)
-            elif not line_stripped:  # 빈 줄은 유지
+            elif not line_stripped:
                 unique_lines.append(line)
         reply = '\n'.join(unique_lines)
-        
-        # 제어 문자 및 깨지는 문자 제거 (인코딩 문제 방지)
-        import string
-        # 인쇄 가능한 문자와 공백만 유지
-        printable_chars = set(string.printable)
-        # 한글, 한자, 일본어 등 유니코드 문자도 허용
+
+        # Remove control characters (optimized)
         cleaned_chars = []
         for char in reply:
-            # 인쇄 가능한 ASCII 문자이거나, 유니코드 문자(한글 등)인 경우만 유지
-            if char in printable_chars or ord(char) > 127:
-                # 제어 문자 제거 (탭, 줄바꿈, 캐리지 리턴은 유지)
-                if ord(char) < 32 and char not in ['\n', '\r', '\t']:
-                    continue
+            code = ord(char)
+            # Keep printable ASCII or unicode characters (Korean etc)
+            if code >= 32 or char in '\n\r\t':
+                cleaned_chars.append(char)
+            elif code > 127:
                 cleaned_chars.append(char)
         reply = ''.join(cleaned_chars)
-        
-        # 앞뒤 공백 정리
-        reply = reply.strip()
-        
-        # 응답 끝에 남은 불완전한 태그나 특수 문자 제거
-        # 예: "<", "<start", "<end", "<|" 등
-        while reply and reply[-1] in ['<', '>', '|']:
-            reply = reply[:-1].strip()
-        
-        # 불완전한 태그 패턴 제거 (끝부분에 남은 것들)
-        reply = re.sub(r'<[^>]*$', '', reply)  # 끝에 불완전한 태그 제거
-        reply = re.sub(r'\|[^>]*$', '', reply)  # 끝에 불완전한 토큰 제거
-        
-        # 다시 앞뒤 공백 정리
+
         reply = reply.strip()
 
-        # 응답 시작 부분의 불필요한 문장부호 제거 (., 。, :, ：, -, 등)
+        # Remove incomplete tags at end
+        while reply and reply[-1] in ['<', '>', '|']:
+            reply = reply[:-1].strip()
+
+        reply = self.RE_INCOMPLETE_TAG.sub('', reply)
+        reply = self.RE_INCOMPLETE_TOKEN.sub('', reply)
+
+        reply = reply.strip()
+
+        # Remove leading punctuation
         while reply and reply[0] in '.。:：-–—•·':
             reply = reply[1:].strip()
 
         return reply
+
+    def _get_correct_model_name(self) -> str:
+        """Get correct model name based on model path"""
+        if not self.model_path:
+            return "로컬 LLM"
+        model_file = os.path.basename(self.model_path).lower()
+        if "lfm2" in model_file:
+            return "Llama Forge Model 2 (LFM2)"
+        elif "gemma" in model_file:
+            return "Gemma 3"
+        elif "qwen" in model_file:
+            return "Qwen3-8B"
+        return "로컬 LLM"
 
     def _calculate_confidence(self, intent: str, retrieved_docs: List[str]) -> float:
         """신뢰도 계산"""
