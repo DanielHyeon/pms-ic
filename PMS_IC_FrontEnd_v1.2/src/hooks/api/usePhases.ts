@@ -90,3 +90,77 @@ export function usePhaseKpis(phaseId: string) {
     enabled: !!phaseId,
   });
 }
+
+export function useAllPhases() {
+  return useQuery({
+    queryKey: phaseKeys.lists(),
+    queryFn: () => apiService.getPhases(),
+  });
+}
+
+export function useUpdateDeliverable() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      phaseId,
+      deliverableId,
+      data,
+    }: {
+      phaseId: string;
+      deliverableId: string;
+      data: { status?: string; approver?: string };
+    }) => apiService.updateDeliverable(phaseId, deliverableId, data),
+    onSuccess: (_, { phaseId }) => {
+      queryClient.invalidateQueries({ queryKey: phaseKeys.deliverables(phaseId) });
+    },
+  });
+}
+
+export function useCreatePhaseKpi() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      phaseId,
+      data,
+    }: {
+      phaseId: string;
+      data: { name: string; target: string; current?: string; status?: string };
+    }) => apiService.createPhaseKpi(phaseId, data),
+    onSuccess: (_, { phaseId }) => {
+      queryClient.invalidateQueries({ queryKey: phaseKeys.kpis(phaseId) });
+    },
+  });
+}
+
+export function useUpdatePhaseKpi() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      phaseId,
+      kpiId,
+      data,
+    }: {
+      phaseId: string;
+      kpiId: string;
+      data: { name?: string; target?: string; current?: string; status?: string };
+    }) => apiService.updatePhaseKpi(phaseId, kpiId, data),
+    onSuccess: (_, { phaseId }) => {
+      queryClient.invalidateQueries({ queryKey: phaseKeys.kpis(phaseId) });
+    },
+  });
+}
+
+export function useDeletePhaseKpi() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ phaseId, kpiId }: { phaseId: string; kpiId: string }) =>
+      apiService.deletePhaseKpi(phaseId, kpiId),
+    onSuccess: (_, { phaseId }) => {
+      queryClient.invalidateQueries({ queryKey: phaseKeys.kpis(phaseId) });
+    },
+  });
+}
