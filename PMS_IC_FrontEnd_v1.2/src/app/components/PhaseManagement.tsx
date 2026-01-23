@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   CheckCircle2,
   Circle,
@@ -337,6 +337,25 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
     deliverables: [],
     kpis: [],
   });
+
+  // Update selectedPhase when API data loads to use actual phase IDs
+  useEffect(() => {
+    if (phasesData) {
+      const phaseData = normalizeResponse(phasesData, []);
+      const phasesArray = Array.isArray(phaseData) ? phaseData : [];
+      if (phasesArray.length > 0) {
+        // Find the phase that corresponds to the selected phase (by orderNum or index)
+        const currentIndex = phases.findIndex((p) => p.id === selectedPhase.id);
+        const apiPhase = phasesArray[currentIndex >= 0 ? currentIndex : 0];
+        if (apiPhase && apiPhase.id !== selectedPhase.id) {
+          const mappedPhase = ['completed', 'inProgress', 'pending'].includes(apiPhase.status)
+            ? apiPhase
+            : mapPhaseFromApi(apiPhase);
+          setSelectedPhase(mappedPhase);
+        }
+      }
+    }
+  }, [phasesData]);
 
   // Sync phases from query data
   const syncedPhases = (() => {
