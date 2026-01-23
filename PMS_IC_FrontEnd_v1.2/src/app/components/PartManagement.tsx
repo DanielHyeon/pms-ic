@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Plus, Search, Users, Edit2, Trash2, ChevronDown, ChevronUp, UserPlus, Crown, CheckCircle, Pause, AlertCircle, GraduationCap, ClipboardCheck, BarChart3, Settings, Shield } from 'lucide-react';
 import { Part, PartMember, PartStatus, PART_STATUS_INFO, CreatePartDto } from '../../types/part';
 import { useProject } from '../../contexts/ProjectContext';
-import { apiService } from '../../services/api';
+import { useParts, usePartMembers, useCreatePart, useUpdatePart, useDeletePart, useAddPartMember, useRemovePartMember } from '../../hooks/api/useParts';
 import { UserRole } from '../App';
 
 // Part leader permission types
@@ -29,9 +29,13 @@ interface PartManagementProps {
 
 export default function PartManagement({ userRole }: PartManagementProps) {
   const { currentProject } = useProject();
-  const [parts, setParts] = useState<Part[]>([]);
-  const [partMembers, setPartMembers] = useState<Record<string, PartMember[]>>({});
-  const [loading, setLoading] = useState(true);
+  const { data: parts = [], isLoading } = useParts(currentProject?.id);
+  const createPartMutation = useCreatePart();
+  const updatePartMutation = useUpdatePart();
+  const deletePartMutation = useDeletePart();
+  const addMemberMutation = useAddPartMember();
+  const removeMemberMutation = useRemovePartMember();
+
   const [expandedParts, setExpandedParts] = useState<Set<string>>(new Set());
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -39,20 +43,18 @@ export default function PartManagement({ userRole }: PartManagementProps) {
   const [editingPart, setEditingPart] = useState<Part | null>(null);
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
 
-  // 담당자 정보
-  const [projectRoles, setProjectRoles] = useState<{
-    educationManager?: { id: string; name: string };
-    qaLead?: { id: string; name: string };
-    ba?: { id: string; name: string };
-  }>({});
+  // Project roles (mock data)
+  const projectRoles = {
+    educationManager: { id: 'user-006', name: '한미영' },
+    qaLead: { id: 'user-007', name: '오정환' },
+    ba: { id: 'user-008', name: '김현우' },
+  };
 
-  // 관리 권한 체크
+  // Permission checks
   const canManage = ['admin', 'pm', 'pmo_head'].includes(userRole);
   const canCreatePart = ['admin', 'pm'].includes(userRole);
-  const canAddMember = ['admin', 'pm'].includes(userRole) || 
-    (userRole === 'developer' && expandedParts.size > 0); // 파트장도 구성원 추가 가능
 
-  // 프로젝트 미선택 시
+  // No project selected
   if (!currentProject) {
     return (
       <div className="p-6">
@@ -66,108 +68,7 @@ export default function PartManagement({ userRole }: PartManagementProps) {
     );
   }
 
-  // 파트 목록 로드
-  useEffect(() => {
-    if (currentProject) {
-      loadParts();
-      loadProjectRoles();
-    }
-  }, [currentProject?.id]);
-
-  const loadParts = async () => {
-    setLoading(true);
-    try {
-      const data = await apiService.getParts(currentProject!.id);
-      setParts(data);
-      // 각 파트의 구성원 로드
-      const membersMap: Record<string, PartMember[]> = {};
-      for (const part of data) {
-        const members = await apiService.getPartMembers(part.id);
-        membersMap[part.id] = members;
-      }
-      setPartMembers(membersMap);
-    } catch (error) {
-      console.error('Failed to load parts:', error);
-      // Mock 데이터
-      const mockParts: Part[] = [
-        {
-          id: 'part-1',
-          projectId: currentProject!.id,
-          name: 'UI/UX 파트',
-          description: '사용자 인터페이스 및 사용자 경험 설계',
-          leaderId: 'user-003',
-          leaderName: '박민수',
-          status: 'ACTIVE',
-          startDate: '2025-01-02',
-          endDate: '2025-06-30',
-          progress: 45,
-          memberCount: 4,
-          createdAt: '2025-01-02T00:00:00Z',
-          updatedAt: '2025-01-15T00:00:00Z',
-        },
-        {
-          id: 'part-2',
-          projectId: currentProject!.id,
-          name: '백엔드 파트',
-          description: '서버 및 API 개발',
-          leaderId: 'user-004',
-          leaderName: '최영수',
-          status: 'ACTIVE',
-          startDate: '2025-01-02',
-          endDate: '2025-09-30',
-          progress: 62,
-          memberCount: 6,
-          createdAt: '2025-01-02T00:00:00Z',
-          updatedAt: '2025-01-15T00:00:00Z',
-        },
-        {
-          id: 'part-3',
-          projectId: currentProject!.id,
-          name: 'AI/ML 파트',
-          description: 'AI 모델 개발 및 학습',
-          leaderId: 'user-005',
-          leaderName: '정수진',
-          status: 'ACTIVE',
-          startDate: '2025-01-02',
-          endDate: '2025-12-31',
-          progress: 35,
-          memberCount: 5,
-          createdAt: '2025-01-02T00:00:00Z',
-          updatedAt: '2025-01-15T00:00:00Z',
-        },
-      ];
-      setParts(mockParts);
-      
-      // Mock 구성원 데이터
-      setPartMembers({
-        'part-1': [
-          { id: 'm1', partId: 'part-1', userId: 'user-003', userName: '박민수', userEmail: 'minsu@example.com', role: 'leader', joinedAt: '2025-01-02' },
-          { id: 'm2', partId: 'part-1', userId: 'user-011', userName: '김지은', userEmail: 'jieun@example.com', role: 'member', joinedAt: '2025-01-02' },
-          { id: 'm3', partId: 'part-1', userId: 'user-012', userName: '이준호', userEmail: 'junho@example.com', role: 'member', joinedAt: '2025-01-05' },
-        ],
-        'part-2': [
-          { id: 'm4', partId: 'part-2', userId: 'user-004', userName: '최영수', userEmail: 'youngsu@example.com', role: 'leader', joinedAt: '2025-01-02' },
-          { id: 'm5', partId: 'part-2', userId: 'user-013', userName: '한상철', userEmail: 'sangchul@example.com', role: 'member', joinedAt: '2025-01-02' },
-        ],
-        'part-3': [
-          { id: 'm6', partId: 'part-3', userId: 'user-005', userName: '정수진', userEmail: 'sujin@example.com', role: 'leader', joinedAt: '2025-01-02' },
-        ],
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadProjectRoles = async () => {
-    // Mock 데이터 - 실제로는 API 호출
-    setProjectRoles({
-      educationManager: { id: 'user-006', name: '한미영' },
-      qaLead: { id: 'user-007', name: '오정환' },
-      ba: { id: 'user-008', name: '김현우' },
-    });
-  };
-
-  // 파트 확장/축소 토글
+  // Toggle part expansion
   const togglePartExpand = (partId: string) => {
     const newExpanded = new Set(expandedParts);
     if (newExpanded.has(partId)) {
@@ -178,142 +79,66 @@ export default function PartManagement({ userRole }: PartManagementProps) {
     setExpandedParts(newExpanded);
   };
 
-  // 파트 생성
-  const handleCreatePart = async (data: CreatePartDto) => {
-    try {
-      await apiService.createPart(currentProject!.id, data);
-      await loadParts();
-      setShowCreateDialog(false);
-    } catch (error) {
-      console.error('Failed to create part:', error);
-      // Mock
-      const newPart: Part = {
-        id: `part-${Date.now()}`,
-        projectId: currentProject!.id,
-        name: data.name,
-        description: data.description || '',
-        leaderId: data.leaderId,
-        leaderName: '새 파트장',
-        status: 'ACTIVE',
-        startDate: data.startDate || new Date().toISOString().split('T')[0],
-        endDate: data.endDate || '',
-        progress: 0,
-        memberCount: 1,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      setParts((prev) => [...prev, newPart]);
-      setPartMembers((prev) => ({
-        ...prev,
-        [newPart.id]: [
-          { id: `m-${Date.now()}`, partId: newPart.id, userId: data.leaderId, userName: '새 파트장', userEmail: '', role: 'leader', joinedAt: new Date().toISOString() },
-        ],
-      }));
-      setShowCreateDialog(false);
-    }
+  // Create part
+  const handleCreatePart = (data: CreatePartDto) => {
+    createPartMutation.mutate(
+      { projectId: currentProject.id, data },
+      {
+        onSuccess: () => setShowCreateDialog(false),
+        onError: (error) => console.error('Failed to create part:', error),
+      }
+    );
   };
 
-  // 파트 수정
-  const handleEditPart = async (data: Partial<Part>) => {
+  // Edit part
+  const handleEditPart = (data: Partial<Part>) => {
     if (!editingPart) return;
-    
-    try {
-      await apiService.updatePart(editingPart.id, data);
-      await loadParts();
-      setShowEditDialog(false);
-      setEditingPart(null);
-    } catch (error) {
-      console.error('Failed to update part:', error);
-      // Mock
-      setParts((prev) =>
-        prev.map((p) =>
-          p.id === editingPart.id
-            ? { ...p, ...data, updatedAt: new Date().toISOString() }
-            : p
-        )
-      );
-      setShowEditDialog(false);
-      setEditingPart(null);
-    }
+    updatePartMutation.mutate(
+      { partId: editingPart.id, data },
+      {
+        onSuccess: () => {
+          setShowEditDialog(false);
+          setEditingPart(null);
+        },
+        onError: (error) => console.error('Failed to update part:', error),
+      }
+    );
   };
 
-  // 파트 삭제
-  const handleDeletePart = async (partId: string) => {
+  // Delete part
+  const handleDeletePart = (partId: string) => {
     if (!confirm('정말 이 파트를 삭제하시겠습니까? 파트 내 모든 구성원이 제거됩니다.')) return;
-    
-    try {
-      await apiService.deletePart(partId);
-      await loadParts();
-    } catch (error) {
-      console.error('Failed to delete part:', error);
-      // Mock
-      setParts((prev) => prev.filter((p) => p.id !== partId));
-      setPartMembers((prev) => {
-        const newMembers = { ...prev };
-        delete newMembers[partId];
-        return newMembers;
-      });
-    }
+    deletePartMutation.mutate(partId, {
+      onError: (error) => console.error('Failed to delete part:', error),
+    });
   };
 
-  // 구성원 추가
-  const handleAddMember = async (partId: string, userId: string, userName: string) => {
-    try {
-      await apiService.addPartMember(partId, userId);
-      await loadParts();
-    } catch (error) {
-      console.error('Failed to add member:', error);
-      // Mock
-      const newMember: PartMember = {
-        id: `m-${Date.now()}`,
-        partId,
-        userId,
-        userName,
-        userEmail: `${userName.toLowerCase().replace(' ', '')}@example.com`,
-        role: 'member',
-        joinedAt: new Date().toISOString(),
-      };
-      setPartMembers((prev) => ({
-        ...prev,
-        [partId]: [...(prev[partId] || []), newMember],
-      }));
-      setParts((prev) =>
-        prev.map((p) =>
-          p.id === partId
-            ? { ...p, memberCount: (p.memberCount || 0) + 1 }
-            : p
-        )
-      );
-    }
-    setShowAddMemberDialog(false);
-    setSelectedPartId(null);
+  // Add member
+  const handleAddMember = (partId: string, userId: string, _userName: string) => {
+    addMemberMutation.mutate(
+      { partId, userId },
+      {
+        onSuccess: () => {
+          setShowAddMemberDialog(false);
+          setSelectedPartId(null);
+        },
+        onError: (error) => console.error('Failed to add member:', error),
+      }
+    );
   };
 
-  // 구성원 제거
-  const handleRemoveMember = async (partId: string, memberId: string) => {
+  // Remove member
+  const handleRemoveMember = (partId: string, memberId: string) => {
     if (!confirm('정말 이 구성원을 파트에서 제거하시겠습니까?')) return;
-    
-    try {
-      await apiService.removePartMember(partId, memberId);
-      await loadParts();
-    } catch (error) {
-      console.error('Failed to remove member:', error);
-      // Mock
-      setPartMembers((prev) => ({
-        ...prev,
-        [partId]: prev[partId]?.filter((m) => m.id !== memberId) || [],
-      }));
-      setParts((prev) =>
-        prev.map((p) =>
-          p.id === partId
-            ? { ...p, memberCount: Math.max(0, (p.memberCount || 1) - 1) }
-            : p
-        )
-      );
-    }
+    removeMemberMutation.mutate(
+      { partId, memberId },
+      {
+        onError: (error) => console.error('Failed to remove member:', error),
+      }
+    );
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[400px]">
         <div className="text-center">
@@ -412,143 +237,26 @@ export default function PartManagement({ userRole }: PartManagementProps) {
             )}
           </div>
         ) : (
-          parts.map((part) => {
-            const statusInfo = PART_STATUS_INFO[part.status];
-            const isExpanded = expandedParts.has(part.id);
-            const members = partMembers[part.id] || [];
-            const leader = members.find((m) => m.role === 'leader');
-            const regularMembers = members.filter((m) => m.role === 'member');
-
-            return (
-              <div key={part.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                {/* 파트 헤더 */}
-                <div
-                  className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
-                  onClick={() => togglePartExpand(part.id)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                        <Users className="text-blue-600" size={20} />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold text-gray-900">{part.name}</h3>
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusInfo.bgColor} ${statusInfo.color}`}>
-                            {statusInfo.label}
-                          </span>
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          파트장: {part.leaderName || '미지정'} | 구성원: {part.memberCount || members.length}명
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      {/* 진행률 */}
-                      <div className="text-right">
-                        <div className="text-sm text-gray-500">진행률</div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-blue-600 rounded-full"
-                              style={{ width: `${part.progress}%` }}
-                            />
-                          </div>
-                          <span className="text-sm font-medium text-gray-900">{part.progress}%</span>
-                        </div>
-                      </div>
-                      {/* 액션 버튼 */}
-                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                        {canManage && (
-                          <>
-                            <button
-                              onClick={() => {
-                                setEditingPart(part);
-                                setShowEditDialog(true);
-                              }}
-                              className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded"
-                              title="편집"
-                            >
-                              <Edit2 size={16} />
-                            </button>
-                            <button
-                              onClick={() => handleDeletePart(part.id)}
-                              className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded"
-                              title="삭제"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </>
-                        )}
-                        <button className="p-1.5 text-gray-500 hover:text-gray-700">
-                          {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 파트 상세 (구성원 목록) */}
-                {isExpanded && (
-                  <div className="border-t border-gray-200 p-4 bg-gray-50">
-                    <div className="space-y-3">
-                      {/* 파트장 */}
-                      {leader && (
-                        <div className="flex items-center gap-3 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                          <div className="w-10 h-10 rounded-full bg-yellow-200 flex items-center justify-center">
-                            <Crown className="text-yellow-600" size={18} />
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-gray-900">{leader.userName}</span>
-                              <span className="text-xs px-2 py-0.5 bg-yellow-200 text-yellow-700 rounded-full">파트장</span>
-                            </div>
-                            <div className="text-sm text-gray-500">{leader.userEmail}</div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* 구성원 목록 */}
-                      {regularMembers.map((member) => (
-                        <div key={member.id} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200">
-                          <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-sm font-medium text-gray-600">
-                            {member.userName[0]}
-                          </div>
-                          <div className="flex-1">
-                            <div className="font-medium text-gray-900">{member.userName}</div>
-                            <div className="text-sm text-gray-500">{member.userEmail}</div>
-                          </div>
-                          {canManage && (
-                            <button
-                              onClick={() => handleRemoveMember(part.id, member.id)}
-                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
-                              title="제거"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-
-                      {/* 구성원 추가 버튼 */}
-                      {(canManage || userRole === 'developer') && (
-                        <button
-                          onClick={() => {
-                            setSelectedPartId(part.id);
-                            setShowAddMemberDialog(true);
-                          }}
-                          className="w-full flex items-center justify-center gap-2 p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors"
-                        >
-                          <UserPlus size={18} />
-                          구성원 추가
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })
+          parts.map((part) => (
+            <PartCard
+              key={part.id}
+              part={part}
+              isExpanded={expandedParts.has(part.id)}
+              canManage={canManage}
+              userRole={userRole}
+              onToggleExpand={() => togglePartExpand(part.id)}
+              onEdit={() => {
+                setEditingPart(part);
+                setShowEditDialog(true);
+              }}
+              onDelete={() => handleDeletePart(part.id)}
+              onRemoveMember={handleRemoveMember}
+              onAddMember={() => {
+                setSelectedPartId(part.id);
+                setShowAddMemberDialog(true);
+              }}
+            />
+          ))
         )}
       </div>
 
@@ -578,9 +286,8 @@ export default function PartManagement({ userRole }: PartManagementProps) {
 
       {/* 구성원 추가 다이얼로그 */}
       {showAddMemberDialog && selectedPartId && (
-        <AddMemberDialog
+        <AddMemberDialogWithQuery
           partId={selectedPartId}
-          existingMembers={partMembers[selectedPartId] || []}
           onClose={() => {
             setShowAddMemberDialog(false);
             setSelectedPartId(null);
@@ -590,6 +297,131 @@ export default function PartManagement({ userRole }: PartManagementProps) {
       )}
     </div>
   );
+}
+
+// Part card component with members hook
+interface PartCardProps {
+  part: Part;
+  isExpanded: boolean;
+  canManage: boolean;
+  userRole: UserRole;
+  onToggleExpand: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onRemoveMember: (partId: string, memberId: string) => void;
+  onAddMember: () => void;
+}
+
+function PartCard({ part, isExpanded, canManage, userRole, onToggleExpand, onEdit, onDelete, onRemoveMember, onAddMember }: PartCardProps) {
+  const { data: members = [] } = usePartMembers(part.id);
+  const statusInfo = PART_STATUS_INFO[part.status];
+  const leader = members.find((m) => m.role === 'leader');
+  const regularMembers = members.filter((m) => m.role === 'member');
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      {/* Part header */}
+      <div
+        className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+        onClick={onToggleExpand}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+              <Users className="text-blue-600" size={20} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-gray-900">{part.name}</h3>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusInfo.bgColor} ${statusInfo.color}`}>
+                  {statusInfo.label}
+                </span>
+              </div>
+              <div className="text-sm text-gray-500">
+                파트장: {part.leaderName || '미지정'} | 구성원: {part.memberCount || members.length}명
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <div className="text-sm text-gray-500">진행률</div>
+              <div className="flex items-center gap-2">
+                <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="h-full bg-blue-600 rounded-full" style={{ width: `${part.progress}%` }} />
+                </div>
+                <span className="text-sm font-medium text-gray-900">{part.progress}%</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+              {canManage && (
+                <>
+                  <button onClick={onEdit} className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded" title="편집">
+                    <Edit2 size={16} />
+                  </button>
+                  <button onClick={onDelete} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded" title="삭제">
+                    <Trash2 size={16} />
+                  </button>
+                </>
+              )}
+              <button className="p-1.5 text-gray-500 hover:text-gray-700">
+                {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Part details (members list) */}
+      {isExpanded && (
+        <div className="border-t border-gray-200 p-4 bg-gray-50">
+          <div className="space-y-3">
+            {leader && (
+              <div className="flex items-center gap-3 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                <div className="w-10 h-10 rounded-full bg-yellow-200 flex items-center justify-center">
+                  <Crown className="text-yellow-600" size={18} />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-gray-900">{leader.userName}</span>
+                    <span className="text-xs px-2 py-0.5 bg-yellow-200 text-yellow-700 rounded-full">파트장</span>
+                  </div>
+                  <div className="text-sm text-gray-500">{leader.userEmail}</div>
+                </div>
+              </div>
+            )}
+            {regularMembers.map((member) => (
+              <div key={member.id} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200">
+                <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-sm font-medium text-gray-600">
+                  {member.userName[0]}
+                </div>
+                <div className="flex-1">
+                  <div className="font-medium text-gray-900">{member.userName}</div>
+                  <div className="text-sm text-gray-500">{member.userEmail}</div>
+                </div>
+                {canManage && (
+                  <button onClick={() => onRemoveMember(part.id, member.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded" title="제거">
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
+            ))}
+            {(canManage || userRole === 'developer') && (
+              <button onClick={onAddMember} className="w-full flex items-center justify-center gap-2 p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors">
+                <UserPlus size={18} />
+                구성원 추가
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Add member dialog wrapper with query
+function AddMemberDialogWithQuery({ partId, onClose, onAdd }: { partId: string; onClose: () => void; onAdd: (partId: string, userId: string, userName: string) => void }) {
+  const { data: existingMembers = [] } = usePartMembers(partId);
+  return <AddMemberDialog partId={partId} existingMembers={existingMembers} onClose={onClose} onAdd={onAdd} />;
 }
 
 // 파트 생성/수정 다이얼로그

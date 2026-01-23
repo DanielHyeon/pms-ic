@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import {
   FileText,
   Upload,
@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { useProject } from '../../contexts/ProjectContext';
 import { Rfp, RfpStatus, ProcessingStatus } from '../../types/project';
-import { apiService } from '../../services/api';
+import { useRfps, useCreateRfp, useUploadRfpFile, useExtractRequirements } from '../../hooks/api/useRfps';
 import { UserRole } from '../App';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -76,45 +76,30 @@ const processingConfig: Record<ProcessingStatus, { label: string; color: string 
 
 export default function RfpManagement({ userRole }: RfpManagementProps) {
   const { currentProject } = useProject();
-  const [rfps, setRfps] = useState<Rfp[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const { data: rfps = [], isLoading, refetch: loadRfps } = useRfps(currentProject?.id);
+  const createRfpMutation = useCreateRfp();
+  const uploadFileMutation = useUploadRfpFile();
+  const extractMutation = useExtractRequirements();
+
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<RfpStatus | 'ALL'>('ALL');
 
-  // 다이얼로그 상태
+  // Dialog state
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [selectedRfp, setSelectedRfp] = useState<Rfp | null>(null);
 
-  // 새 RFP 폼 상태
+  // New RFP form state
   const [newRfp, setNewRfp] = useState({
     title: '',
     content: '',
   });
   const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
-  const [isExtracting, setIsExtracting] = useState(false);
 
-  // RFP 목록 로드
-  const loadRfps = useCallback(async () => {
-    if (!currentProject) return;
+  const isCreating = createRfpMutation.isPending || uploadFileMutation.isPending;
+  const isExtracting = extractMutation.isPending;
 
-    setIsLoading(true);
-    try {
-      const data = await apiService.getRfps(currentProject.id);
-      setRfps(data || []);
-    } catch (error) {
-      console.error('Failed to load RFPs:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentProject]);
-
-  useEffect(() => {
-    loadRfps();
-  }, [loadRfps]);
-
-  // 필터링된 RFP 목록
+  // Filtered RFP list
   const filteredRfps = rfps.filter((rfp) => {
     const matchesSearch =
       rfp.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -123,46 +108,52 @@ export default function RfpManagement({ userRole }: RfpManagementProps) {
     return matchesSearch && matchesStatus;
   });
 
-  // RFP 생성
-  const handleCreateRfp = async () => {
+  // Create RFP
+  const handleCreateRfp = () => {
     if (!currentProject || !newRfp.title.trim()) return;
 
-    setIsCreating(true);
-    try {
-      if (uploadFile) {
-        await apiService.uploadRfpFile(currentProject.id, uploadFile, newRfp.title);
-      } else {
-        await apiService.createRfp(currentProject.id, {
-          title: newRfp.title,
-          content: newRfp.content,
-          status: 'DRAFT',
-          processingStatus: 'PENDING',
-        });
-      }
+    const onSuccess = () => {
       setIsCreateDialogOpen(false);
       setNewRfp({ title: '', content: '' });
       setUploadFile(null);
-      await loadRfps();
-    } catch (error) {
+    };
+
+    const onError = (error: Error) => {
       console.error('Failed to create RFP:', error);
-    } finally {
-      setIsCreating(false);
+    };
+
+    if (uploadFile) {
+      uploadFileMutation.mutate(
+        { projectId: currentProject.id, file: uploadFile, title: newRfp.title },
+        { onSuccess, onError }
+      );
+    } else {
+      createRfpMutation.mutate(
+        {
+          projectId: currentProject.id,
+          data: {
+            title: newRfp.title,
+            content: newRfp.content,
+            status: 'DRAFT',
+            processingStatus: 'PENDING',
+          },
+        },
+        { onSuccess, onError }
+      );
     }
   };
 
-  // 요구사항 추출 시작
-  const handleExtractRequirements = async (rfp: Rfp) => {
+  // Extract requirements
+  const handleExtractRequirements = (rfp: Rfp) => {
     if (!currentProject) return;
-
-    setIsExtracting(true);
-    try {
-      await apiService.extractRequirements(currentProject.id, rfp.id, rfp.content);
-      await loadRfps();
-    } catch (error) {
-      console.error('Failed to extract requirements:', error);
-    } finally {
-      setIsExtracting(false);
-    }
+    extractMutation.mutate(
+      { projectId: currentProject.id, rfpId: rfp.id, content: rfp.content },
+      {
+        onError: (error) => {
+          console.error('Failed to extract requirements:', error);
+        },
+      }
+    );
   };
 
   // RFP 상세 보기

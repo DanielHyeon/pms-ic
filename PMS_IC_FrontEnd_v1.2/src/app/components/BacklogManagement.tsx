@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { ChevronDown, ChevronRight, Plus, Star, ArrowUp, ArrowDown, Users } from 'lucide-react';
 import { UserRole } from '../App';
-import { apiService } from '../../services/api';
+import { useStories, useCreateStory, useUpdateStory, useUpdateStoryPriority } from '../../hooks/api/useStories';
 
 interface UserStory {
   id: number;
@@ -15,97 +15,12 @@ interface UserStory {
   acceptanceCriteria: string[];
 }
 
-const initialStories: UserStory[] = [
-  {
-    id: 1,
-    title: '사용자로서 영수증 이미지를 업로드하면 자동으로 항목이 추출되기를 원한다',
-    description: '영수증 OCR 기능 구현',
-    priority: 1,
-    storyPoints: 8,
-    status: 'SELECTED',
-    assignee: '이영희',
-    epic: 'OCR 엔진',
-    acceptanceCriteria: [
-      '영수증 이미지 업로드 시 95% 이상 정확도로 텍스트 추출',
-      '병원명, 진료일, 금액 등 핵심 항목 자동 인식',
-      '인식 결과를 사용자가 수정할 수 있는 UI 제공',
-    ],
-  },
-  {
-    id: 2,
-    title: '심사자로서 AI의 판단 근거를 명확히 확인하여 신뢰성을 검증하고 싶다',
-    description: 'AI 설명 가능성(XAI) 기능 구현',
-    priority: 2,
-    storyPoints: 13,
-    status: 'BACKLOG',
-    epic: 'AI 모델',
-    acceptanceCriteria: [
-      'AI 판단의 주요 근거(약관 조항, 유사 판례 등) 제공',
-      '신뢰도 점수 표시 (0-100%)',
-      '판단 근거를 시각적으로 하이라이트',
-    ],
-  },
-  {
-    id: 3,
-    title: '관리자로서 모델의 성능 지표를 실시간으로 모니터링하고 싶다',
-    description: '모델 성능 대시보드 구축',
-    priority: 3,
-    storyPoints: 5,
-    status: 'COMPLETED',
-    assignee: '박민수',
-    epic: '인프라',
-    acceptanceCriteria: [
-      '정확도, 재현율, F1-Score 등 핵심 지표 시각화',
-      '일별/주별 성능 추이 그래프',
-      '이상 징후 감지 시 알림 기능',
-    ],
-  },
-  {
-    id: 4,
-    title: '개발자로서 학습 데이터를 쉽게 라벨링하고 관리하고 싶다',
-    description: '데이터 라벨링 도구 개발',
-    priority: 4,
-    storyPoints: 8,
-    status: 'BACKLOG',
-    epic: '데이터 관리',
-    acceptanceCriteria: [
-      '이미지 및 텍스트 데이터 라벨링 UI',
-      '라벨링 품질 검증 기능',
-      '팀 간 라벨링 작업 분배 및 진행률 추적',
-    ],
-  },
-  {
-    id: 5,
-    title: '사용자로서 진단서를 업로드하면 자동으로 질병명과 진료 내용이 분류되기를 원한다',
-    description: '진단서 자동 분류 기능',
-    priority: 5,
-    storyPoints: 13,
-    status: 'BACKLOG',
-    epic: 'OCR 엔진',
-    acceptanceCriteria: [
-      '진단서 이미지에서 질병명 자동 추출',
-      '진료 내용을 보험 약관 항목으로 자동 매핑',
-      '98% 이상의 분류 정확도',
-    ],
-  },
-  {
-    id: 6,
-    title: '심사자로서 과거 유사 케이스를 빠르게 검색하여 참고하고 싶다',
-    description: '유사 케이스 검색 엔진',
-    priority: 6,
-    storyPoints: 8,
-    status: 'BACKLOG',
-    epic: 'AI 모델',
-    acceptanceCriteria: [
-      '의미 기반 검색(Semantic Search) 기능',
-      '검색 결과에 유사도 점수 표시',
-      '검색 결과를 심사 화면에 바로 참조',
-    ],
-  },
-];
-
 export default function BacklogManagement({ userRole }: { userRole: UserRole }) {
-  const [stories, setStories] = useState<UserStory[]>(initialStories);
+  const { data: stories = [], isLoading: isLoadingStories } = useStories();
+  const createStoryMutation = useCreateStory();
+  const updateStoryMutation = useUpdateStory();
+  const updatePriorityMutation = useUpdateStoryPriority();
+
   const [expandedStory, setExpandedStory] = useState<number | null>(null);
   const [showPlanningPoker, setShowPlanningPoker] = useState(false);
   const [selectedStoryForPoker, setSelectedStoryForPoker] = useState<number | null>(null);
@@ -116,74 +31,34 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
     epic: '',
     acceptanceCriteria: [''],
   });
-  const [isLoading, setIsLoading] = useState(false);
   const [selectedEpicFilter, setSelectedEpicFilter] = useState<string>('전체');
 
   const canEdit = ['pm', 'developer', 'qa', 'pmo_head'].includes(userRole);
   const canPrioritize = ['pm', 'pmo_head'].includes(userRole);
 
-  // Load stories from API on mount (only once when component first renders)
-  useEffect(() => {
-    // Check if we have stories in localStorage first
-    const savedStories = localStorage.getItem('backlog_stories');
-    if (savedStories) {
-      try {
-        setStories(JSON.parse(savedStories));
-      } catch (error) {
-        console.error('Failed to parse saved stories:', error);
-        loadStories();
-      }
-    } else {
-      loadStories();
-    }
-  }, []);
-
-  // Save stories to localStorage whenever they change
-  useEffect(() => {
-    if (stories.length > 0) {
-      localStorage.setItem('backlog_stories', JSON.stringify(stories));
-    }
-  }, [stories]);
-
-  const loadStories = async () => {
-    try {
-      const data = await apiService.getStories();
-      // Always update with API data if available, even if empty
-      // This ensures backend is the source of truth
-      if (data) {
-        setStories(data.length > 0 ? data : initialStories);
-      }
-    } catch (error) {
-      console.error('Failed to load stories:', error);
-      // Keep current stories on error
-    }
-  };
-
-  const handleAddStory = async () => {
+  const handleAddStory = () => {
     if (!newStory.title || !newStory.description || !newStory.epic) {
       alert('필수 항목을 모두 입력해주세요.');
       return;
     }
 
-    setIsLoading(true);
-    try {
-      const storyData = {
-        title: newStory.title,
-        description: newStory.description,
-        epic: newStory.epic,
-        acceptanceCriteria: newStory.acceptanceCriteria.filter((c) => c.trim() !== ''),
-      };
+    const storyData = {
+      title: newStory.title,
+      description: newStory.description,
+      epic: newStory.epic,
+      acceptanceCriteria: newStory.acceptanceCriteria.filter((c) => c.trim() !== ''),
+    };
 
-      const createdStory = await apiService.createStory(storyData);
-      setStories([...stories, createdStory]);
-      setShowAddStoryModal(false);
-      setNewStory({ title: '', description: '', epic: '', acceptanceCriteria: [''] });
-    } catch (error) {
-      console.error('Failed to create story:', error);
-      alert('스토리 추가에 실패했습니다.');
-    } finally {
-      setIsLoading(false);
-    }
+    createStoryMutation.mutate(storyData, {
+      onSuccess: () => {
+        setShowAddStoryModal(false);
+        setNewStory({ title: '', description: '', epic: '', acceptanceCriteria: [''] });
+      },
+      onError: (error) => {
+        console.error('Failed to create story:', error);
+        alert('스토리 추가에 실패했습니다.');
+      },
+    });
   };
 
   const epics = Array.from(new Set(stories.map((s) => s.epic)));
@@ -194,61 +69,19 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
     return 'text-green-600 bg-green-50';
   };
 
-  const movePriority = async (id: number, direction: 'up' | 'down') => {
+  const movePriority = (id: number, direction: 'up' | 'down') => {
     if (!canPrioritize) return;
-
-    try {
-      const updatedStories = await apiService.updateStoryPriority(id, direction);
-      if (updatedStories && updatedStories.length > 0) {
-        setStories(updatedStories);
-      } else {
-        // Fallback to local update if API doesn't return stories
-        setStories((prev) => {
-          const idx = prev.findIndex((s) => s.id === id);
-          if (idx === -1) return prev;
-
-          const newStories = [...prev];
-          if (direction === 'up' && idx > 0) {
-            const temp = newStories[idx].priority;
-            newStories[idx].priority = newStories[idx - 1].priority;
-            newStories[idx - 1].priority = temp;
-            [newStories[idx], newStories[idx - 1]] = [newStories[idx - 1], newStories[idx]];
-          } else if (direction === 'down' && idx < newStories.length - 1) {
-            const temp = newStories[idx].priority;
-            newStories[idx].priority = newStories[idx + 1].priority;
-            newStories[idx + 1].priority = temp;
-            [newStories[idx], newStories[idx + 1]] = [newStories[idx + 1], newStories[idx]];
-          }
-          return newStories;
-        });
-      }
-    } catch (error) {
-      console.error('Failed to update priority:', error);
-    }
+    updatePriorityMutation.mutate({ id, direction });
   };
 
-  const moveToSprint = async (storyId: number) => {
+  const moveToSprint = (storyId: number) => {
     if (!canEdit) return;
-    try {
-      await apiService.updateStory(storyId, { status: 'SELECTED' });
-      setStories((prev) =>
-        prev.map((s) => (s.id === storyId ? { ...s, status: 'SELECTED' } : s))
-      );
-    } catch (error) {
-      console.error('Failed to move to sprint:', error);
-    }
+    updateStoryMutation.mutate({ id: storyId, data: { status: 'SELECTED' } });
   };
 
-  const removeFromSprint = async (storyId: number) => {
+  const removeFromSprint = (storyId: number) => {
     if (!canEdit) return;
-    try {
-      await apiService.updateStory(storyId, { status: 'BACKLOG' });
-      setStories((prev) =>
-        prev.map((s) => (s.id === storyId ? { ...s, status: 'BACKLOG' } : s))
-      );
-    } catch (error) {
-      console.error('Failed to remove from sprint:', error);
-    }
+    updateStoryMutation.mutate({ id: storyId, data: { status: 'BACKLOG' } });
   };
 
   // Filter stories by epic
@@ -459,17 +292,17 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
             <div className="flex gap-3 mt-6">
               <button
                 onClick={handleAddStory}
-                disabled={isLoading}
+                disabled={createStoryMutation.isPending}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isLoading ? '추가 중...' : '스토리 추가'}
+                {createStoryMutation.isPending ? '추가 중...' : '스토리 추가'}
               </button>
               <button
                 onClick={() => {
                   setShowAddStoryModal(false);
                   setNewStory({ title: '', description: '', epic: '', acceptanceCriteria: [''] });
                 }}
-                disabled={isLoading}
+                disabled={createStoryMutation.isPending}
                 className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 취소
