@@ -164,3 +164,24 @@ export function useDeletePhaseKpi() {
     },
   });
 }
+
+export function useApproveDeliverable() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      deliverableId,
+      approved,
+    }: {
+      deliverableId: string;
+      approved: boolean;
+      phaseId?: string;
+    }) => apiService.approveDeliverable(deliverableId, approved),
+    onSuccess: (_, { phaseId }) => {
+      if (phaseId) {
+        queryClient.invalidateQueries({ queryKey: phaseKeys.deliverables(phaseId) });
+      }
+      queryClient.invalidateQueries({ queryKey: phaseKeys.lists() });
+    },
+  });
+}
