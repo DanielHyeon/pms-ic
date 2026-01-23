@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Shield, Lock, User, AlertCircle, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
-import { apiService } from '../../services/api';
+import { useLogin, useSetToken } from '../../hooks/api';
 import { useAuthStore, UserRole, UserInfo } from '../../stores/authStore';
 
 // Demo user accounts - password is 'password123' for all users (matches database)
@@ -92,13 +92,16 @@ export default function LoginScreen() {
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuthStore();
+  const loginMutation = useLogin();
+  const { setToken } = useSetToken();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [showQuickLogin, setShowQuickLogin] = useState(true);
+
+  const isLoading = loginMutation.isPending;
 
   // Get the redirect path from location state or default to '/'
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/';
@@ -111,24 +114,21 @@ export default function LoginScreen() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setIsLoading(true);
 
     try {
-      const response = await apiService.login(email, password);
+      const response = await loginMutation.mutateAsync({ email, password });
 
       if (response.token && response.user) {
-        apiService.setToken(response.token);
         handleLogin(response.user as UserInfo, response.token);
       } else {
         // Fallback to demo users
         const user = demoUsers[email.toLowerCase()];
 
         if (user && user.password === password) {
-          apiService.setToken('demo-token-' + email);
+          setToken('demo-token-' + email);
           handleLogin(user.userInfo);
         } else {
           setError('이메일 또는 비밀번호가 올바르지 않습니다.');
-          setIsLoading(false);
         }
       }
     } catch (err) {
@@ -136,11 +136,10 @@ export default function LoginScreen() {
       const user = demoUsers[email.toLowerCase()];
 
       if (user && user.password === password) {
-        apiService.setToken('demo-token-' + email);
+        setToken('demo-token-' + email);
         handleLogin(user.userInfo);
       } else {
         setError('이메일 또는 비밀번호가 올바르지 않습니다.');
-        setIsLoading(false);
       }
     }
   };
@@ -148,22 +147,20 @@ export default function LoginScreen() {
   const handleQuickLogin = async (userEmail: string) => {
     const user = demoUsers[userEmail];
     if (user) {
-      setIsLoading(true);
       setEmail(userEmail);
       setPassword(user.password);
 
       try {
-        const response = await apiService.login(userEmail, user.password);
+        const response = await loginMutation.mutateAsync({ email: userEmail, password: user.password });
 
         if (response.token && response.user) {
-          apiService.setToken(response.token);
           handleLogin(response.user as UserInfo, response.token);
         } else {
-          apiService.setToken('demo-token-' + userEmail);
+          setToken('demo-token-' + userEmail);
           handleLogin(user.userInfo);
         }
       } catch (err) {
-        apiService.setToken('demo-token-' + userEmail);
+        setToken('demo-token-' + userEmail);
         setTimeout(() => {
           handleLogin(user.userInfo);
         }, 800);

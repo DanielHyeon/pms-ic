@@ -42,3 +42,6 @@ export * from './useLineage';
 
 // Chat hooks
 export * from './useChat';
+
+// Auth hooks
+export * from './useAuth';
