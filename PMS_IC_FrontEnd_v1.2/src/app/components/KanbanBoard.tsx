@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useDrag, useDrop } from 'react-dnd';
-import { Clock, AlertTriangle, Flame, Lock, Plus } from 'lucide-react';
+import { Clock, AlertTriangle, Flame, Lock, Plus, Loader2 } from 'lucide-react';
 import { UserRole } from '../App';
 import TaskFormModal from './TaskFormModal';
 import { useKanbanBoard, Task, Column as ColumnType } from '../../hooks/useKanbanBoard';
+import { useKanbanTasks, organizeTasksIntoColumns, useCreateTask, useUpdateTask, useDeleteTask } from '../../hooks/api/useTasks';
 import { getPriorityColor } from '../../utils/status';
 
 interface TaskCardProps {
@@ -245,14 +246,67 @@ export default function KanbanBoard({ userRole }: { userRole: UserRole }) {
   const canEdit = ['pm', 'developer', 'qa'].includes(userRole);
   const isReadOnly = ['auditor', 'sponsor'].includes(userRole);
 
-  const { columns, stats, moveTask, addTask, updateTask, deleteTask } = useKanbanBoard(initialColumns, canEdit);
+  // Fetch tasks from API
+  const { data: apiTasks = [], isLoading } = useKanbanTasks();
+  const createTaskMutation = useCreateTask();
+  const updateTaskMutation = useUpdateTask();
+  const deleteTaskMutation = useDeleteTask();
+
+  // Use local hook as fallback when API returns no data
+  const { columns: localColumns, stats: localStats, moveTask, addTask, updateTask, deleteTask } = useKanbanBoard(initialColumns, canEdit);
+
+  // Organize API tasks into columns, fallback to local if no API data
+  const columns = useMemo(() => {
+    if (apiTasks.length > 0) {
+      // Map API tasks to local Task format for compatibility
+      const mappedColumns = organizeTasksIntoColumns(apiTasks);
+      return mappedColumns.map((col) => ({
+        ...col,
+        tasks: col.tasks.map((t) => ({
+          id: parseInt(t.id.replace(/\D/g, '')) || Date.now(), // Convert string ID to number
+          title: t.title,
+          assignee: t.assignee,
+          priority: t.priority,
+          storyPoints: t.storyPoints,
+          dueDate: t.dueDate,
+          isFirefighting: t.isFirefighting,
+          labels: t.labels,
+        })),
+      }));
+    }
+    return localColumns;
+  }, [apiTasks, localColumns]);
+
+  // Calculate stats from columns
+  const stats = useMemo(() => {
+    const totalTasks = columns.reduce((sum, col) => sum + col.tasks.length, 0);
+    const completedTasks = columns.find((col) => col.id === 'done')?.tasks.length || 0;
+    const inProgressTasks = columns.find((col) => col.id === 'inProgress')?.tasks.length || 0;
+    const firefightingTasks = columns.reduce(
+      (sum, col) => sum + col.tasks.filter((t) => t.isFirefighting).length,
+      0
+    );
+    return { totalTasks, completedTasks, inProgressTasks, firefightingTasks };
+  }, [columns]);
 
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
   const [showEditTaskModal, setShowEditTaskModal] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
-  const handleAddTask = (task: Task) => {
-    addTask(task);
+  const handleAddTask = async (task: Task) => {
+    try {
+      await createTaskMutation.mutateAsync({
+        title: task.title,
+        assigneeId: task.assignee,
+        priority: task.priority.toUpperCase(),
+        dueDate: task.dueDate,
+        tags: task.labels,
+        status: 'TODO',
+      });
+    } catch {
+      // Fallback to local state
+      addTask(task);
+    }
     setShowAddTaskModal(false);
   };
 
@@ -261,21 +315,46 @@ export default function KanbanBoard({ userRole }: { userRole: UserRole }) {
     setShowEditTaskModal(true);
   };
 
-  const handleUpdateTask = (task: Task) => {
-    updateTask(task);
+  const handleUpdateTask = async (task: Task) => {
+    try {
+      await updateTaskMutation.mutateAsync({
+        id: String(task.id),
+        data: {
+          title: task.title,
+          assigneeId: task.assignee,
+          priority: task.priority.toUpperCase(),
+          dueDate: task.dueDate,
+          tags: task.labels,
+        },
+      });
+    } catch {
+      // Fallback to local state
+      updateTask(task);
+    }
     setShowEditTaskModal(false);
     setEditingTask(null);
   };
 
-  const handleDeleteTask = () => {
+  const handleDeleteTask = async () => {
     if (!editingTask || !confirm('이 작업을 삭제하시겠습니까?')) return;
-    deleteTask(editingTask.id);
+    try {
+      await deleteTaskMutation.mutateAsync(String(editingTask.id));
+    } catch {
+      // Fallback to local state
+      deleteTask(editingTask.id);
+    }
     setShowEditTaskModal(false);
     setEditingTask(null);
   };
 
   return (
     <div className="p-6">
+      {isLoading && (
+        <div className="mb-6 flex items-center justify-center gap-2 text-blue-600">
+          <Loader2 className="animate-spin" size={20} />
+          <span>작업 목록을 불러오는 중...</span>
+        </div>
+      )}
       {isReadOnly && (
         <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-center gap-3">
           <Lock className="text-amber-600" size={20} />

@@ -30,6 +30,7 @@ import {
   useDeleteIssue,
   useUpdateIssueStatus,
 } from '../../hooks/api/useCommon';
+import { useProjectDeliverables } from '../../hooks/api/usePhases';
 
 // ========================================
 // 타입 정의
@@ -74,14 +75,15 @@ interface Deliverable {
   type: 'DOCUMENT' | 'CODE' | 'REPORT' | 'PRESENTATION' | 'OTHER';
   status: 'PENDING' | 'IN_REVIEW' | 'APPROVED' | 'REJECTED';
   version?: string;
-  submissionDate?: string;
+  uploadedAt?: string;
   dueDate?: string;
-  inspectionDate?: string;
-  inspector?: string;
   fileName?: string;
   uploadedBy?: string;
   approver?: string;
+  approvedBy?: string;
   approvedAt?: string;
+  phaseId?: string;
+  phaseName?: string;
 }
 
 type TabType = 'deliverables' | 'meetings' | 'issues';
@@ -294,11 +296,31 @@ const initialDeliverables: Deliverable[] = [
 export default function CommonManagement({ userRole }: { userRole: UserRole }) {
   const { currentProject } = useProject();
   const [activeTab, setActiveTab] = useState<TabType>('deliverables');
-  const [deliverables] = useState<Deliverable[]>(initialDeliverables);
 
   // TanStack Query hooks
   const { data: meetings = [], isLoading: meetingsLoading } = useMeetings(currentProject?.id);
   const { data: issues = [], isLoading: issuesLoading } = useIssues(currentProject?.id);
+  const { data: apiDeliverables = [], isLoading: deliverablesLoading } = useProjectDeliverables(currentProject?.id);
+
+  // Map API deliverables to component format, fallback to initial data if empty
+  const deliverables: Deliverable[] = apiDeliverables.length > 0
+    ? apiDeliverables.map((d: any) => ({
+        id: d.id,
+        name: d.name,
+        description: d.description,
+        type: d.type || 'DOCUMENT',
+        status: d.status || 'PENDING',
+        version: d.version,
+        uploadedAt: d.uploadedAt,
+        fileName: d.fileName,
+        uploadedBy: d.uploadedBy,
+        approver: d.approver,
+        approvedBy: d.approver,
+        approvedAt: d.approvedAt,
+        phaseId: d.phaseId,
+        phaseName: d.phaseName,
+      }))
+    : initialDeliverables;
 
   const createMeetingMutation = useCreateMeeting();
   const updateMeetingMutation = useUpdateMeeting();
@@ -309,7 +331,7 @@ export default function CommonManagement({ userRole }: { userRole: UserRole }) {
   const deleteIssueMutation = useDeleteIssue();
   const updateIssueStatusMutation = useUpdateIssueStatus();
 
-  const loading = meetingsLoading || issuesLoading;
+  const loading = meetingsLoading || issuesLoading || deliverablesLoading;
 
   // 필터 상태
   const [meetingFilter, setMeetingFilter] = useState<string>('');
@@ -617,6 +639,11 @@ export default function CommonManagement({ userRole }: { userRole: UserRole }) {
                               <p className="text-sm text-gray-500 ml-7 mb-1">{deliverable.description}</p>
                             )}
                             <div className="flex items-center gap-4 text-xs text-gray-400 ml-7">
+                              {deliverable.phaseName && (
+                                <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">
+                                  {deliverable.phaseName}
+                                </span>
+                              )}
                               {deliverable.uploadedAt && (
                                 <span className="flex items-center gap-1">
                                   <Clock size={12} />

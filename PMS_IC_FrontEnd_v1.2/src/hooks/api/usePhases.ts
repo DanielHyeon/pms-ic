@@ -185,3 +185,40 @@ export function useApproveDeliverable() {
     },
   });
 }
+
+// Project-level deliverables hook - aggregates deliverables from all phases
+export function useProjectDeliverables(projectId?: string) {
+  const { data: phases = [] } = usePhases(projectId);
+
+  return useQuery({
+    queryKey: [...phaseKeys.all, 'project-deliverables', { projectId }],
+    queryFn: async () => {
+      if (!phases || phases.length === 0) return [];
+
+      const phaseIds = phases.map((p: { id: string }) => p.id);
+      const deliverablePromises = phaseIds.map((phaseId: string) =>
+        apiService.getPhaseDeliverables(phaseId).catch(() => [])
+      );
+
+      const results = await Promise.all(deliverablePromises);
+
+      // Flatten and add phase info to each deliverable
+      const allDeliverables: any[] = [];
+      results.forEach((deliverables, index) => {
+        const phase = phases[index];
+        if (Array.isArray(deliverables)) {
+          deliverables.forEach((d: any) => {
+            allDeliverables.push({
+              ...d,
+              phaseId: phase.id,
+              phaseName: phase.name,
+            });
+          });
+        }
+      });
+
+      return allDeliverables;
+    },
+    enabled: !!projectId && phases.length > 0,
+  });
+}

@@ -455,6 +455,10 @@ export class ApiService {
     }, { message: 'KPI deleted' });
   }
 
+  async getTasks() {
+    return this.fetchWithFallback('/tasks', {}, []);
+  }
+
   async getTaskColumns() {
     return this.fetchWithFallback('/tasks/columns', {}, []);
   }
