@@ -1,27 +1,34 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Project, ProjectSummary } from '../types/project';
-import { apiService } from '../services/api';
+import {
+  useProjects as useProjectsQuery,
+  useProject as useProjectQuery,
+  useCreateProject as useCreateProjectMutation,
+  useUpdateProject as useUpdateProjectMutation,
+  projectKeys,
+} from '../hooks/api';
 
 interface ProjectContextType {
-  // 현재 선택된 프로젝트
+  // Current selected project
   currentProject: Project | null;
 
-  // 프로젝트 목록 (선택기용 요약 정보)
+  // Project list (summary for selector)
   projects: ProjectSummary[];
 
-  // 로딩 상태
+  // Loading state
   isLoading: boolean;
 
-  // 프로젝트 선택
+  // Select project
   selectProject: (projectId: string) => Promise<void>;
 
-  // 프로젝트 목록 새로고침
+  // Refresh project list
   refreshProjects: () => Promise<void>;
 
-  // 프로젝트 생성
+  // Create project
   createProject: (data: Partial<Project>) => Promise<Project>;
 
-  // 프로젝트 업데이트
+  // Update project
   updateProject: (projectId: string, data: Partial<Project>) => Promise<Project>;
 }
 
@@ -32,95 +39,64 @@ interface ProjectProviderProps {
 }
 
 export function ProjectProvider({ children }: ProjectProviderProps) {
-  const [currentProject, setCurrentProject] = useState<Project | null>(null);
-  const [projects, setProjects] = useState<ProjectSummary[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const queryClient = useQueryClient();
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(() => {
+    return localStorage.getItem('currentProjectId');
+  });
 
-  // 프로젝트 목록 로드
-  const refreshProjects = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const projectList = await apiService.getProjects();
-      setProjects(projectList);
+  // TanStack Query hooks
+  const { data: projectList = [], isLoading: projectsLoading, refetch: refetchProjects } = useProjectsQuery();
+  const { data: currentProjectData, isLoading: projectLoading } = useProjectQuery(selectedProjectId || '');
+  const createProjectMutation = useCreateProjectMutation();
+  const updateProjectMutation = useUpdateProjectMutation();
 
-      // 저장된 프로젝트 ID가 있으면 자동 선택
+  const isLoading = projectsLoading || projectLoading || createProjectMutation.isPending || updateProjectMutation.isPending;
+  const currentProject = currentProjectData || null;
+  const projects = projectList as ProjectSummary[];
+
+  // Auto-select project when list loads and no project is selected
+  useEffect(() => {
+    if (projectList.length > 0 && !selectedProjectId) {
       const savedProjectId = localStorage.getItem('currentProjectId');
-      if (savedProjectId && projectList.length > 0) {
+      if (savedProjectId) {
         const savedProject = projectList.find((p: ProjectSummary) => p.id === savedProjectId);
         if (savedProject) {
-          const fullProject = await apiService.getProject(savedProjectId);
-          setCurrentProject(fullProject);
-        } else if (projectList.length > 0) {
-          // 저장된 프로젝트가 없으면 첫 번째 프로젝트 선택
-          const fullProject = await apiService.getProject(projectList[0].id);
-          setCurrentProject(fullProject);
+          setSelectedProjectId(savedProjectId);
+        } else {
+          // Saved project not found, select first
+          setSelectedProjectId(projectList[0].id);
           localStorage.setItem('currentProjectId', projectList[0].id);
         }
-      } else if (projectList.length > 0 && !currentProject) {
-        // 프로젝트가 있는데 선택된 게 없으면 첫 번째 선택
-        const fullProject = await apiService.getProject(projectList[0].id);
-        setCurrentProject(fullProject);
+      } else {
+        // No saved project, select first
+        setSelectedProjectId(projectList[0].id);
         localStorage.setItem('currentProjectId', projectList[0].id);
       }
-    } catch (error) {
-      console.error('Failed to load projects:', error);
-    } finally {
-      setIsLoading(false);
     }
-  }, [currentProject]);
+  }, [projectList, selectedProjectId]);
 
-  // 프로젝트 선택
+  // Select project
   const selectProject = useCallback(async (projectId: string) => {
-    setIsLoading(true);
-    try {
-      const project = await apiService.getProject(projectId);
-      setCurrentProject(project);
-      localStorage.setItem('currentProjectId', projectId);
-    } catch (error) {
-      console.error('Failed to select project:', error);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+    setSelectedProjectId(projectId);
+    localStorage.setItem('currentProjectId', projectId);
+    // Invalidate to refetch the project data
+    await queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
+  }, [queryClient]);
 
-  // 프로젝트 생성
+  // Refresh project list
+  const refreshProjects = useCallback(async () => {
+    await refetchProjects();
+  }, [refetchProjects]);
+
+  // Create project
   const createProject = useCallback(async (data: Partial<Project>): Promise<Project> => {
-    setIsLoading(true);
-    try {
-      const newProject = await apiService.createProject(data);
-      await refreshProjects();
-      return newProject;
-    } catch (error) {
-      console.error('Failed to create project:', error);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [refreshProjects]);
+    return createProjectMutation.mutateAsync(data);
+  }, [createProjectMutation]);
 
-  // 프로젝트 업데이트
+  // Update project
   const updateProject = useCallback(async (projectId: string, data: Partial<Project>): Promise<Project> => {
-    setIsLoading(true);
-    try {
-      const updatedProject = await apiService.updateProject(projectId, data);
-      if (currentProject?.id === projectId) {
-        setCurrentProject(updatedProject);
-      }
-      await refreshProjects();
-      return updatedProject;
-    } catch (error) {
-      console.error('Failed to update project:', error);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentProject, refreshProjects]);
-
-  // 초기 로드
-  useEffect(() => {
-    refreshProjects();
-  }, []);
+    return updateProjectMutation.mutateAsync({ id: projectId, data });
+  }, [updateProjectMutation]);
 
   const value: ProjectContextType = {
     currentProject,
