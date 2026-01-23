@@ -5,7 +5,7 @@ Includes:
 - PDF type classification (Native vs Scanned vs Mixed)
 - Smart Model Routing based on document complexity
 - VARCO-VISION OCR (primary, high quality Korean OCR)
-- MinerU CLI integration (fallback)
+- PaddleOCR integration (fallback)
 - Tesseract OCR (fallback)
 """
 
@@ -151,10 +151,10 @@ class DocumentAnalysis:
 
 class SmartModelRouter:
     """
-    Document complexity analysis for optimal MinerU configuration.
+    Document complexity analysis for optimal OCR configuration.
 
     Analyzes PDF structure and recommends:
-    - Backend selection (pipeline, hybrid, vlm)
+    - OCR method selection based on document type
     - Configuration optimizations
     """
 
@@ -163,7 +163,7 @@ class SmartModelRouter:
 
     def analyze_document(self, pdf_path: str) -> DocumentAnalysis:
         """
-        Analyze document and recommend optimal MinerU configuration.
+        Analyze document and recommend optimal OCR configuration.
 
         Args:
             pdf_path: Path to PDF file
@@ -309,7 +309,7 @@ class SmartModelRouter:
         metrics: Dict,
         pdf_type: PDFType
     ) -> Dict:
-        """Get recommended MinerU configuration based on analysis."""
+        """Get recommended OCR configuration based on analysis."""
 
         has_formulas = metrics.get('formula_indicators', 0) > 0
         has_tables = metrics.get('table_indicators', 0) > 0
@@ -386,115 +386,6 @@ def _extract_text_pypdf(file_path: str) -> str:
         if text:
             parts.append(text)
     return "\n\n".join(parts)
-
-
-def _run_mineru_ocr_command(command: str, image_path: str) -> str:
-    env = os.environ.copy()
-    args = shlex.split(command) + [image_path]
-    try:
-        result = subprocess.run(
-            args,
-            capture_output=True,
-            text=True,
-            check=True,
-            env=env,
-        )
-        return result.stdout.strip()
-    except subprocess.CalledProcessError as exc:
-        logger.error("MinerU OCR command failed: %s", " ".join(args))
-        if exc.stdout:
-            logger.error("MinerU OCR stdout: %s", exc.stdout.strip())
-        if exc.stderr:
-            logger.error("MinerU OCR stderr: %s", exc.stderr.strip())
-        raise
-
-
-def _run_mineru_cli_pdf(
-    file_path: str,
-    use_smart_routing: bool = True
-) -> str:
-    """
-    Run MinerU CLI with optional smart routing.
-
-    Smart routing analyzes the PDF and selects optimal backend/config
-    based on document complexity and type.
-    """
-    command = os.getenv("MINERU_OCR_COMMAND", "mineru").strip()
-    if not command:
-        raise RuntimeError("MINERU_OCR_COMMAND is required for mineru_cli OCR")
-
-    method = os.getenv("MINERU_OCR_METHOD", "auto").strip() or "auto"
-    backend = os.getenv("MINERU_OCR_BACKEND", "").strip()
-    lang = os.getenv("MINERU_OCR_LANG", "").strip()
-
-    # Smart routing: analyze document and get recommended config
-    analysis: Optional[DocumentAnalysis] = None
-    if use_smart_routing and os.getenv("MINERU_SMART_ROUTING", "true").lower() == "true":
-        try:
-            router = get_smart_router()
-            analysis = router.analyze_document(file_path)
-            logger.info(
-                "Smart routing: complexity=%s, pdf_type=%s, backend=%s",
-                analysis.complexity.value,
-                analysis.pdf_type.value,
-                analysis.recommended_backend
-            )
-
-            # Use recommended backend if not explicitly set
-            if not backend:
-                backend = analysis.recommended_backend
-
-            # Select method based on PDF type
-            if method == "auto":
-                if analysis.pdf_type == PDFType.NATIVE:
-                    method = "txt"  # Direct text extraction
-                elif analysis.pdf_type == PDFType.SCANNED:
-                    method = "ocr"  # Full OCR
-                else:
-                    method = "auto"  # Let MinerU decide
-
-        except Exception as e:
-            logger.warning("Smart routing analysis failed: %s", e)
-
-    extra_args = os.getenv("MINERU_OCR_ARGS", "").strip()
-    args = shlex.split(command)
-    if extra_args:
-        args.extend(shlex.split(extra_args))
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        output_dir = os.path.join(tmpdir, "output")
-        os.makedirs(output_dir, exist_ok=True)
-
-        run_args = args + ["-p", file_path, "-o", output_dir, "-m", method]
-        if backend and "-b" not in args and "--backend" not in args:
-            run_args.extend(["-b", backend])
-        if lang and "-l" not in args and "--lang" not in args:
-            run_args.extend(["-l", lang])
-
-        logger.info("Running MinerU CLI: %s", " ".join(run_args))
-
-        try:
-            subprocess.run(run_args, check=True, capture_output=True, text=True)
-        except subprocess.CalledProcessError as exc:
-            logger.error("MinerU CLI failed: %s", " ".join(run_args))
-            if exc.stdout:
-                logger.error("MinerU CLI stdout: %s", exc.stdout.strip())
-            if exc.stderr:
-                logger.error("MinerU CLI stderr: %s", exc.stderr.strip())
-            raise
-
-        candidates = []
-        for root, _dirs, files in os.walk(output_dir):
-            for name in files:
-                if name.lower().endswith((".md", ".txt")):
-                    candidates.append(os.path.join(root, name))
-
-        if not candidates:
-            return ""
-
-        candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
-        with open(candidates[0], "r", encoding="utf-8") as handle:
-            return handle.read().strip()
 
 
 def _run_tesseract_ocr(image_path: str, lang: str) -> str:
@@ -896,15 +787,12 @@ def extract_text_from_pdf_ocr(file_path: str) -> str:
     Extract PDF text via image-based OCR pipeline.
 
     Environment variables:
-      OCR_ENGINE: varco|paddle|mineru_cli|mineru|tesseract|pypdf (default: varco)
+      OCR_ENGINE: varco|paddle|tesseract|pypdf (default: varco)
         - varco: VARCO-VISION-2.0-1.7B-OCR (best Korean, CC-BY-NC-4.0 license)
         - paddle: PaddleOCR Korean + PP-Structure (Apache 2.0, commercial OK)
-        - mineru_cli: MinerU CLI
         - tesseract: Tesseract OCR
         - pypdf: Direct text extraction (no OCR)
-      USE_MINERU_OCR: true enables OCR pipeline
-      MINERU_OCR_ENGINE: (deprecated, use OCR_ENGINE instead)
-      MINERU_OCR_COMMAND: command for mineru per-image OCR
+      USE_OCR: true enables OCR pipeline
       OCR_DPI: DPI for image conversion (default: 300)
       OCR_LANG: Language for tesseract (default: kor+eng)
 
@@ -917,12 +805,7 @@ def extract_text_from_pdf_ocr(file_path: str) -> str:
         PADDLE_LANG: Language (default: korean)
         PADDLE_USE_STRUCTURE: Use PP-Structure for table/layout (default: true)
     """
-    # Support both new and legacy env var names
-    ocr_engine = os.getenv("OCR_ENGINE", "").lower()
-    if not ocr_engine:
-        ocr_engine = os.getenv("MINERU_OCR_ENGINE", "varco").lower()
-
-    ocr_command = os.getenv("MINERU_OCR_COMMAND", "").strip()
+    ocr_engine = os.getenv("OCR_ENGINE", "varco").lower()
     ocr_dpi = int(os.getenv("OCR_DPI", "300"))
     ocr_lang = os.getenv("OCR_LANG", "kor+eng")
 
@@ -953,34 +836,26 @@ def extract_text_from_pdf_ocr(file_path: str) -> str:
             logger.error("PaddleOCR failed: %s, falling back to pypdf", e)
             return _extract_text_pypdf(file_path)
 
-    # MinerU CLI
-    if ocr_engine == "mineru_cli":
-        return _run_mineru_cli_pdf(file_path)
+    # Tesseract OCR (per-image)
+    if ocr_engine == "tesseract":
+        images = convert_from_path(file_path, dpi=ocr_dpi)
+        if not images:
+            return ""
 
-    # Per-image OCR (mineru or tesseract)
-    images = convert_from_path(file_path, dpi=ocr_dpi)
-    if not images:
-        return ""
-
-    parts: List[str] = []
-    with tempfile.TemporaryDirectory() as tmpdir:
-        for idx, image in enumerate(images, start=1):
-            image_path = os.path.join(tmpdir, f"page_{idx}.png")
-            image.save(image_path, "PNG")
-
-            if ocr_engine == "mineru":
-                if not ocr_command:
-                    raise RuntimeError("MINERU_OCR_COMMAND is required for mineru OCR")
-                page_text = _run_mineru_ocr_command(ocr_command, image_path)
-            elif ocr_engine == "tesseract":
+        parts: List[str] = []
+        with tempfile.TemporaryDirectory() as tmpdir:
+            for idx, image in enumerate(images, start=1):
+                image_path = os.path.join(tmpdir, f"page_{idx}.png")
+                image.save(image_path, "PNG")
                 page_text = _run_tesseract_ocr(image_path, ocr_lang)
-            else:
-                raise RuntimeError(f"Unknown OCR engine: {ocr_engine}")
+                if page_text:
+                    parts.append(page_text)
 
-            if page_text:
-                parts.append(page_text)
+        return "\n\n".join(parts)
 
-    return "\n\n".join(parts)
+    # Unknown engine - fallback to pypdf
+    logger.warning(f"Unknown OCR engine: {ocr_engine}, falling back to pypdf")
+    return _extract_text_pypdf(file_path)
 
 
 def extract_text_from_pdf(file_path: str, auto_detect: bool = True) -> str:
@@ -993,17 +868,16 @@ def extract_text_from_pdf(file_path: str, auto_detect: bool = True) -> str:
                      optimal extraction method
 
     Behavior:
-    - USE_MINERU_OCR=true: Always use OCR pipeline
-    - USE_MINERU_OCR=false + auto_detect=True: Classify PDF and decide
-    - USE_MINERU_OCR=false + auto_detect=False: Use pypdf only
+    - USE_OCR=true: Always use OCR pipeline
+    - USE_OCR=false + auto_detect=True: Classify PDF and decide
+    - USE_OCR=false + auto_detect=False: Use pypdf only
 
     Environment variables:
-    - USE_MINERU_OCR: Force OCR pipeline (true/false)
-    - MINERU_SMART_ROUTING: Enable smart routing (true/false, default: true)
-    - MINERU_AUTO_DETECT: Enable auto PDF type detection (true/false, default: true)
+    - USE_OCR: Force OCR pipeline (true/false)
+    - AUTO_DETECT_PDF_TYPE: Enable auto PDF type detection (true/false, default: true)
     """
-    use_ocr = os.getenv("USE_MINERU_OCR", "false").lower() == "true"
-    enable_auto_detect = os.getenv("MINERU_AUTO_DETECT", "true").lower() == "true"
+    use_ocr = os.getenv("USE_OCR", "false").lower() == "true"
+    enable_auto_detect = os.getenv("AUTO_DETECT_PDF_TYPE", "true").lower() == "true"
 
     # If OCR is explicitly enabled, use it
     if use_ocr:

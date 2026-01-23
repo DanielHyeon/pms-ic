@@ -41,11 +41,11 @@ fi
 # 백엔드 확인
 echo ""
 echo "3. 백엔드 상태 확인..."
-BACKEND_HEALTH=$(curl -s -w "\n%{http_code}" http://localhost:8080/actuator/health 2>/dev/null)
+BACKEND_HEALTH=$(curl -s -w "\n%{http_code}" http://localhost:8083/actuator/health 2>/dev/null)
 BACKEND_HTTP_CODE=$(echo "$BACKEND_HEALTH" | tail -n1)
 
 if [ "$BACKEND_HTTP_CODE" = "200" ]; then
-    echo "✅ 백엔드 정상 (포트 8080)"
+    echo "✅ 백엔드 정상 (포트 8083)"
 else
     echo "❌ 백엔드 오류 (HTTP $BACKEND_HTTP_CODE)"
     echo "   백엔드가 실행 중인지 확인하세요:"

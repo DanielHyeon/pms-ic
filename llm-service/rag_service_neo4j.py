@@ -13,7 +13,7 @@ from typing import Dict, List, Optional
 from neo4j import GraphDatabase
 from sentence_transformers import SentenceTransformer
 
-from document_parser import MinerUDocumentParser, LayoutAwareChunker
+from document_parser import DocumentParser, LayoutAwareChunker
 
 logger = logging.getLogger(__name__)
 
@@ -132,16 +132,9 @@ class RAGServiceNeo4j:
         self.embedding_dim = 1024
         logger.info("Embedding model loaded successfully")
 
-        # MinerU 파서 및 청커 초기화
-        use_mineru_model = os.getenv("USE_MINERU_MODEL", "true").lower() == "true"
-        mineru_device = os.getenv("MINERU_DEVICE", "cpu")
-
-        if use_mineru_model:
-            logger.info("Loading MinerU2.5 model for advanced document parsing...")
-            self.parser = MinerUDocumentParser(use_mock=False, device=mineru_device)
-        else:
-            logger.info("Using heuristic-based document parsing (mock mode)...")
-            self.parser = MinerUDocumentParser(use_mock=True)
+        # Document parser initialization (heuristic-based)
+        logger.info("Initializing document parser (heuristic mode)...")
+        self.parser = DocumentParser(use_mock=True)
 
         self.chunker = LayoutAwareChunker(max_chunk_size=800, overlap=100)
         self.tools_retriever = ToolsRetriever(self._search_impl)
@@ -232,7 +225,7 @@ class RAGServiceNeo4j:
             access_level = int(metadata.get("access_level", get_access_level(uploaded_by_role)))
 
             # 구조 파싱 및 청킹
-            logger.info(f"Parsing document {doc_id} with MinerU...")
+            logger.info(f"Parsing document {doc_id} with DocumentParser...")
             blocks = self.parser.parse_document(content, metadata)
             chunks = self.chunker.chunk_blocks(blocks)
 

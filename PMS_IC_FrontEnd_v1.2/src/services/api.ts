@@ -317,15 +317,53 @@ export class ApiService {
   }
 
   // ========== Phase API ==========
-  async getPhases() {
-    return this.fetchWithFallback('/phases', {}, []);
+  async getPhases(projectId?: string) {
+    const params = projectId ? `?projectId=${projectId}` : '';
+    return this.fetchWithFallback(`/phases${params}`, {}, []);
   }
 
-  async updatePhase(phaseId: number, data: any) {
+  async getPhase(phaseId: string) {
+    return this.fetchWithFallback(`/phases/${phaseId}`, {}, null);
+  }
+
+  async createPhase(projectId: string, data: {
+    name: string;
+    description?: string;
+    orderNum: number;
+    status?: string;
+    gateStatus?: string;
+    startDate?: string;
+    endDate?: string;
+    progress?: number;
+    trackType?: string;
+  }) {
+    return this.fetchWithFallback(`/phases?projectId=${projectId}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }, { ...data, id: `phase-${Date.now()}` });
+  }
+
+  async updatePhase(phaseId: string, data: {
+    name?: string;
+    description?: string;
+    orderNum?: number;
+    status?: string;
+    gateStatus?: string;
+    startDate?: string;
+    endDate?: string;
+    progress?: number;
+    trackType?: string;
+  }) {
     return this.fetchWithFallback(`/phases/${phaseId}`, {
       method: 'PUT',
       body: JSON.stringify(data),
-    }, data);
+    }, { ...data, id: phaseId });
+  }
+
+  async deletePhase(phaseId: string) {
+    return this.fetchWithFallback(`/phases/${phaseId}`, {
+      method: 'DELETE',
+    }, { message: 'Phase deleted' });
   }
 
   async updateDeliverable(phaseId: number, deliverableId: number, data: any) {

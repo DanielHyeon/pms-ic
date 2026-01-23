@@ -40,7 +40,6 @@ services:
       LLM_N_CTX: 4096               # Increased context for elaboration requests
       LLM_N_THREADS: 6              # Fewer threads for GPU
       EMBEDDING_DEVICE: cpu          # CPU for embeddings (GPU memory reserved for LLM)
-      MINERU_DEVICE: cpu             # CPU for document parsing (used rarely)
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
       VECTOR_DB: neo4j

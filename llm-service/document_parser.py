@@ -1,6 +1,6 @@
 """
-MinerU2.5-2509-1.2B 기반 고급 문서 파싱 모듈
 Layout-aware document parsing with structure understanding
+Provides heuristic and LLM-based document structure analysis
 """
 
 import logging
@@ -42,38 +42,38 @@ class DocumentBlock:
             self.metadata = {}
 
 
-class MinerUDocumentParser:
+class DocumentParser:
     """
-    MinerU2.5-2509-1.2B 기반 문서 파서
+    Layout-aware document parser
 
-    GGUF 모델을 llama-cpp-python으로 로드하여 실제 문서 구조 파싱 수행
+    Uses GGUF model via llama-cpp-python for document structure parsing
     """
 
-    def __init__(self, device: str = "cpu", use_mock: bool = False, model_path: str = None):
+    def __init__(self, device: str = "cpu", use_mock: bool = True, model_path: str = None):
         """
         Args:
-            device: 'cpu' 또는 'cuda'
-            use_mock: True이면 MinerU 모델 대신 휴리스틱 파싱 사용
-            model_path: MinerU GGUF 모델 경로 (기본값: ./models/MinerU2.5-2509-1.2B.i1-Q6_K.gguf)
+            device: 'cpu' or 'cuda'
+            use_mock: True to use heuristic parsing (default), False to use LLM model
+            model_path: GGUF model path for LLM-based parsing
         """
         self.device = device
         self.use_mock = use_mock
         self.model = None
 
-        # 기본 모델 경로 설정
+        # Default model path
         if model_path is None:
-            env_model_path = os.getenv("MINERU_MODEL_PATH")
+            env_model_path = os.getenv("DOCUMENT_PARSER_MODEL_PATH")
             model_path = env_model_path or os.path.join(
                 os.path.dirname(__file__),
                 "models",
-                "MinerU2.5-2509-1.2B.i1-Q6_K.gguf"
+                "document_parser.gguf"
             )
 
         self.model_path = model_path
 
         if not use_mock:
             try:
-                logger.info(f"Loading MinerU2.5 model from {model_path}...")
+                logger.info(f"Loading LLM2.5 model from {model_path}...")
 
                 # 모델 파일 존재 확인
                 if not os.path.exists(model_path):
@@ -91,12 +91,12 @@ class MinerUDocumentParser:
                     n_gpu_layers=0 if device == "cpu" else -1  # CPU 또는 GPU
                 )
 
-                logger.info("✅ MinerU2.5 model loaded successfully!")
+                logger.info("✅ LLM2.5 model loaded successfully!")
                 logger.info(f"   Model: {os.path.basename(model_path)}")
                 logger.info(f"   Device: {device}")
 
             except Exception as e:
-                logger.error(f"Failed to load MinerU model: {e}")
+                logger.error(f"Failed to load LLM model: {e}")
                 logger.warning("Falling back to heuristic-based parsing.")
                 self.use_mock = True
                 self.model = None
@@ -115,13 +115,13 @@ class MinerUDocumentParser:
         if self.use_mock:
             return self._parse_with_heuristics(text, metadata)
         else:
-            # 실제 MinerU 모델 사용 (구현 예정)
-            return self._parse_with_mineru_model(text, metadata)
+            # 실제 LLM 모델 사용 (구현 예정)
+            return self._parse_with_llm_model(text, metadata)
 
     def _parse_with_heuristics(self, text: str, metadata: Optional[Dict] = None) -> List[DocumentBlock]:
         """
-        휴리스틱 기반 구조 파싱 (MinerU 시뮬레이션)
-        실제로는 MinerU 모델이 이미지에서 직접 구조를 추출하지만,
+        휴리스틱 기반 구조 파싱 (LLM 시뮬레이션)
+        실제로는 LLM 모델이 이미지에서 직접 구조를 추출하지만,
         여기서는 텍스트 기반으로 구조를 추론합니다.
         """
         blocks = []
@@ -285,21 +285,21 @@ class MinerUDocumentParser:
 
         return False
 
-    def _parse_with_mineru_model(self, text: str, metadata: Optional[Dict] = None) -> List[DocumentBlock]:
+    def _parse_with_llm_model(self, text: str, metadata: Optional[Dict] = None) -> List[DocumentBlock]:
         """
-        실제 MinerU2.5 모델을 사용한 파싱
+        실제 LLM2.5 모델을 사용한 파싱
 
-        MinerU는 문서 이미지 분석에 특화되어 있지만,
+        LLM는 문서 이미지 분석에 특화되어 있지만,
         GGUF 형식으로는 텍스트 기반 구조 분석 프롬프팅을 사용합니다.
         """
         if self.model is None:
-            logger.warning("MinerU model not loaded. Falling back to heuristics.")
+            logger.warning("LLM model not loaded. Falling back to heuristics.")
             return self._parse_with_heuristics(text, metadata)
 
         try:
-            max_chars = int(os.getenv("MINERU_PARSE_MAX_CHARS", "12000"))
-            chunk_tokens = int(os.getenv("MINERU_PARSE_CHUNK_TOKENS", "3000"))
-            chunk_overlap = int(os.getenv("MINERU_PARSE_CHUNK_OVERLAP", "200"))
+            max_chars = int(os.getenv("DOCPARSER_PARSE_MAX_CHARS", "12000"))
+            chunk_tokens = int(os.getenv("DOCPARSER_PARSE_CHUNK_TOKENS", "3000"))
+            chunk_overlap = int(os.getenv("DOCPARSER_PARSE_CHUNK_OVERLAP", "200"))
 
             if len(text) <= max_chars:
                 parsed_blocks = self._parse_text_with_model(text)
@@ -310,18 +310,18 @@ class MinerUDocumentParser:
                     for idx, chunk in enumerate(chunks)
                 ])
 
-            logger.info(f"MinerU parsed document into {len(parsed_blocks)} blocks")
+            logger.info(f"LLM parsed document into {len(parsed_blocks)} blocks")
             return parsed_blocks
 
         except Exception as e:
-            logger.error(f"MinerU model parsing failed: {e}")
+            logger.error(f"LLM model parsing failed: {e}")
             logger.warning("Falling back to heuristic parsing.")
             return self._parse_with_heuristics(text, metadata)
 
     def _parse_text_with_model(self, text: str, chunk_index: int = 0) -> List[DocumentBlock]:
-        """단일 텍스트 청크를 MinerU 모델로 파싱."""
+        """단일 텍스트 청크를 LLM 모델로 파싱."""
         prompt = self._create_parsing_prompt(text)
-        logger.debug("Sending chunk %d to MinerU for parsing (length: %d)", chunk_index, len(text))
+        logger.debug("Sending chunk %d to LLM for parsing (length: %d)", chunk_index, len(text))
 
         response = self.model(
             prompt,
@@ -333,7 +333,7 @@ class MinerUDocumentParser:
         )
 
         result_text = response['choices'][0]['text'].strip()
-        logger.debug("MinerU response length for chunk %d: %d", chunk_index, len(result_text))
+        logger.debug("LLM response length for chunk %d: %d", chunk_index, len(result_text))
 
         blocks = self._parse_model_response(result_text, text)
         for block in blocks:
@@ -384,9 +384,9 @@ class MinerUDocumentParser:
 
     def _create_parsing_prompt(self, text: str) -> str:
         """
-        MinerU 모델용 문서 구조 분석 프롬프트 생성
+        LLM 모델용 문서 구조 분석 프롬프트 생성
 
-        MinerU는 문서 파싱에 특화되어 있으므로,
+        LLM는 문서 파싱에 특화되어 있으므로,
         문서 구조 요소를 식별하도록 지시합니다.
         """
         prompt = f"""You are a document structure analyzer. Analyze the following document and identify structural elements.
@@ -417,7 +417,7 @@ Structural analysis (JSON):"""
 
     def _parse_model_response(self, response: str, original_text: str) -> List[DocumentBlock]:
         """
-        MinerU 모델 응답을 DocumentBlock 리스트로 변환
+        LLM 모델 응답을 DocumentBlock 리스트로 변환
         """
         blocks = []
 
@@ -447,7 +447,7 @@ Structural analysis (JSON):"""
                             page=1,
                             metadata={
                                 'line': item.get('line', 0),
-                                'source': 'mineru_model',
+                                'source': 'llm_model',
                                 'confidence': item.get('confidence', 1.0)
                             }
                         )
@@ -458,11 +458,11 @@ Structural analysis (JSON):"""
                         continue
 
                 if blocks:
-                    logger.info(f"Successfully parsed {len(blocks)} blocks from MinerU response")
+                    logger.info(f"Successfully parsed {len(blocks)} blocks from LLM response")
                     return blocks
 
             # JSON 파싱 실패 시 휴리스틱으로 대체
-            logger.warning("Could not parse JSON from MinerU response. Using heuristic parsing.")
+            logger.warning("Could not parse JSON from LLM response. Using heuristic parsing.")
 
         except json.JSONDecodeError as e:
             logger.warning(f"JSON decode error: {e}. Using heuristic parsing.")
@@ -475,7 +475,7 @@ Structural analysis (JSON):"""
 
 class LayoutAwareChunker:
     """
-    구조 인식 청킹 - MinerU 파싱 결과를 의미 단위로 청크화
+    구조 인식 청킹 - LLM 파싱 결과를 의미 단위로 청크화
     """
 
     def __init__(self, max_chunk_size: int = 1000, overlap: int = 100):
@@ -614,7 +614,7 @@ def parse_and_chunk_document(text: str, metadata: Optional[Dict] = None) -> List
     Returns:
         청크 딕셔너리 리스트
     """
-    parser = MinerUDocumentParser(use_mock=True)
+    parser = DocumentParser(use_mock=True)
     chunker = LayoutAwareChunker(max_chunk_size=1000, overlap=100)
 
     blocks = parser.parse_document(text, metadata)

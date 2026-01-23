@@ -20,7 +20,7 @@ langchain==0.3.7
 langchain-core==0.3.15
 langchain-community==0.3.5
 
-# MinerU2.5 for advanced document parsing (CPU version)
+# PDF Processing & Document Parsing (CPU version)
 transformers>=4.30.0
 torch==2.4.1
 torchvision==0.19.1
@@ -28,17 +28,9 @@ pillow>=9.0.0
 pdf2image>=1.16.0
 accelerate>=0.20.0
 loguru>=0.7.0
-magika>=0.6.1
 pypdfium2>=4.30.0
 boto3>=1.34.0
 reportlab>=4.0.0
-fast-langdetect>=0.3.0
 opencv-python-headless>=4.10.0.84
 beautifulsoup4>=4.12.3
-modelscope>=1.16.0
-mineru-vl-utils>=0.1.0
-pdftext>=0.4.0
-doclayout-yolo>=0.0.2
-ultralytics>=8.3.0
-scikit-image>=0.23.0
 pdfminer.six>=20231228

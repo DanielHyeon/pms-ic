@@ -13,6 +13,7 @@ import {
   Plus,
   Pencil,
   Trash2,
+  Settings,
 } from 'lucide-react';
 import { UserRole } from '../App';
 import { apiService } from '../../services/api';
@@ -164,11 +165,22 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
   const [showKpiModal, setShowKpiModal] = useState(false);
   const [editingKpi, setEditingKpi] = useState<KPI | null>(null);
   const [kpiForm, setKpiForm] = useState({ name: '', target: '', current: '', status: 'onTrack' as KPI['status'] });
+  const [showPhaseModal, setShowPhaseModal] = useState(false);
+  const [editingPhase, setEditingPhase] = useState<Phase | null>(null);
+  const [phaseForm, setPhaseForm] = useState({
+    name: '',
+    description: '',
+    status: 'pending' as Phase['status'],
+    startDate: '',
+    endDate: '',
+    progress: 0,
+  });
 
   const canEdit = !['auditor', 'business_analyst'].includes(userRole);
   const canApprove = ['sponsor', 'pmo_head', 'pm'].includes(userRole);
   const canUpload = ['pm', 'developer', 'qa', 'pmo_head'].includes(userRole);
   const canManageKpi = ['pm', 'pmo_head'].includes(userRole);
+  const canManagePhases = ['sponsor', 'pmo_head', 'pm'].includes(userRole);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -623,6 +635,151 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
     setEditingKpi(null);
   };
 
+  const mapPhaseStatusToApi = (status: Phase['status']): string => {
+    switch (status) {
+      case 'completed':
+        return 'COMPLETED';
+      case 'inProgress':
+        return 'IN_PROGRESS';
+      default:
+        return 'NOT_STARTED';
+    }
+  };
+
+  const handleSavePhase = async () => {
+    if (!phaseForm.name.trim()) return;
+
+    const payload = {
+      name: phaseForm.name.trim(),
+      description: phaseForm.description.trim(),
+      status: mapPhaseStatusToApi(phaseForm.status),
+      startDate: phaseForm.startDate || undefined,
+      endDate: phaseForm.endDate || undefined,
+      progress: phaseForm.progress,
+      orderNum: editingPhase ? undefined : phases.length + 1,
+    };
+
+    try {
+      let savedPhase: Phase;
+
+      if (editingPhase) {
+        const response = await apiService.updatePhase(editingPhase.id, payload);
+        const phaseData = normalizeResponse(response, null);
+        savedPhase = phaseData
+          ? {
+              id: phaseData.id || editingPhase.id,
+              name: phaseData.name || payload.name,
+              description: phaseData.description || payload.description,
+              status: mapPhaseStatus(phaseData.status) || phaseForm.status,
+              progress: phaseData.progress ?? payload.progress,
+              startDate: formatDate(phaseData.startDate) || payload.startDate || '',
+              endDate: formatDate(phaseData.endDate) || payload.endDate || '',
+              deliverables: editingPhase.deliverables,
+              kpis: editingPhase.kpis,
+            }
+          : {
+              ...editingPhase,
+              name: payload.name,
+              description: payload.description,
+              status: phaseForm.status,
+              progress: payload.progress,
+              startDate: payload.startDate || editingPhase.startDate,
+              endDate: payload.endDate || editingPhase.endDate,
+            };
+      } else {
+        const projectId = 'proj-001';
+        const response = await apiService.createPhase(projectId, payload);
+        const phaseData = normalizeResponse(response, null);
+        savedPhase = phaseData
+          ? {
+              id: phaseData.id || `phase-${Date.now()}`,
+              name: phaseData.name || payload.name,
+              description: phaseData.description || payload.description,
+              status: mapPhaseStatus(phaseData.status) || phaseForm.status,
+              progress: phaseData.progress ?? payload.progress,
+              startDate: formatDate(phaseData.startDate) || payload.startDate || '',
+              endDate: formatDate(phaseData.endDate) || payload.endDate || '',
+              deliverables: [],
+              kpis: [],
+            }
+          : {
+              id: `phase-${Date.now()}`,
+              name: payload.name,
+              description: payload.description,
+              status: phaseForm.status,
+              progress: payload.progress,
+              startDate: payload.startDate || '',
+              endDate: payload.endDate || '',
+              deliverables: [],
+              kpis: [],
+            };
+      }
+
+      setPhases((prev) =>
+        editingPhase
+          ? prev.map((phase) => (phase.id === editingPhase.id ? savedPhase : phase))
+          : [...prev, savedPhase]
+      );
+
+      if (editingPhase && selectedPhase.id === editingPhase.id) {
+        setSelectedPhase(savedPhase);
+      }
+    } catch (error) {
+      console.warn('Phase save failed', error);
+    }
+
+    setShowPhaseModal(false);
+    setEditingPhase(null);
+    setPhaseForm({
+      name: '',
+      description: '',
+      status: 'pending',
+      startDate: '',
+      endDate: '',
+      progress: 0,
+    });
+  };
+
+  const handleDeletePhase = async (phaseId: string) => {
+    if (!confirm('이 단계를 삭제하시겠습니까?')) return;
+
+    try {
+      await apiService.deletePhase(phaseId);
+      setPhases((prev) => prev.filter((phase) => phase.id !== phaseId));
+      if (selectedPhase.id === phaseId && phases.length > 1) {
+        const remaining = phases.filter((p) => p.id !== phaseId);
+        setSelectedPhase(remaining[0]);
+      }
+    } catch (error) {
+      console.warn('Phase delete failed', error);
+    }
+  };
+
+  const openPhaseModal = (phase?: Phase) => {
+    if (phase) {
+      setEditingPhase(phase);
+      setPhaseForm({
+        name: phase.name,
+        description: phase.description,
+        status: phase.status,
+        startDate: phase.startDate,
+        endDate: phase.endDate,
+        progress: phase.progress,
+      });
+    } else {
+      setEditingPhase(null);
+      setPhaseForm({
+        name: '',
+        description: '',
+        status: 'pending',
+        startDate: '',
+        endDate: '',
+        progress: 0,
+      });
+    }
+    setShowPhaseModal(true);
+  };
+
   return (
     <div className="p-6">
       {!canEdit && (
@@ -635,9 +792,20 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
         </div>
       )}
 
-      <div className="mb-6">
-        <h2 className="text-2xl font-semibold text-gray-900">단계별 프로젝트 관리</h2>
-        <p className="text-sm text-gray-500 mt-1">Waterfall 기반 거시적 프로세스 관리</p>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-semibold text-gray-900">단계별 프로젝트 관리</h2>
+          <p className="text-sm text-gray-500 mt-1">Waterfall 기반 거시적 프로세스 관리</p>
+        </div>
+        {canManagePhases && (
+          <button
+            onClick={() => openPhaseModal()}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={18} />
+            단계 추가
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -660,8 +828,25 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
                   {phase.status === 'pending' && <Circle className="text-gray-400" size={24} />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-medium text-gray-900 text-sm">{phase.name}</h3>
-                  <p className="text-xs text-gray-500 mt-1">{phase.description}</p>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="font-medium text-gray-900 text-sm">{phase.name}</h3>
+                      <p className="text-xs text-gray-500 mt-1">{phase.description}</p>
+                    </div>
+                    {canManagePhases && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openPhaseModal(phase);
+                        }}
+                        className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                        title="단계 설정"
+                      >
+                        <Settings size={16} />
+                      </button>
+                    )}
+                  </div>
                   <div className="mt-3">
                     <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
                       <span>진행률</span>
@@ -1068,6 +1253,120 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
                 취소
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showPhaseModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              {editingPhase ? '단계 수정' : '새 단계 추가'}
+            </h3>
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">단계명 *</label>
+                <input
+                  value={phaseForm.name}
+                  onChange={(e) => setPhaseForm((prev) => ({ ...prev, name: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  placeholder="단계명을 입력하세요"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-700 mb-1">설명</label>
+                <textarea
+                  value={phaseForm.description}
+                  onChange={(e) => setPhaseForm((prev) => ({ ...prev, description: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  rows={3}
+                  placeholder="단계 설명을 입력하세요"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">시작일</label>
+                  <input
+                    type="date"
+                    value={phaseForm.startDate}
+                    onChange={(e) => setPhaseForm((prev) => ({ ...prev, startDate: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">종료일</label>
+                  <input
+                    type="date"
+                    value={phaseForm.endDate}
+                    onChange={(e) => setPhaseForm((prev) => ({ ...prev, endDate: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">상태</label>
+                  <select
+                    value={phaseForm.status}
+                    onChange={(e) => setPhaseForm((prev) => ({ ...prev, status: e.target.value as Phase['status'] }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  >
+                    <option value="pending">대기</option>
+                    <option value="inProgress">진행중</option>
+                    <option value="completed">완료</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-700 mb-1">진행률 (%)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={phaseForm.progress}
+                    onChange={(e) => setPhaseForm((prev) => ({ ...prev, progress: Number(e.target.value) }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={handleSavePhase}
+                disabled={!phaseForm.name.trim()}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              >
+                {editingPhase ? '수정' : '추가'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPhaseModal(false);
+                  setEditingPhase(null);
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                취소
+              </button>
+            </div>
+            {editingPhase && (
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (editingPhase) {
+                      handleDeletePhase(editingPhase.id);
+                      setShowPhaseModal(false);
+                      setEditingPhase(null);
+                    }
+                  }}
+                  className="w-full px-4 py-2 text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Trash2 size={16} />
+                  이 단계 삭제
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

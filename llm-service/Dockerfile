@@ -29,8 +29,7 @@ ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64/stubs:/usr/local/cuda/lib64:${LD_LIBRA
 # Python 의존성 설치
 COPY requirements.txt .
 RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel \
-    && python3 -m pip install --no-cache-dir -r requirements.txt \
-    && python3 -m pip install --no-cache-dir --no-deps "mineru"
+    && python3 -m pip install --no-cache-dir -r requirements.txt
 
 # 런타임에서는 실제 CUDA 드라이버 라이브러리를 우선 사용
 ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib/x86_64-linux-gnu
@@ -46,8 +45,7 @@ COPY test_query_refinement.py .
 COPY test_query_refinement_simple.py .
 
 # 모델 디렉토리 생성 (볼륨 마운트로 모델 제공)
-RUN mkdir -p /app/models /models /data /output \
-    && echo '{"models-dir": "/app/models"}' > /root/mineru.json
+RUN mkdir -p /app/models /models /data /output
 
 # 헬스체크를 위한 curl 설치됨
 EXPOSE 8000

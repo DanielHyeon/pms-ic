@@ -49,7 +49,6 @@ case $MODE in
         grep -q "^LLM_N_CTX=" .env || echo "LLM_N_CTX=2048" >> .env
         grep -q "^LLM_N_THREADS=" .env || echo "LLM_N_THREADS=8" >> .env
         grep -q "^EMBEDDING_DEVICE=" .env || echo "EMBEDDING_DEVICE=cpu" >> .env
-        grep -q "^MINERU_DEVICE=" .env || echo "MINERU_DEVICE=cpu" >> .env
 
         # Update .env
         sed -i.bak \
@@ -58,7 +57,6 @@ case $MODE in
             -e 's/^LLM_N_CTX=.*/LLM_N_CTX=2048/' \
             -e 's/^LLM_N_THREADS=.*/LLM_N_THREADS=8/' \
             -e 's/^EMBEDDING_DEVICE=.*/EMBEDDING_DEVICE=cpu/' \
-            -e 's/^MINERU_DEVICE=.*/MINERU_DEVICE=cpu/' \
             .env
 
         print_success "Environment variables updated for CPU mode"
@@ -114,7 +112,6 @@ case $MODE in
         grep -q "^LLM_N_CTX=" .env || echo "LLM_N_CTX=4096" >> .env
         grep -q "^LLM_N_THREADS=" .env || echo "LLM_N_THREADS=6" >> .env
         grep -q "^EMBEDDING_DEVICE=" .env || echo "EMBEDDING_DEVICE=cuda" >> .env
-        grep -q "^MINERU_DEVICE=" .env || echo "MINERU_DEVICE=cuda" >> .env
 
         # Update .env
         sed -i.bak \
@@ -123,7 +120,6 @@ case $MODE in
             -e 's/^LLM_N_CTX=.*/LLM_N_CTX=4096/' \
             -e 's/^LLM_N_THREADS=.*/LLM_N_THREADS=6/' \
             -e 's/^EMBEDDING_DEVICE=.*/EMBEDDING_DEVICE=cuda/' \
-            -e 's/^MINERU_DEVICE=.*/MINERU_DEVICE=cuda/' \
             .env
 
         print_success "Environment variables updated for GPU mode"

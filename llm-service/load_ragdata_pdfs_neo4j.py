@@ -9,9 +9,6 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-# Default: use MinerU model for parsing
-os.environ.setdefault("USE_MINERU_MODEL", "true")
-
 from rag_service_neo4j import RAGServiceNeo4j
 from pdf_ocr_pipeline import extract_text_from_pdf
 
