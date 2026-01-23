@@ -47,7 +47,8 @@ export class ApiService {
   private async fetchWithFallback<T>(
     endpoint: string,
     options: RequestInit = {},
-    mockData: T
+    mockData: T,
+    timeoutMs: number = 10000
   ): Promise<T> {
     // Always try real API first, even if health check failed
     try {
@@ -61,7 +62,7 @@ export class ApiService {
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         ...options,
         headers,
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(timeoutMs),
       });
 
       if (!response.ok) {
@@ -395,10 +396,11 @@ export class ApiService {
       ? `/phases/${params.phaseId}/deliverables/${params.deliverableId}/upload`
       : `/phases/${params.phaseId}/deliverables`;
 
+    // Use 5 minute timeout for file uploads (large files may take time)
     return this.fetchWithFallback(endpoint, {
       method: 'POST',
       body: formData,
-    }, {});
+    }, {}, 300000);
   }
 
   async approveDeliverable(deliverableId: string, approved: boolean) {
@@ -1190,10 +1192,12 @@ export class ApiService {
       const headers: HeadersInit = {};
       if (this.token) headers.Authorization = `Bearer ${this.token}`;
 
+      // Use 5 minute timeout for file uploads (large files may take time)
       const response = await fetch(`${API_BASE_URL}/projects/${projectId}/rfps/upload`, {
         method: 'POST',
         headers,
         body: formData,
+        signal: AbortSignal.timeout(300000),
       });
 
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);

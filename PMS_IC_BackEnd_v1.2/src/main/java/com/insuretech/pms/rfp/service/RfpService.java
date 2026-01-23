@@ -1,5 +1,7 @@
 package com.insuretech.pms.rfp.service;
 
+import com.insuretech.pms.common.service.FileStorageService;
+import com.insuretech.pms.common.service.FileStorageService.StorageResult;
 import com.insuretech.pms.rfp.dto.*;
 import com.insuretech.pms.rfp.entity.*;
 import com.insuretech.pms.rfp.repository.RfpRepository;
@@ -9,12 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.List;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -23,8 +20,10 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class RfpService {
 
+    private static final String RFP_SUBDIRECTORY = "rfp";
+
     private final RfpRepository rfpRepository;
-    private static final String UPLOAD_DIR = "./uploads/rfp/";
+    private final FileStorageService fileStorageService;
 
     public List<RfpDto> getRfpsByProject(String projectId) {
         return rfpRepository.findByProjectIdOrderByCreatedAtDesc(projectId)
@@ -81,11 +80,10 @@ public class RfpService {
         Rfp rfp = rfpRepository.findByIdAndProjectId(rfpId, projectId)
                 .orElseThrow(() -> new RuntimeException("RFP not found: " + rfpId));
 
-        // Delete file if exists
+        // Delete file using common FileStorageService
         if (rfp.getFilePath() != null) {
-            try {
-                Files.deleteIfExists(Paths.get(rfp.getFilePath()));
-            } catch (IOException e) {
+            boolean deleted = fileStorageService.deleteFile(rfp.getFilePath());
+            if (!deleted) {
                 log.warn("Failed to delete file: {}", rfp.getFilePath());
             }
         }
@@ -95,39 +93,34 @@ public class RfpService {
     }
 
     @Transactional
-    public RfpDto uploadRfpFile(String projectId, MultipartFile file, String title) throws IOException {
-        // Create upload directory if not exists
-        Path uploadPath = Paths.get(UPLOAD_DIR, projectId);
-        if (!Files.exists(uploadPath)) {
-            Files.createDirectories(uploadPath);
+    public RfpDto uploadRfpFile(String projectId, MultipartFile file, String title) {
+        // Use common FileStorageService for file storage
+        String subdirectory = RFP_SUBDIRECTORY + "/" + projectId;
+        StorageResult storageResult = fileStorageService.storeFile(file, subdirectory);
+
+        // Determine title from file name if not provided
+        String rfpTitle = title;
+        if (rfpTitle == null || rfpTitle.isBlank()) {
+            String originalFileName = storageResult.getOriginalFileName();
+            String extension = storageResult.getFileExtension();
+            rfpTitle = extension.isEmpty() ? originalFileName : originalFileName.replace("." + extension, "");
         }
-
-        // Generate unique filename
-        String originalFilename = file.getOriginalFilename();
-        String extension = originalFilename != null && originalFilename.contains(".")
-                ? originalFilename.substring(originalFilename.lastIndexOf("."))
-                : "";
-        String newFilename = UUID.randomUUID().toString() + extension;
-        Path filePath = uploadPath.resolve(newFilename);
-
-        // Save file
-        Files.copy(file.getInputStream(), filePath);
 
         // Create RFP entity
         Rfp rfp = Rfp.builder()
                 .projectId(projectId)
-                .title(title != null ? title : originalFilename.replace(extension, ""))
-                .filePath(filePath.toString())
-                .fileName(originalFilename)
-                .fileType(extension.replace(".", ""))
-                .fileSize(file.getSize())
+                .title(rfpTitle)
+                .filePath(storageResult.getFilePath())
+                .fileName(storageResult.getOriginalFileName())
+                .fileType(storageResult.getFileExtension())
+                .fileSize(storageResult.getFileSize())
                 .status(RfpStatus.DRAFT)
                 .processingStatus(ProcessingStatus.PENDING)
                 .tenantId(projectId)
                 .build();
 
         Rfp saved = rfpRepository.save(rfp);
-        log.info("Uploaded RFP file: {} for project: {}", originalFilename, projectId);
+        log.info("Uploaded RFP file: {} for project: {}", storageResult.getOriginalFileName(), projectId);
         return RfpDto.fromEntity(saved);
     }
 

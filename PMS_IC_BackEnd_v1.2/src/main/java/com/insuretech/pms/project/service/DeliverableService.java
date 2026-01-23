@@ -1,6 +1,8 @@
 package com.insuretech.pms.project.service;
 
 import com.insuretech.pms.common.exception.CustomException;
+import com.insuretech.pms.common.service.FileStorageService;
+import com.insuretech.pms.common.service.FileStorageService.StorageResult;
 import com.insuretech.pms.project.dto.DeliverableDto;
 import com.insuretech.pms.project.entity.Deliverable;
 import com.insuretech.pms.project.entity.Phase;
@@ -12,25 +14,17 @@ import com.insuretech.pms.project.repository.ProjectMemberRepository;
 import com.insuretech.pms.rag.service.RAGIndexingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.net.MalformedURLException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -38,13 +32,13 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class DeliverableService {
 
+    private static final String DELIVERABLES_SUBDIRECTORY = "deliverables";
+
     private final DeliverableRepository deliverableRepository;
     private final PhaseRepository phaseRepository;
     private final ProjectMemberRepository projectMemberRepository;
     private final RAGIndexingService ragIndexingService;
-
-    @Value("${pms.storage.deliverables:uploads/deliverables}")
-    private String deliverableStoragePath;
+    private final FileStorageService fileStorageService;
 
     @Transactional(readOnly = true)
     public List<DeliverableDto> getDeliverablesByPhase(String phaseId) {
@@ -64,28 +58,17 @@ public class DeliverableService {
             String type,
             String uploadedBy
     ) {
-        if (file == null || file.isEmpty()) {
-            throw CustomException.badRequest("업로드할 파일이 없습니다.");
-        }
-
         Phase phase = phaseRepository.findById(phaseId)
-                .orElseThrow(() -> CustomException.notFound("단계를 찾을 수 없습니다: " + phaseId));
+                .orElseThrow(() -> CustomException.notFound("Phase not found: " + phaseId));
 
         Deliverable deliverable = resolveDeliverable(deliverableId, phase, name, description, type);
 
-        String originalFileName = StringUtils.cleanPath(file.getOriginalFilename());
-        String storedFileName = UUID.randomUUID() + "-" + originalFileName;
-        Path targetPath = buildStoragePath(storedFileName);
+        // Use common FileStorageService for file storage
+        StorageResult storageResult = fileStorageService.storeFile(file, DELIVERABLES_SUBDIRECTORY);
 
-        try {
-            Files.copy(file.getInputStream(), targetPath);
-        } catch (IOException e) {
-            throw CustomException.internalError("파일 저장에 실패했습니다.");
-        }
-
-        deliverable.setFileName(originalFileName);
-        deliverable.setFilePath(targetPath.toString());
-        deliverable.setFileSize(file.getSize());
+        deliverable.setFileName(storageResult.getOriginalFileName());
+        deliverable.setFilePath(storageResult.getFilePath());
+        deliverable.setFileSize(storageResult.getFileSize());
         deliverable.setUploadedBy(uploadedBy);
         deliverable.setStatus(Deliverable.DeliverableStatus.IN_REVIEW);
 
@@ -93,7 +76,8 @@ public class DeliverableService {
         log.info("Deliverable uploaded: {} (phase={})", saved.getId(), phaseId);
 
         // Trigger RAG indexing asynchronously
-        triggerRAGIndexing(saved, phase, uploadedBy, targetPath);
+        Path filePath = Paths.get(storageResult.getFilePath());
+        triggerRAGIndexing(saved, phase, uploadedBy, filePath);
 
         return DeliverableDto.from(saved);
     }
@@ -118,7 +102,7 @@ public class DeliverableService {
             metadata.put("phase_name", phase.getName());
             metadata.put("project_id", projectId);
             metadata.put("project_name", phase.getProject().getName());
-            metadata.put("file_type", getFileExtension(deliverable.getFileName()));
+            metadata.put("file_type", fileStorageService.getFileExtension(deliverable.getFileName()));
             metadata.put("category", deliverable.getType() != null ? deliverable.getType().name() : "DOCUMENT");
             metadata.put("created_at", LocalDateTime.now().toString());
 
@@ -145,24 +129,14 @@ public class DeliverableService {
         }
     }
 
-    /**
-     * Get file extension from filename
-     */
-    private String getFileExtension(String fileName) {
-        if (fileName == null || !fileName.contains(".")) {
-            return "unknown";
-        }
-        return fileName.substring(fileName.lastIndexOf(".") + 1).toLowerCase();
-    }
-
     @Transactional
     public DeliverableDto approveDeliverable(String deliverableId, boolean approved, String approver) {
         Deliverable deliverable = deliverableRepository.findById(deliverableId)
-                .orElseThrow(() -> CustomException.notFound("산출물을 찾을 수 없습니다: " + deliverableId));
+                .orElseThrow(() -> CustomException.notFound("Deliverable not found: " + deliverableId));
 
         deliverable.setStatus(approved ? Deliverable.DeliverableStatus.APPROVED : Deliverable.DeliverableStatus.REJECTED);
         deliverable.setApprover(approver);
-        deliverable.setApprovedAt(java.time.LocalDateTime.now());
+        deliverable.setApprovedAt(LocalDateTime.now());
 
         Deliverable saved = deliverableRepository.save(deliverable);
         log.info("Deliverable approval updated: {} -> {}", saved.getId(), saved.getStatus());
@@ -172,30 +146,20 @@ public class DeliverableService {
     @Transactional(readOnly = true)
     public Deliverable getDeliverable(String deliverableId) {
         return deliverableRepository.findById(deliverableId)
-                .orElseThrow(() -> CustomException.notFound("산출물을 찾을 수 없습니다: " + deliverableId));
+                .orElseThrow(() -> CustomException.notFound("Deliverable not found: " + deliverableId));
     }
 
     @Transactional(readOnly = true)
     public Resource loadDeliverableFile(Deliverable deliverable) {
         if (deliverable.getFilePath() == null) {
-            throw CustomException.badRequest("파일이 업로드되지 않았습니다.");
+            throw CustomException.badRequest("File has not been uploaded.");
         }
-
-        try {
-            Path filePath = Paths.get(deliverable.getFilePath());
-            Resource resource = new UrlResource(filePath.toUri());
-            if (!resource.exists()) {
-                throw CustomException.notFound("파일을 찾을 수 없습니다.");
-            }
-            return resource;
-        } catch (MalformedURLException e) {
-            throw CustomException.internalError("파일 경로가 올바르지 않습니다.");
-        }
+        return fileStorageService.loadFile(deliverable.getFilePath());
     }
 
     private void ensurePhaseExists(String phaseId) {
         if (!phaseRepository.existsById(phaseId)) {
-            throw CustomException.notFound("단계를 찾을 수 없습니다: " + phaseId);
+            throw CustomException.notFound("Phase not found: " + phaseId);
         }
     }
 
@@ -208,9 +172,9 @@ public class DeliverableService {
     ) {
         if (deliverableId != null && !deliverableId.isBlank()) {
             Deliverable existing = deliverableRepository.findById(deliverableId)
-                    .orElseThrow(() -> CustomException.notFound("산출물을 찾을 수 없습니다: " + deliverableId));
+                    .orElseThrow(() -> CustomException.notFound("Deliverable not found: " + deliverableId));
             if (!existing.getPhase().getId().equals(phase.getId())) {
-                throw CustomException.badRequest("해당 단계와 산출물 ID가 일치하지 않습니다.");
+                throw CustomException.badRequest("Phase ID does not match deliverable.");
             }
             if (name != null && !name.isBlank()) {
                 existing.setName(name);
@@ -225,7 +189,7 @@ public class DeliverableService {
         }
 
         if (name == null || name.isBlank()) {
-            throw CustomException.badRequest("산출물 이름이 필요합니다.");
+            throw CustomException.badRequest("Deliverable name is required.");
         }
 
         Deliverable.DeliverableType deliverableType = Deliverable.DeliverableType.DOCUMENT;
@@ -240,15 +204,5 @@ public class DeliverableService {
                 .type(deliverableType)
                 .status(Deliverable.DeliverableStatus.PENDING)
                 .build();
-    }
-
-    private Path buildStoragePath(String storedFileName) {
-        Path storageDir = Paths.get(deliverableStoragePath);
-        try {
-            Files.createDirectories(storageDir);
-        } catch (IOException e) {
-            throw CustomException.internalError("파일 저장 경로 생성에 실패했습니다.");
-        }
-        return storageDir.resolve(storedFileName);
     }
 }
