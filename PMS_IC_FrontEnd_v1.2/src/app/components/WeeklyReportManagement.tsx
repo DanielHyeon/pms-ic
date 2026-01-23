@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import {
   FileBarChart,
   Search,
@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { useProject } from '../../contexts/ProjectContext';
 import { WeeklyReport, ReportStatus } from '../../types/project';
-import { apiService } from '../../services/api';
+import { useWeeklyReports, useCreateWeeklyReport, useGenerateAiReport } from '../../hooks/api';
 import { UserRole } from '../App';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -83,10 +83,13 @@ function getThisWeekDates() {
 
 export default function WeeklyReportManagement({ userRole }: WeeklyReportManagementProps) {
   const { currentProject } = useProject();
-  const [reports, setReports] = useState<WeeklyReport[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<ReportStatus | 'ALL'>('ALL');
+
+  // TanStack Query hooks
+  const { data: reports = [], isLoading, refetch } = useWeeklyReports(currentProject?.id);
+  const createReportMutation = useCreateWeeklyReport();
+  const generateAiReportMutation = useGenerateAiReport();
 
   // 다이얼로그 상태
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -101,7 +104,6 @@ export default function WeeklyReportManagement({ userRole }: WeeklyReportManagem
     periodEnd: thisWeek.end,
     content: '',
   });
-  const [isCreating, setIsCreating] = useState(false);
 
   // AI 생성 상태
   const [aiPeriod, setAiPeriod] = useState({
@@ -110,26 +112,6 @@ export default function WeeklyReportManagement({ userRole }: WeeklyReportManagem
   });
   const [aiContext, setAiContext] = useState('');
   const [generatedContent, setGeneratedContent] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
-
-  // 보고서 목록 로드
-  const loadReports = useCallback(async () => {
-    if (!currentProject) return;
-
-    setIsLoading(true);
-    try {
-      const data = await apiService.getWeeklyReports(currentProject.id);
-      setReports(data || []);
-    } catch (error) {
-      console.error('Failed to load reports:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentProject]);
-
-  useEffect(() => {
-    loadReports();
-  }, [loadReports]);
 
   // 필터링된 보고서 목록
   const filteredReports = reports.filter((report) => {
@@ -145,11 +127,13 @@ export default function WeeklyReportManagement({ userRole }: WeeklyReportManagem
   const handleCreateReport = async () => {
     if (!currentProject || !newReport.content.trim()) return;
 
-    setIsCreating(true);
     try {
-      await apiService.createWeeklyReport(currentProject.id, {
-        ...newReport,
-        status: 'DRAFT',
+      await createReportMutation.mutateAsync({
+        projectId: currentProject.id,
+        data: {
+          ...newReport,
+          status: 'DRAFT',
+        },
       });
       setIsCreateDialogOpen(false);
       setNewReport({
@@ -157,11 +141,8 @@ export default function WeeklyReportManagement({ userRole }: WeeklyReportManagem
         periodEnd: thisWeek.end,
         content: '',
       });
-      await loadReports();
     } catch (error) {
       console.error('Failed to create report:', error);
-    } finally {
-      setIsCreating(false);
     }
   };
 
@@ -169,21 +150,18 @@ export default function WeeklyReportManagement({ userRole }: WeeklyReportManagem
   const handleGenerateAiReport = async () => {
     if (!currentProject) return;
 
-    setIsGenerating(true);
     setGeneratedContent('');
     try {
-      const result = await apiService.generateAiReport(
-        currentProject.id,
-        aiPeriod.start,
-        aiPeriod.end,
-        aiContext || undefined
-      );
+      const result = await generateAiReportMutation.mutateAsync({
+        projectId: currentProject.id,
+        startDate: aiPeriod.start,
+        endDate: aiPeriod.end,
+        context: aiContext || undefined,
+      });
       setGeneratedContent(result.content || '');
     } catch (error) {
       console.error('Failed to generate AI report:', error);
       setGeneratedContent('AI 보고서 생성에 실패했습니다. 다시 시도해주세요.');
-    } finally {
-      setIsGenerating(false);
     }
   };
 
@@ -281,7 +259,7 @@ export default function WeeklyReportManagement({ userRole }: WeeklyReportManagem
                 ))}
               </SelectContent>
             </Select>
-            <Button variant="outline" onClick={loadReports} disabled={isLoading}>
+            <Button variant="outline" onClick={() => refetch()} disabled={isLoading}>
               <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
             </Button>
           </div>
@@ -443,15 +421,15 @@ export default function WeeklyReportManagement({ userRole }: WeeklyReportManagem
             <Button
               variant="outline"
               onClick={() => setIsCreateDialogOpen(false)}
-              disabled={isCreating}
+              disabled={createReportMutation.isPending}
             >
               취소
             </Button>
             <Button
               onClick={handleCreateReport}
-              disabled={!newReport.content.trim() || isCreating}
+              disabled={!newReport.content.trim() || createReportMutation.isPending}
             >
-              {isCreating ? (
+              {createReportMutation.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   저장 중...
@@ -572,10 +550,10 @@ export default function WeeklyReportManagement({ userRole }: WeeklyReportManagem
 
             <Button
               onClick={handleGenerateAiReport}
-              disabled={isGenerating}
+              disabled={generateAiReportMutation.isPending}
               className="w-full"
             >
-              {isGenerating ? (
+              {generateAiReportMutation.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   AI가 보고서를 생성하고 있습니다...

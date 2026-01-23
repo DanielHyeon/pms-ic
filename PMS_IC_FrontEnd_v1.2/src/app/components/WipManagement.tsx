@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { RefreshCw, Download, AlertCircle, TrendingUp, ChevronDown } from 'lucide-react';
 import WipDashboard from './WipDashboard';
 import ProgressVisualization from './ProgressVisualization';
-import { apiService } from '../../services/api';
+import { useProjectWipStatus, useProjectProgress } from '../../hooks/api';
 import { exportService, ProgressItem } from '../../services/export';
 import { toastService } from '../../services/toast';
 
@@ -15,42 +15,33 @@ type TabType = 'dashboard' | 'progress';
 
 const WipManagement: React.FC<WipManagementProps> = ({ projectId, onRefresh }) => {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [wipData, setWipData] = useState<any>(null);
-  const [progressData, setProgressData] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
 
-  const fetchWipData = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  // TanStack Query hooks
+  const {
+    data: wipData,
+    isLoading: wipLoading,
+    error: wipError,
+    refetch: refetchWip,
+    isRefetching: wipRefetching,
+  } = useProjectWipStatus(projectId);
 
-      // Fetch project-wide WIP status
-      const wipResponse = await apiService.getProjectWipStatus(projectId);
-      setWipData(wipResponse);
+  const {
+    data: progressData,
+    isLoading: progressLoading,
+    error: progressError,
+    refetch: refetchProgress,
+    isRefetching: progressRefetching,
+  } = useProjectProgress(projectId);
 
-      // Fetch progress data
-      const progressResponse = await apiService.getProjectProgress(projectId);
-      setProgressData(progressResponse);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch WIP data';
-      setError(errorMessage);
-      console.error('Error fetching WIP data:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId]);
-
-  useEffect(() => {
-    fetchWipData();
-  }, [fetchWipData]);
+  const loading = wipLoading || progressLoading;
+  const refreshing = wipRefetching || progressRefetching;
+  const error = wipError || progressError
+    ? (wipError instanceof Error ? wipError.message : progressError instanceof Error ? progressError.message : 'Failed to fetch WIP data')
+    : null;
 
   const handleRefresh = async () => {
-    setRefreshing(true);
-    await fetchWipData();
-    setRefreshing(false);
+    await Promise.all([refetchWip(), refetchProgress()]);
     onRefresh?.();
   };
 

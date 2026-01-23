@@ -30,3 +30,9 @@ export * from './useEducations';
 
 // Role hooks (users, permissions, project members)
 export * from './useRoles';
+
+// Weekly Report hooks
+export * from './useWeeklyReports';
+
+// WIP hooks
+export * from './useWip';
