@@ -575,15 +575,15 @@ export default function RequirementManagement({ userRole }: RequirementManagemen
             <Button
               variant="outline"
               onClick={() => setIsCreateDialogOpen(false)}
-              disabled={isCreating}
+              disabled={createMutation.isPending}
             >
               취소
             </Button>
             <Button
               onClick={handleCreateRequirement}
-              disabled={!newRequirement.title.trim() || isCreating}
+              disabled={!newRequirement.title.trim() || createMutation.isPending}
             >
-              {isCreating ? (
+              {createMutation.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   추가 중...
