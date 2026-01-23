@@ -1,10 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Plus, Search, Star, Edit2, Trash2, Users, CheckCircle, Clock, Pause, XCircle, AlertCircle, ChevronRight } from 'lucide-react';
 import { toastService } from '../../services/toast';
 import { Project, ProjectStatus } from '../../types/project';
 import { useProject } from '../../contexts/ProjectContext';
-import { apiService } from '../../services/api';
 import { UserRole } from '../App';
+import {
+  useProjectsWithDetails,
+  useCreateProject,
+  useUpdateProject,
+  useDeleteProject,
+  useSetDefaultProject
+} from '../../hooks/api/useProjects';
 
 interface ProjectManagementProps {
   userRole: UserRole;
@@ -21,8 +27,12 @@ const PROJECT_STATUS_INFO: Record<ProjectStatus, { label: string; color: string;
 
 export default function ProjectManagement({ userRole }: ProjectManagementProps) {
   const { currentProject, selectProject, refreshProjects } = useProject();
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: projects = [], isLoading } = useProjectsWithDetails();
+  const createProjectMutation = useCreateProject();
+  const updateProjectMutation = useUpdateProject();
+  const deleteProjectMutation = useDeleteProject();
+  const setDefaultProjectMutation = useSetDefaultProject();
+
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'ALL'>('ALL');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -34,78 +44,6 @@ export default function ProjectManagement({ userRole }: ProjectManagementProps) 
   const canManage = ['admin', 'pm', 'pmo_head'].includes(userRole);
   const canCreate = ['admin', 'pm'].includes(userRole);
   const canSetDefault = ['admin', 'pm'].includes(userRole);
-
-  // 프로젝트 목록 로드
-  useEffect(() => {
-    loadProjects();
-  }, []);
-
-  const loadProjects = async () => {
-    setLoading(true);
-    try {
-      const data = await apiService.getProjects();
-      // 전체 프로젝트 정보 로드
-      const fullProjects = await Promise.all(
-        data.map((p: { id: string }) => apiService.getProject(p.id))
-      );
-      setProjects(fullProjects);
-    } catch (error) {
-      console.error('Failed to load projects:', error);
-      // Mock 데이터
-      setProjects([
-        {
-          id: '1',
-          name: 'AI 기반 손해보험 지급심사 자동화',
-          code: 'INS-AI-2025-001',
-          description: 'AI/ML 기술을 활용한 보험금 청구 자동 심사 시스템 구축',
-          status: 'IN_PROGRESS',
-          startDate: '2025-01-02',
-          endDate: '2025-12-31',
-          budget: 5000000000,
-          progress: 62,
-          managerId: 'user-001',
-          managerName: '김철수',
-          isDefault: true,
-          createdAt: '2025-01-02T00:00:00Z',
-          updatedAt: '2025-01-15T00:00:00Z',
-        },
-        {
-          id: '2',
-          name: '차세대 고객관리 시스템',
-          code: 'CRM-2025-001',
-          description: '통합 고객 관리 시스템 고도화',
-          status: 'PLANNING',
-          startDate: '2025-03-01',
-          endDate: '2025-09-30',
-          budget: 2000000000,
-          progress: 0,
-          managerId: 'user-002',
-          managerName: '이영희',
-          isDefault: false,
-          createdAt: '2025-01-10T00:00:00Z',
-          updatedAt: '2025-01-10T00:00:00Z',
-        },
-        {
-          id: '3',
-          name: '데이터 품질 고도화',
-          code: 'DQ-2024-001',
-          description: '전사 데이터 품질 관리 체계 구축',
-          status: 'COMPLETED',
-          startDate: '2024-01-01',
-          endDate: '2024-12-31',
-          budget: 1500000000,
-          progress: 100,
-          managerId: 'user-001',
-          managerName: '김철수',
-          isDefault: false,
-          createdAt: '2024-01-01T00:00:00Z',
-          updatedAt: '2024-12-31T00:00:00Z',
-        },
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // 필터링된 프로젝트 목록
   const filteredProjects = projects.filter((project) => {
@@ -134,93 +72,65 @@ export default function ProjectManagement({ userRole }: ProjectManagementProps) 
 
   // 대표 프로젝트 설정
   const handleSetDefault = async (projectId: string) => {
-    try {
-      // API 호출
-      await apiService.setDefaultProject(projectId);
-      // 목록 새로고침
-      await loadProjects();
-      await refreshProjects();
-    } catch (error) {
-      console.error('Failed to set default project:', error);
-      // Mock: 로컬 상태 업데이트
-      setProjects((prev) =>
-        prev.map((p) => ({
-          ...p,
-          isDefault: p.id === projectId,
-        }))
-      );
-    }
+    setDefaultProjectMutation.mutate(projectId, {
+      onSuccess: () => {
+        refreshProjects();
+        toastService.success('대표 프로젝트가 설정되었습니다.');
+      },
+      onError: (error) => {
+        console.error('Failed to set default project:', error);
+        toastService.error('대표 프로젝트 설정에 실패했습니다.');
+      }
+    });
   };
 
   // 프로젝트 삭제
   const handleDelete = async (projectId: string) => {
     if (!confirm('정말 이 프로젝트를 삭제하시겠습니까?')) return;
-    
-    try {
-      await apiService.deleteProject(projectId);
-      await loadProjects();
-      await refreshProjects();
-    } catch (error) {
-      console.error('Failed to delete project:', error);
-      // Mock
-      setProjects((prev) => prev.filter((p) => p.id !== projectId));
-    }
+
+    deleteProjectMutation.mutate(projectId, {
+      onSuccess: () => {
+        refreshProjects();
+        toastService.success('프로젝트가 삭제되었습니다.');
+      },
+      onError: (error) => {
+        console.error('Failed to delete project:', error);
+        toastService.error('프로젝트 삭제에 실패했습니다.');
+      }
+    });
   };
 
   // 프로젝트 생성
   const handleCreate = async (data: Partial<Project>) => {
-    try {
-      await apiService.createProject(data);
-      await loadProjects();
-      await refreshProjects();
-      setShowCreateDialog(false);
-    } catch (error) {
-      console.error('Failed to create project:', error);
-      // Mock
-      const newProject: Project = {
-        id: `proj-${Date.now()}`,
-        name: data.name || '새 프로젝트',
-        code: data.code || `PROJ-${Date.now()}`,
-        description: data.description || '',
-        status: 'PLANNING',
-        startDate: data.startDate || new Date().toISOString().split('T')[0],
-        endDate: data.endDate || '',
-        budget: data.budget || 0,
-        progress: 0,
-        managerId: 'current-user',
-        managerName: '현재 사용자',
-        isDefault: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      setProjects((prev) => [...prev, newProject]);
-      setShowCreateDialog(false);
-    }
+    createProjectMutation.mutate(data, {
+      onSuccess: () => {
+        refreshProjects();
+        setShowCreateDialog(false);
+        toastService.success('프로젝트가 생성되었습니다.');
+      },
+      onError: (error) => {
+        console.error('Failed to create project:', error);
+        toastService.error('프로젝트 생성에 실패했습니다.');
+      }
+    });
   };
 
   // 프로젝트 수정
   const handleEdit = async (data: Partial<Project>) => {
     if (!editingProject) return;
-    
-    try {
-      await apiService.updateProject(editingProject.id, data);
-      await loadProjects();
-      await refreshProjects();
-      setShowEditDialog(false);
-      setEditingProject(null);
-    } catch (error) {
-      console.error('Failed to update project:', error);
-      // Mock
-      setProjects((prev) =>
-        prev.map((p) =>
-          p.id === editingProject.id
-            ? { ...p, ...data, updatedAt: new Date().toISOString() }
-            : p
-        )
-      );
-      setShowEditDialog(false);
-      setEditingProject(null);
-    }
+
+    updateProjectMutation.mutate({ id: editingProject.id, data }, {
+      onSuccess: () => {
+        refreshProjects();
+        setShowEditDialog(false);
+        setEditingProject(null);
+        toastService.success('프로젝트가 수정되었습니다.');
+      },
+      onError: (error) => {
+        console.error('Failed to update project:', error);
+        toastService.error('프로젝트 수정에 실패했습니다.');
+      }
+    });
   };
 
   // 금액 포맷팅
@@ -231,7 +141,7 @@ export default function ProjectManagement({ userRole }: ProjectManagementProps) 
     return `${(budget / 10000).toLocaleString()}만원`;
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[400px]">
         <div className="text-center">

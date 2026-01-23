@@ -1,87 +1,14 @@
-import { useState, useEffect } from 'react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { TrendingUp, AlertTriangle, CheckCircle2, Clock, Target, DollarSign, Lock, Cpu, Cog, Layers, User, FolderKanban, ChevronRight, Star, BarChart3 } from 'lucide-react';
+import { TrendingUp, AlertTriangle, CheckCircle2, Clock, Target, DollarSign, Lock, Cpu, Cog, Layers, User, FolderKanban, ChevronRight, Star } from 'lucide-react';
 import { UserRole } from '../App';
 import { trackProgressData, subProjectData, partLeaderData, phaseData, sprintVelocity, burndownData } from '../../mocks';
 import { getStatusColor, getStatusLabel, getTrackColor, getActivityColor } from '../../utils/status';
 import { useProject } from '../../contexts/ProjectContext';
-import { Project } from '../../types/project';
-import { apiService } from '../../services/api';
+import { useProjectsWithDetails } from '../../hooks/api/useProjects';
 
 // 포트폴리오 뷰 (전체 프로젝트 현황)
 function PortfolioView({ userRole, onSelectProject }: { userRole: UserRole; onSelectProject: (projectId: string) => void }) {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadProjects();
-  }, []);
-
-  const loadProjects = async () => {
-    setLoading(true);
-    try {
-      const projectList = await apiService.getProjects();
-      const fullProjects = await Promise.all(
-        projectList.map((p: { id: string }) => apiService.getProject(p.id))
-      );
-      setProjects(fullProjects);
-    } catch (error) {
-      console.error('Failed to load projects:', error);
-      // Mock 데이터
-      setProjects([
-        {
-          id: '1',
-          name: 'AI 기반 손해보험 지급심사 자동화',
-          code: 'INS-AI-2025-001',
-          description: 'AI/ML 기술을 활용한 보험금 청구 자동 심사 시스템 구축',
-          status: 'IN_PROGRESS',
-          startDate: '2025-01-02',
-          endDate: '2025-12-31',
-          budget: 5000000000,
-          progress: 62,
-          managerId: 'user-001',
-          managerName: '김철수',
-          isDefault: true,
-          createdAt: '2025-01-02T00:00:00Z',
-          updatedAt: '2025-01-15T00:00:00Z',
-        },
-        {
-          id: '2',
-          name: '차세대 고객관리 시스템',
-          code: 'CRM-2025-001',
-          description: '통합 고객 관리 시스템 고도화',
-          status: 'PLANNING',
-          startDate: '2025-03-01',
-          endDate: '2025-09-30',
-          budget: 2000000000,
-          progress: 0,
-          managerId: 'user-002',
-          managerName: '이영희',
-          isDefault: false,
-          createdAt: '2025-01-10T00:00:00Z',
-          updatedAt: '2025-01-10T00:00:00Z',
-        },
-        {
-          id: '3',
-          name: '데이터 품질 고도화',
-          code: 'DQ-2024-001',
-          description: '전사 데이터 품질 관리 체계 구축',
-          status: 'COMPLETED',
-          startDate: '2024-01-01',
-          endDate: '2024-12-31',
-          budget: 1500000000,
-          progress: 100,
-          managerId: 'user-001',
-          managerName: '김철수',
-          isDefault: false,
-          createdAt: '2024-01-01T00:00:00Z',
-          updatedAt: '2024-12-31T00:00:00Z',
-        },
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: projects = [], isLoading } = useProjectsWithDetails();
 
   const getStatusInfo = (status: string) => {
     switch (status) {
@@ -98,7 +25,7 @@ function PortfolioView({ userRole, onSelectProject }: { userRole: UserRole; onSe
   const completedProjects = projects.filter(p => p.status === 'COMPLETED').length;
   const totalBudget = projects.reduce((sum, p) => sum + (p.budget || 0), 0);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[400px]">
         <div className="text-center">
