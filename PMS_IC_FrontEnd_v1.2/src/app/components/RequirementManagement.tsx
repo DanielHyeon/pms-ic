@@ -722,15 +722,15 @@ export default function RequirementManagement({ userRole }: RequirementManagemen
             <Button
               variant="outline"
               onClick={() => setIsLinkDialogOpen(false)}
-              disabled={isLinking}
+              disabled={linkMutation.isPending}
             >
               취소
             </Button>
             <Button
               onClick={handleLinkTask}
-              disabled={!taskIdToLink.trim() || isLinking}
+              disabled={!taskIdToLink.trim() || linkMutation.isPending}
             >
-              {isLinking ? (
+              {linkMutation.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   연결 중...
