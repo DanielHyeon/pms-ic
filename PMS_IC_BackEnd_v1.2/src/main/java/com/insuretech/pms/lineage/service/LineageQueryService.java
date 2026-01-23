@@ -6,16 +6,12 @@ import com.insuretech.pms.lineage.dto.*;
 import com.insuretech.pms.lineage.entity.LineageEventType;
 import com.insuretech.pms.lineage.entity.OutboxEvent;
 import com.insuretech.pms.lineage.repository.OutboxEventRepository;
-import com.insuretech.pms.rfp.entity.Requirement;
-import com.insuretech.pms.rfp.repository.RequirementRepository;
-import com.insuretech.pms.task.entity.Sprint;
-import com.insuretech.pms.task.entity.Task;
-import com.insuretech.pms.task.entity.UserStory;
-import com.insuretech.pms.task.repository.SprintRepository;
-import com.insuretech.pms.task.repository.TaskRepository;
-import com.insuretech.pms.task.repository.UserStoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.neo4j.driver.*;
+import org.neo4j.driver.Record;
+import org.neo4j.driver.types.Node;
+import org.neo4j.driver.types.Relationship;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -23,12 +19,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Service for querying lineage data from PostgreSQL and constructing graph visualizations.
- * Uses OutboxEvent for timeline and domain entities for graph construction.
+ * Service for querying lineage data from Neo4j graph database.
+ * Uses Neo4j for efficient graph traversal and relationship queries.
+ * Falls back to OutboxEvent for timeline data (event history).
  */
 @Slf4j
 @Service
@@ -36,65 +34,76 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class LineageQueryService {
 
+    private final Driver neo4jDriver;
     private final OutboxEventRepository outboxEventRepository;
-    private final RequirementRepository requirementRepository;
-    private final UserStoryRepository userStoryRepository;
-    private final TaskRepository taskRepository;
-    private final SprintRepository sprintRepository;
     private final UserRepository userRepository;
 
     /**
-     * Get the complete lineage graph for a project.
-     * Constructs nodes from Requirements, UserStories, Tasks, and Sprints.
-     * Constructs edges from linkedTaskIds and sprint assignments.
+     * Get the complete lineage graph for a project from Neo4j.
+     * Single query retrieves all nodes and relationships.
      */
     public LineageGraphDto getProjectGraph(String projectId) {
-        log.debug("Building lineage graph for project: {}", projectId);
+        log.debug("Fetching lineage graph from Neo4j for project: {}", projectId);
 
         List<LineageNodeDto> nodes = new ArrayList<>();
         List<LineageEdgeDto> edges = new ArrayList<>();
+        Set<String> processedNodeIds = new HashSet<>();
+        Set<String> processedEdgeIds = new HashSet<>();
 
-        // Load all entities for the project
-        List<Requirement> requirements = requirementRepository.findByProjectIdOrderByCodeAsc(projectId);
-        List<UserStory> stories = userStoryRepository.findByProjectIdOrderByPriorityOrderAsc(projectId);
-        List<Task> tasks = loadTasksForProject(projectId);
-        List<Sprint> sprints = sprintRepository.findByProjectIdOrderByStartDateDesc(projectId);
+        String query = """
+            MATCH (n)
+            WHERE n.projectId = $projectId
+              AND (n:Requirement OR n:UserStory OR n:Task OR n:Sprint)
+            OPTIONAL MATCH (n)-[r]->(m)
+            WHERE m.projectId = $projectId
+            RETURN n, r, m
+            """;
 
-        // Build nodes
-        requirements.forEach(req -> nodes.add(toNode(req)));
-        stories.forEach(story -> nodes.add(toNode(story)));
-        tasks.forEach(task -> nodes.add(toNode(task)));
-        sprints.forEach(sprint -> nodes.add(toNode(sprint)));
+        try (Session session = neo4jDriver.session()) {
+            Result result = session.run(query, Values.parameters("projectId", projectId));
 
-        // Build edges from Requirement -> Task links
-        for (Requirement req : requirements) {
-            for (String taskId : req.getLinkedTaskIds()) {
-                edges.add(LineageEdgeDto.builder()
-                        .id(req.getId() + "-" + taskId)
-                        .source(req.getId())
-                        .target(taskId)
-                        .relationship(LineageEdgeDto.LineageRelationship.IMPLEMENTED_BY)
-                        .createdAt(req.getUpdatedAt())
-                        .build());
+            while (result.hasNext()) {
+                Record record = result.next();
+
+                // Process source node
+                Node sourceNode = record.get("n").asNode();
+                if (!processedNodeIds.contains(sourceNode.elementId())) {
+                    nodes.add(toNodeDto(sourceNode));
+                    processedNodeIds.add(sourceNode.elementId());
+                }
+
+                // Process relationship and target node if exists
+                if (!record.get("r").isNull() && !record.get("m").isNull()) {
+                    Relationship rel = record.get("r").asRelationship();
+                    Node targetNode = record.get("m").asNode();
+
+                    // Add target node
+                    if (!processedNodeIds.contains(targetNode.elementId())) {
+                        nodes.add(toNodeDto(targetNode));
+                        processedNodeIds.add(targetNode.elementId());
+                    }
+
+                    // Add edge
+                    String edgeId = rel.elementId();
+                    if (!processedEdgeIds.contains(edgeId)) {
+                        edges.add(toEdgeDto(rel, sourceNode, targetNode));
+                        processedEdgeIds.add(edgeId);
+                    }
+                }
             }
+        } catch (Exception e) {
+            log.error("Neo4j query failed for project graph: {}", e.getMessage());
+            return LineageGraphDto.builder()
+                    .nodes(Collections.emptyList())
+                    .edges(Collections.emptyList())
+                    .statistics(emptyStatistics())
+                    .build();
         }
 
-        // Build edges from UserStory -> Sprint assignments
-        for (UserStory story : stories) {
-            if (story.getSprint() != null) {
-                edges.add(LineageEdgeDto.builder()
-                        .id(story.getId() + "-" + story.getSprint().getId())
-                        .source(story.getId())
-                        .target(story.getSprint().getId())
-                        .relationship(LineageEdgeDto.LineageRelationship.BELONGS_TO_SPRINT)
-                        .createdAt(story.getUpdatedAt())
-                        .build());
-            }
-        }
+        // Calculate statistics from the graph
+        LineageGraphDto.LineageStatisticsDto stats = calculateStatisticsFromNodes(nodes, edges);
 
-        // Calculate statistics
-        LineageGraphDto.LineageStatisticsDto stats = calculateStatistics(
-                requirements, stories, tasks, sprints);
+        log.info("Loaded {} nodes and {} edges from Neo4j for project {}", nodes.size(), edges.size(), projectId);
 
         return LineageGraphDto.builder()
                 .nodes(nodes)
@@ -104,7 +113,257 @@ public class LineageQueryService {
     }
 
     /**
-     * Get activity timeline with pagination and filtering.
+     * Get upstream dependencies using Neo4j path traversal.
+     * Much more efficient than recursive PostgreSQL queries.
+     */
+    public LineageTreeDto getUpstream(String aggregateType, String aggregateId, int depth) {
+        log.debug("Fetching upstream from Neo4j for {}: {} with depth {}", aggregateType, aggregateId, depth);
+
+        List<LineageNodeDto> nodes = new ArrayList<>();
+        List<LineageEdgeDto> edges = new ArrayList<>();
+        Set<String> processedNodeIds = new HashSet<>();
+        LineageNodeDto root = null;
+
+        String label = mapAggregateTypeToLabel(aggregateType);
+
+        String query = String.format("""
+            MATCH (target:%s {id: $id})
+            OPTIONAL MATCH path = (source)-[r*1..%d]->(target)
+            WHERE source:Requirement OR source:UserStory OR source:Task OR source:Sprint
+            RETURN target, path
+            """, label, depth);
+
+        try (Session session = neo4jDriver.session()) {
+            Result result = session.run(query, Values.parameters("id", aggregateId));
+
+            while (result.hasNext()) {
+                Record record = result.next();
+
+                // Get root node
+                if (root == null && !record.get("target").isNull()) {
+                    Node targetNode = record.get("target").asNode();
+                    root = toNodeDto(targetNode);
+                    if (!processedNodeIds.contains(targetNode.elementId())) {
+                        nodes.add(root);
+                        processedNodeIds.add(targetNode.elementId());
+                    }
+                }
+
+                // Process path if exists
+                if (!record.get("path").isNull()) {
+                    var path = record.get("path").asPath();
+
+                    for (Node node : path.nodes()) {
+                        if (!processedNodeIds.contains(node.elementId())) {
+                            nodes.add(toNodeDto(node));
+                            processedNodeIds.add(node.elementId());
+                        }
+                    }
+
+                    for (Relationship rel : path.relationships()) {
+                        edges.add(LineageEdgeDto.builder()
+                                .id(rel.elementId())
+                                .source(getNodeIdFromRel(rel, path, true))
+                                .target(getNodeIdFromRel(rel, path, false))
+                                .relationship(mapRelationshipType(rel.type()))
+                                .build());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("Neo4j upstream query failed: {}", e.getMessage());
+        }
+
+        return LineageTreeDto.builder()
+                .root(root)
+                .nodes(nodes)
+                .edges(edges)
+                .maxDepth(depth)
+                .totalNodes(nodes.size())
+                .build();
+    }
+
+    /**
+     * Get downstream dependencies using Neo4j path traversal.
+     */
+    public LineageTreeDto getDownstream(String aggregateType, String aggregateId, int depth) {
+        log.debug("Fetching downstream from Neo4j for {}: {} with depth {}", aggregateType, aggregateId, depth);
+
+        List<LineageNodeDto> nodes = new ArrayList<>();
+        List<LineageEdgeDto> edges = new ArrayList<>();
+        Set<String> processedNodeIds = new HashSet<>();
+        LineageNodeDto root = null;
+
+        String label = mapAggregateTypeToLabel(aggregateType);
+
+        String query = String.format("""
+            MATCH (source:%s {id: $id})
+            OPTIONAL MATCH path = (source)-[r*1..%d]->(target)
+            WHERE target:Requirement OR target:UserStory OR target:Task OR target:Sprint
+            RETURN source, path
+            """, label, depth);
+
+        try (Session session = neo4jDriver.session()) {
+            Result result = session.run(query, Values.parameters("id", aggregateId));
+
+            while (result.hasNext()) {
+                Record record = result.next();
+
+                // Get root node
+                if (root == null && !record.get("source").isNull()) {
+                    Node sourceNode = record.get("source").asNode();
+                    root = toNodeDto(sourceNode);
+                    if (!processedNodeIds.contains(sourceNode.elementId())) {
+                        nodes.add(root);
+                        processedNodeIds.add(sourceNode.elementId());
+                    }
+                }
+
+                // Process path if exists
+                if (!record.get("path").isNull()) {
+                    var path = record.get("path").asPath();
+
+                    for (Node node : path.nodes()) {
+                        if (!processedNodeIds.contains(node.elementId())) {
+                            nodes.add(toNodeDto(node));
+                            processedNodeIds.add(node.elementId());
+                        }
+                    }
+
+                    for (Relationship rel : path.relationships()) {
+                        edges.add(LineageEdgeDto.builder()
+                                .id(rel.elementId())
+                                .source(getNodeIdFromRel(rel, path, true))
+                                .target(getNodeIdFromRel(rel, path, false))
+                                .relationship(mapRelationshipType(rel.type()))
+                                .build());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("Neo4j downstream query failed: {}", e.getMessage());
+        }
+
+        return LineageTreeDto.builder()
+                .root(root)
+                .nodes(nodes)
+                .edges(edges)
+                .maxDepth(depth)
+                .totalNodes(nodes.size())
+                .build();
+    }
+
+    /**
+     * Analyze impact of changing an entity using Neo4j traversal.
+     */
+    public ImpactAnalysisDto analyzeImpact(String aggregateType, String aggregateId) {
+        log.debug("Analyzing impact from Neo4j for {}: {}", aggregateType, aggregateId);
+
+        String label = mapAggregateTypeToLabel(aggregateType);
+        List<ImpactAnalysisDto.ImpactedEntityDto> directImpacts = new ArrayList<>();
+        List<ImpactAnalysisDto.ImpactedEntityDto> indirectImpacts = new ArrayList<>();
+        Set<String> affectedSprintIds = new HashSet<>();
+        String sourceTitle = "";
+
+        // Query for direct and indirect impacts
+        String query = String.format("""
+            MATCH (source:%s {id: $id})
+            OPTIONAL MATCH (source)-[r1]->(direct)
+            OPTIONAL MATCH (source)-[*2..3]->(indirect)
+            WHERE (direct:UserStory OR direct:Task OR direct:Sprint)
+              AND (indirect:UserStory OR indirect:Task OR indirect:Sprint)
+              AND direct <> indirect
+            RETURN source,
+                   collect(DISTINCT direct) as directNodes,
+                   collect(DISTINCT indirect) as indirectNodes
+            """, label);
+
+        try (Session session = neo4jDriver.session()) {
+            Result result = session.run(query, Values.parameters("id", aggregateId));
+
+            if (result.hasNext()) {
+                Record record = result.next();
+
+                // Source info
+                if (!record.get("source").isNull()) {
+                    Node source = record.get("source").asNode();
+                    sourceTitle = getStringProperty(source, "title");
+                }
+
+                // Direct impacts
+                List<Object> directNodes = record.get("directNodes").asList();
+                for (Object obj : directNodes) {
+                    if (obj instanceof Node node) {
+                        String type = getNodeType(node);
+                        directImpacts.add(ImpactAnalysisDto.ImpactedEntityDto.builder()
+                                .id(getStringProperty(node, "id"))
+                                .type(type)
+                                .title(getStringProperty(node, "title"))
+                                .status(getStringProperty(node, "status"))
+                                .impactLevel(ImpactAnalysisDto.ImpactLevel.DIRECT)
+                                .depth(1)
+                                .build());
+
+                        if ("SPRINT".equals(type)) {
+                            affectedSprintIds.add(getStringProperty(node, "id"));
+                        }
+                    }
+                }
+
+                // Indirect impacts
+                List<Object> indirectNodes = record.get("indirectNodes").asList();
+                for (Object obj : indirectNodes) {
+                    if (obj instanceof Node node) {
+                        String nodeId = getStringProperty(node, "id");
+                        // Skip if already in direct impacts
+                        if (directImpacts.stream().anyMatch(d -> d.getId().equals(nodeId))) {
+                            continue;
+                        }
+
+                        String type = getNodeType(node);
+                        indirectImpacts.add(ImpactAnalysisDto.ImpactedEntityDto.builder()
+                                .id(nodeId)
+                                .type(type)
+                                .title(getStringProperty(node, "title"))
+                                .status(getStringProperty(node, "status"))
+                                .impactLevel(ImpactAnalysisDto.ImpactLevel.INDIRECT)
+                                .depth(2)
+                                .build());
+
+                        if ("SPRINT".equals(type)) {
+                            affectedSprintIds.add(nodeId);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("Neo4j impact analysis failed: {}", e.getMessage());
+        }
+
+        // Get sprint names
+        List<String> sprintNames = getSprintNames(affectedSprintIds);
+
+        int impactedStories = (int) (directImpacts.stream().filter(d -> "USER_STORY".equals(d.getType())).count()
+                + indirectImpacts.stream().filter(d -> "USER_STORY".equals(d.getType())).count());
+        int impactedTasks = (int) (directImpacts.stream().filter(d -> "TASK".equals(d.getType())).count()
+                + indirectImpacts.stream().filter(d -> "TASK".equals(d.getType())).count());
+
+        return ImpactAnalysisDto.builder()
+                .sourceId(aggregateId)
+                .sourceType(aggregateType)
+                .sourceTitle(sourceTitle)
+                .impactedStories(impactedStories)
+                .impactedTasks(impactedTasks)
+                .impactedSprints(affectedSprintIds.size())
+                .directImpacts(directImpacts)
+                .indirectImpacts(indirectImpacts)
+                .affectedSprintNames(sprintNames)
+                .build();
+    }
+
+    /**
+     * Get activity timeline from OutboxEvent (PostgreSQL).
+     * Timeline data is event-based, best stored in relational DB.
      */
     public Page<LineageEventDto> getTimeline(
             String projectId,
@@ -114,36 +373,27 @@ public class LineageQueryService {
             String userId,
             Pageable pageable) {
 
-        log.debug("Fetching timeline for project: {}, type: {}, since: {}, until: {}",
-                projectId, aggregateType, since, until);
+        log.debug("Fetching timeline for project: {}, type: {}", projectId, aggregateType);
 
-        // Get all events and filter (for MVP; production should use custom query)
-        List<OutboxEvent> allEvents = outboxEventRepository.findAll();
+        Page<OutboxEvent> eventsPage = outboxEventRepository.findTimelineEvents(
+                aggregateType, since, until, pageable);
 
-        List<OutboxEvent> filtered = allEvents.stream()
+        List<OutboxEvent> filtered = eventsPage.getContent().stream()
                 .filter(e -> matchesProject(e, projectId))
-                .filter(e -> aggregateType == null || e.getAggregateType().equals(aggregateType))
-                .filter(e -> since == null || e.getCreatedAt().isAfter(since))
-                .filter(e -> until == null || e.getCreatedAt().isBefore(until))
                 .filter(e -> userId == null || matchesUser(e, userId))
-                .sorted(Comparator.comparing(OutboxEvent::getCreatedAt).reversed())
                 .collect(Collectors.toList());
 
-        // Map users for actor names
         Map<String, String> userNames = loadUserNames();
 
-        // Convert to DTOs with pagination
-        int start = (int) pageable.getOffset();
-        int end = Math.min(start + pageable.getPageSize(), filtered.size());
-        List<LineageEventDto> pageContent = filtered.subList(start, end).stream()
+        List<LineageEventDto> pageContent = filtered.stream()
                 .map(e -> toEventDto(e, userNames))
                 .collect(Collectors.toList());
 
-        return new PageImpl<>(pageContent, pageable, filtered.size());
+        return new PageImpl<>(pageContent, pageable, eventsPage.getTotalElements());
     }
 
     /**
-     * Get history for a specific entity.
+     * Get history for a specific entity from OutboxEvent.
      */
     public List<LineageEventDto> getEntityHistory(String aggregateType, String aggregateId) {
         log.debug("Fetching history for {}: {}", aggregateType, aggregateId);
@@ -159,280 +409,246 @@ public class LineageQueryService {
     }
 
     /**
-     * Get upstream dependencies (what leads to this entity).
-     */
-    public LineageTreeDto getUpstream(String aggregateType, String aggregateId, int depth) {
-        log.debug("Fetching upstream for {}: {} with depth {}", aggregateType, aggregateId, depth);
-
-        List<LineageNodeDto> nodes = new ArrayList<>();
-        List<LineageEdgeDto> edges = new ArrayList<>();
-
-        // Find the root entity
-        LineageNodeDto root = findNode(aggregateType, aggregateId);
-        if (root == null) {
-            return LineageTreeDto.builder()
-                    .nodes(Collections.emptyList())
-                    .edges(Collections.emptyList())
-                    .maxDepth(0)
-                    .totalNodes(0)
-                    .build();
-        }
-
-        nodes.add(root);
-
-        // For Task, find linked Requirements
-        if ("TASK".equals(aggregateType)) {
-            List<Requirement> linkedReqs = requirementRepository.findAll().stream()
-                    .filter(r -> r.getLinkedTaskIds().contains(aggregateId))
-                    .collect(Collectors.toList());
-
-            for (Requirement req : linkedReqs) {
-                nodes.add(toNode(req));
-                edges.add(LineageEdgeDto.builder()
-                        .id(req.getId() + "-" + aggregateId)
-                        .source(req.getId())
-                        .target(aggregateId)
-                        .relationship(LineageEdgeDto.LineageRelationship.IMPLEMENTED_BY)
-                        .build());
-            }
-        }
-
-        return LineageTreeDto.builder()
-                .root(root)
-                .nodes(nodes)
-                .edges(edges)
-                .maxDepth(depth)
-                .totalNodes(nodes.size())
-                .build();
-    }
-
-    /**
-     * Get downstream dependencies (what depends on this entity).
-     */
-    public LineageTreeDto getDownstream(String aggregateType, String aggregateId, int depth) {
-        log.debug("Fetching downstream for {}: {} with depth {}", aggregateType, aggregateId, depth);
-
-        List<LineageNodeDto> nodes = new ArrayList<>();
-        List<LineageEdgeDto> edges = new ArrayList<>();
-
-        LineageNodeDto root = findNode(aggregateType, aggregateId);
-        if (root == null) {
-            return LineageTreeDto.builder()
-                    .nodes(Collections.emptyList())
-                    .edges(Collections.emptyList())
-                    .maxDepth(0)
-                    .totalNodes(0)
-                    .build();
-        }
-
-        nodes.add(root);
-
-        // For Requirement, find linked Tasks
-        if ("REQUIREMENT".equals(aggregateType)) {
-            Requirement req = requirementRepository.findById(aggregateId).orElse(null);
-            if (req != null) {
-                for (String taskId : req.getLinkedTaskIds()) {
-                    taskRepository.findById(taskId).ifPresent(task -> {
-                        nodes.add(toNode(task));
-                        edges.add(LineageEdgeDto.builder()
-                                .id(aggregateId + "-" + taskId)
-                                .source(aggregateId)
-                                .target(taskId)
-                                .relationship(LineageEdgeDto.LineageRelationship.IMPLEMENTED_BY)
-                                .build());
-                    });
-                }
-            }
-        }
-
-        return LineageTreeDto.builder()
-                .root(root)
-                .nodes(nodes)
-                .edges(edges)
-                .maxDepth(depth)
-                .totalNodes(nodes.size())
-                .build();
-    }
-
-    /**
-     * Analyze impact of changing an entity.
-     */
-    public ImpactAnalysisDto analyzeImpact(String aggregateType, String aggregateId) {
-        log.debug("Analyzing impact for {}: {}", aggregateType, aggregateId);
-
-        LineageNodeDto source = findNode(aggregateType, aggregateId);
-        if (source == null) {
-            return ImpactAnalysisDto.builder()
-                    .sourceId(aggregateId)
-                    .sourceType(aggregateType)
-                    .impactedStories(0)
-                    .impactedTasks(0)
-                    .impactedSprints(0)
-                    .directImpacts(Collections.emptyList())
-                    .indirectImpacts(Collections.emptyList())
-                    .affectedSprintNames(Collections.emptyList())
-                    .build();
-        }
-
-        List<ImpactAnalysisDto.ImpactedEntityDto> directImpacts = new ArrayList<>();
-        List<ImpactAnalysisDto.ImpactedEntityDto> indirectImpacts = new ArrayList<>();
-        Set<String> affectedSprintIds = new HashSet<>();
-
-        if ("REQUIREMENT".equals(aggregateType)) {
-            Requirement req = requirementRepository.findById(aggregateId).orElse(null);
-            if (req != null) {
-                // Direct impacts: linked tasks
-                for (String taskId : req.getLinkedTaskIds()) {
-                    taskRepository.findById(taskId).ifPresent(task -> {
-                        directImpacts.add(ImpactAnalysisDto.ImpactedEntityDto.builder()
-                                .id(task.getId())
-                                .type("TASK")
-                                .title(task.getTitle())
-                                .status(task.getStatus().name())
-                                .impactLevel(ImpactAnalysisDto.ImpactLevel.DIRECT)
-                                .depth(1)
-                                .build());
-                    });
-                }
-            }
-        }
-
-        // Get affected sprint names
-        List<String> sprintNames = affectedSprintIds.stream()
-                .map(id -> sprintRepository.findById(id).map(Sprint::getName).orElse("Unknown"))
-                .collect(Collectors.toList());
-
-        return ImpactAnalysisDto.builder()
-                .sourceId(aggregateId)
-                .sourceType(aggregateType)
-                .sourceTitle(source.getTitle())
-                .impactedStories(0)
-                .impactedTasks(directImpacts.size())
-                .impactedSprints(affectedSprintIds.size())
-                .directImpacts(directImpacts)
-                .indirectImpacts(indirectImpacts)
-                .affectedSprintNames(sprintNames)
-                .build();
-    }
-
-    /**
-     * Get lineage statistics for a project.
+     * Get lineage statistics from Neo4j.
      */
     public LineageGraphDto.LineageStatisticsDto getStatistics(String projectId) {
-        List<Requirement> requirements = requirementRepository.findByProjectIdOrderByCodeAsc(projectId);
-        List<UserStory> stories = userStoryRepository.findByProjectIdOrderByPriorityOrderAsc(projectId);
-        List<Task> tasks = loadTasksForProject(projectId);
-        List<Sprint> sprints = sprintRepository.findByProjectIdOrderByStartDateDesc(projectId);
+        log.debug("Fetching statistics from Neo4j for project: {}", projectId);
 
-        return calculateStatistics(requirements, stories, tasks, sprints);
+        String query = """
+            MATCH (n)
+            WHERE n.projectId = $projectId
+            WITH n,
+                 CASE WHEN n:Requirement THEN 1 ELSE 0 END as isReq,
+                 CASE WHEN n:UserStory THEN 1 ELSE 0 END as isStory,
+                 CASE WHEN n:Task THEN 1 ELSE 0 END as isTask,
+                 CASE WHEN n:Sprint THEN 1 ELSE 0 END as isSprint
+            RETURN sum(isReq) as requirements,
+                   sum(isStory) as stories,
+                   sum(isTask) as tasks,
+                   sum(isSprint) as sprints
+            """;
+
+        String linkedQuery = """
+            MATCH (r:Requirement {projectId: $projectId})-[:IMPLEMENTED_BY|DERIVES]->()
+            RETURN count(DISTINCT r) as linkedRequirements
+            """;
+
+        int requirements = 0, stories = 0, tasks = 0, sprints = 0, linkedReqs = 0;
+
+        try (Session session = neo4jDriver.session()) {
+            Result result = session.run(query, Values.parameters("projectId", projectId));
+            if (result.hasNext()) {
+                Record record = result.next();
+                requirements = record.get("requirements").asInt();
+                stories = record.get("stories").asInt();
+                tasks = record.get("tasks").asInt();
+                sprints = record.get("sprints").asInt();
+            }
+
+            Result linkedResult = session.run(linkedQuery, Values.parameters("projectId", projectId));
+            if (linkedResult.hasNext()) {
+                linkedReqs = linkedResult.next().get("linkedRequirements").asInt();
+            }
+        } catch (Exception e) {
+            log.error("Neo4j statistics query failed: {}", e.getMessage());
+            return emptyStatistics();
+        }
+
+        double coverage = requirements == 0 ? 0.0 : (double) linkedReqs / requirements * 100;
+
+        return LineageGraphDto.LineageStatisticsDto.builder()
+                .requirements(requirements)
+                .stories(stories)
+                .tasks(tasks)
+                .sprints(sprints)
+                .linkedRequirements(linkedReqs)
+                .unlinkedRequirements(requirements - linkedReqs)
+                .coverage(Math.round(coverage * 100.0) / 100.0)
+                .build();
     }
 
     // ===== Helper Methods =====
 
-    private List<Task> loadTasksForProject(String projectId) {
-        // Tasks are loaded via KanbanColumn which belongs to a project
-        // For simplicity, load all tasks (production should use proper query)
-        return taskRepository.findAll();
-    }
-
-    private LineageNodeDto toNode(Requirement req) {
+    private LineageNodeDto toNodeDto(Node node) {
+        String type = getNodeType(node);
         Map<String, Object> metadata = new HashMap<>();
-        metadata.put("category", req.getCategory() != null ? req.getCategory().name() : null);
-        metadata.put("priority", req.getPriority() != null ? req.getPriority().name() : null);
-        metadata.put("progress", req.getProgress());
-        metadata.put("linkedTaskCount", req.getLinkedTaskIds().size());
+
+        // Extract common metadata
+        if (node.containsKey("priority")) {
+            metadata.put("priority", getStringProperty(node, "priority"));
+        }
+        if (node.containsKey("storyPoints")) {
+            metadata.put("storyPoints", node.get("storyPoints").asInt(0));
+        }
+        if (node.containsKey("epic")) {
+            metadata.put("epic", getStringProperty(node, "epic"));
+        }
+        if (node.containsKey("category")) {
+            metadata.put("category", getStringProperty(node, "category"));
+        }
 
         return LineageNodeDto.builder()
-                .id(req.getId())
-                .type(LineageNodeDto.LineageNodeType.REQUIREMENT)
-                .code(req.getCode())
-                .title(req.getTitle())
-                .status(req.getStatus() != null ? req.getStatus().name() : null)
+                .id(getStringProperty(node, "id"))
+                .type(LineageNodeDto.LineageNodeType.valueOf(type))
+                .code(getStringProperty(node, "code"))
+                .title(getStringProperty(node, "title"))
+                .status(getStringProperty(node, "status"))
                 .metadata(metadata)
                 .build();
     }
 
-    private LineageNodeDto toNode(UserStory story) {
-        Map<String, Object> metadata = new HashMap<>();
-        metadata.put("storyPoints", story.getStoryPoints());
-        metadata.put("priority", story.getPriority() != null ? story.getPriority().name() : null);
-        metadata.put("epic", story.getEpic());
-        metadata.put("sprintId", story.getSprint() != null ? story.getSprint().getId() : null);
-
-        return LineageNodeDto.builder()
-                .id(story.getId())
-                .type(LineageNodeDto.LineageNodeType.USER_STORY)
-                .title(story.getTitle())
-                .status(story.getStatus() != null ? story.getStatus().name() : null)
-                .metadata(metadata)
+    private LineageEdgeDto toEdgeDto(Relationship rel, Node source, Node target) {
+        return LineageEdgeDto.builder()
+                .id(rel.elementId())
+                .source(getStringProperty(source, "id"))
+                .target(getStringProperty(target, "id"))
+                .relationship(mapRelationshipType(rel.type()))
+                .createdAt(getDateTimeProperty(rel, "createdAt"))
                 .build();
     }
 
-    private LineageNodeDto toNode(Task task) {
-        Map<String, Object> metadata = new HashMap<>();
-        metadata.put("priority", task.getPriority() != null ? task.getPriority().name() : null);
-        metadata.put("dueDate", task.getDueDate() != null ? task.getDueDate().toString() : null);
-        metadata.put("trackType", task.getTrackType() != null ? task.getTrackType().name() : null);
-
-        return LineageNodeDto.builder()
-                .id(task.getId())
-                .type(LineageNodeDto.LineageNodeType.TASK)
-                .title(task.getTitle())
-                .status(task.getStatus() != null ? task.getStatus().name() : null)
-                .metadata(metadata)
-                .build();
+    private String getNodeType(Node node) {
+        for (String label : node.labels()) {
+            return switch (label) {
+                case "Requirement" -> "REQUIREMENT";
+                case "UserStory" -> "USER_STORY";
+                case "Task" -> "TASK";
+                case "Sprint" -> "SPRINT";
+                default -> label.toUpperCase();
+            };
+        }
+        return "UNKNOWN";
     }
 
-    private LineageNodeDto toNode(Sprint sprint) {
-        Map<String, Object> metadata = new HashMap<>();
-        metadata.put("goal", sprint.getGoal());
-        metadata.put("startDate", sprint.getStartDate() != null ? sprint.getStartDate().toString() : null);
-        metadata.put("endDate", sprint.getEndDate() != null ? sprint.getEndDate().toString() : null);
-
-        return LineageNodeDto.builder()
-                .id(sprint.getId())
-                .type(LineageNodeDto.LineageNodeType.SPRINT)
-                .title(sprint.getName())
-                .status(sprint.getStatus() != null ? sprint.getStatus().name() : null)
-                .metadata(metadata)
-                .build();
-    }
-
-    private LineageNodeDto findNode(String aggregateType, String aggregateId) {
+    private String mapAggregateTypeToLabel(String aggregateType) {
         return switch (aggregateType) {
-            case "REQUIREMENT" -> requirementRepository.findById(aggregateId)
-                    .map(this::toNode).orElse(null);
-            case "USER_STORY" -> userStoryRepository.findById(aggregateId)
-                    .map(this::toNode).orElse(null);
-            case "TASK" -> taskRepository.findById(aggregateId)
-                    .map(this::toNode).orElse(null);
-            case "SPRINT" -> sprintRepository.findById(aggregateId)
-                    .map(this::toNode).orElse(null);
-            default -> null;
+            case "REQUIREMENT" -> "Requirement";
+            case "USER_STORY" -> "UserStory";
+            case "TASK" -> "Task";
+            case "SPRINT" -> "Sprint";
+            default -> aggregateType;
         };
     }
 
-    private LineageGraphDto.LineageStatisticsDto calculateStatistics(
-            List<Requirement> requirements,
-            List<UserStory> stories,
-            List<Task> tasks,
-            List<Sprint> sprints) {
+    private LineageEdgeDto.LineageRelationship mapRelationshipType(String type) {
+        return switch (type) {
+            case "DERIVES" -> LineageEdgeDto.LineageRelationship.DERIVES;
+            case "BREAKS_DOWN_TO" -> LineageEdgeDto.LineageRelationship.BREAKS_DOWN_TO;
+            case "IMPLEMENTED_BY" -> LineageEdgeDto.LineageRelationship.IMPLEMENTED_BY;
+            case "BELONGS_TO_SPRINT" -> LineageEdgeDto.LineageRelationship.BELONGS_TO_SPRINT;
+            default -> LineageEdgeDto.LineageRelationship.DERIVES;
+        };
+    }
 
-        int linkedReqs = (int) requirements.stream()
-                .filter(r -> !r.getLinkedTaskIds().isEmpty())
+    private String getStringProperty(Node node, String key) {
+        if (node.containsKey(key) && !node.get(key).isNull()) {
+            return node.get(key).asString();
+        }
+        return "";
+    }
+
+    private String getStringProperty(Relationship rel, String key) {
+        if (rel.containsKey(key) && !rel.get(key).isNull()) {
+            return rel.get(key).asString();
+        }
+        return "";
+    }
+
+    private LocalDateTime getDateTimeProperty(Relationship rel, String key) {
+        if (rel.containsKey(key) && !rel.get(key).isNull()) {
+            try {
+                ZonedDateTime zdt = rel.get(key).asZonedDateTime();
+                return zdt.toLocalDateTime();
+            } catch (Exception e) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private String getNodeIdFromRel(Relationship rel, org.neo4j.driver.types.Path path, boolean isSource) {
+        for (Node node : path.nodes()) {
+            String nodeElementId = node.elementId();
+            if (isSource && rel.startNodeElementId().equals(nodeElementId)) {
+                return getStringProperty(node, "id");
+            }
+            if (!isSource && rel.endNodeElementId().equals(nodeElementId)) {
+                return getStringProperty(node, "id");
+            }
+        }
+        return "";
+    }
+
+    private List<String> getSprintNames(Set<String> sprintIds) {
+        if (sprintIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<String> names = new ArrayList<>();
+        String query = """
+            MATCH (s:Sprint)
+            WHERE s.id IN $ids
+            RETURN s.name as name
+            """;
+
+        try (Session session = neo4jDriver.session()) {
+            Result result = session.run(query, Values.parameters("ids", new ArrayList<>(sprintIds)));
+            while (result.hasNext()) {
+                names.add(result.next().get("name").asString());
+            }
+        } catch (Exception e) {
+            log.error("Failed to fetch sprint names: {}", e.getMessage());
+        }
+
+        return names;
+    }
+
+    private LineageGraphDto.LineageStatisticsDto calculateStatisticsFromNodes(
+            List<LineageNodeDto> nodes, List<LineageEdgeDto> edges) {
+
+        int requirements = (int) nodes.stream()
+                .filter(n -> n.getType() == LineageNodeDto.LineageNodeType.REQUIREMENT).count();
+        int stories = (int) nodes.stream()
+                .filter(n -> n.getType() == LineageNodeDto.LineageNodeType.USER_STORY).count();
+        int tasks = (int) nodes.stream()
+                .filter(n -> n.getType() == LineageNodeDto.LineageNodeType.TASK).count();
+        int sprints = (int) nodes.stream()
+                .filter(n -> n.getType() == LineageNodeDto.LineageNodeType.SPRINT).count();
+
+        // Count requirements that have outgoing edges
+        Set<String> linkedReqIds = edges.stream()
+                .filter(e -> e.getRelationship() == LineageEdgeDto.LineageRelationship.IMPLEMENTED_BY
+                        || e.getRelationship() == LineageEdgeDto.LineageRelationship.DERIVES)
+                .map(LineageEdgeDto::getSource)
+                .collect(Collectors.toSet());
+
+        int linkedReqs = (int) nodes.stream()
+                .filter(n -> n.getType() == LineageNodeDto.LineageNodeType.REQUIREMENT)
+                .filter(n -> linkedReqIds.contains(n.getId()))
                 .count();
 
-        double coverage = requirements.isEmpty() ? 0.0 :
-                (double) linkedReqs / requirements.size() * 100;
+        double coverage = requirements == 0 ? 0.0 : (double) linkedReqs / requirements * 100;
 
         return LineageGraphDto.LineageStatisticsDto.builder()
-                .requirements(requirements.size())
-                .stories(stories.size())
-                .tasks(tasks.size())
-                .sprints(sprints.size())
+                .requirements(requirements)
+                .stories(stories)
+                .tasks(tasks)
+                .sprints(sprints)
                 .linkedRequirements(linkedReqs)
-                .unlinkedRequirements(requirements.size() - linkedReqs)
+                .unlinkedRequirements(requirements - linkedReqs)
                 .coverage(Math.round(coverage * 100.0) / 100.0)
+                .build();
+    }
+
+    private LineageGraphDto.LineageStatisticsDto emptyStatistics() {
+        return LineageGraphDto.LineageStatisticsDto.builder()
+                .requirements(0)
+                .stories(0)
+                .tasks(0)
+                .sprints(0)
+                .linkedRequirements(0)
+                .unlinkedRequirements(0)
+                .coverage(0.0)
                 .build();
     }
 
@@ -445,9 +661,6 @@ public class LineageQueryService {
     }
 
     private boolean matchesUser(OutboxEvent event, String userId) {
-        if (userId == null) {
-            return true;
-        }
         Map<String, Object> payload = event.getPayload();
         if (payload == null) {
             return false;
@@ -487,30 +700,29 @@ public class LineageQueryService {
 
     private String buildDescription(OutboxEvent event) {
         LineageEventType type = event.getEventType();
-        String target = event.getAggregateType().toLowerCase().replace("_", " ");
 
         return switch (type) {
-            case REQUIREMENT_CREATED -> "Created requirement";
-            case REQUIREMENT_UPDATED -> "Updated requirement";
-            case REQUIREMENT_DELETED -> "Deleted requirement";
-            case REQUIREMENT_STATUS_CHANGED -> "Changed requirement status";
-            case STORY_CREATED -> "Created user story";
-            case STORY_UPDATED -> "Updated user story";
-            case STORY_DELETED -> "Deleted user story";
-            case STORY_SPRINT_ASSIGNED -> "Assigned story to sprint";
-            case TASK_CREATED -> "Created task";
-            case TASK_UPDATED -> "Updated task";
-            case TASK_DELETED -> "Deleted task";
-            case TASK_STATUS_CHANGED -> "Changed task status";
-            case REQUIREMENT_STORY_LINKED -> "Linked requirement to story";
-            case REQUIREMENT_STORY_UNLINKED -> "Unlinked requirement from story";
-            case STORY_TASK_LINKED -> "Linked story to task";
-            case STORY_TASK_UNLINKED -> "Unlinked story from task";
-            case REQUIREMENT_TASK_LINKED -> "Linked requirement to task";
-            case REQUIREMENT_TASK_UNLINKED -> "Unlinked requirement from task";
-            case SPRINT_CREATED -> "Created sprint";
-            case SPRINT_STARTED -> "Started sprint";
-            case SPRINT_COMPLETED -> "Completed sprint";
+            case REQUIREMENT_CREATED -> "요구사항 생성";
+            case REQUIREMENT_UPDATED -> "요구사항 수정";
+            case REQUIREMENT_DELETED -> "요구사항 삭제";
+            case REQUIREMENT_STATUS_CHANGED -> "요구사항 상태 변경";
+            case STORY_CREATED -> "유저스토리 생성";
+            case STORY_UPDATED -> "유저스토리 수정";
+            case STORY_DELETED -> "유저스토리 삭제";
+            case STORY_SPRINT_ASSIGNED -> "스프린트에 스토리 배정";
+            case TASK_CREATED -> "태스크 생성";
+            case TASK_UPDATED -> "태스크 수정";
+            case TASK_DELETED -> "태스크 삭제";
+            case TASK_STATUS_CHANGED -> "태스크 상태 변경";
+            case REQUIREMENT_STORY_LINKED -> "요구사항-스토리 연결";
+            case REQUIREMENT_STORY_UNLINKED -> "요구사항-스토리 연결 해제";
+            case STORY_TASK_LINKED -> "스토리-태스크 연결";
+            case STORY_TASK_UNLINKED -> "스토리-태스크 연결 해제";
+            case REQUIREMENT_TASK_LINKED -> "요구사항-태스크 연결";
+            case REQUIREMENT_TASK_UNLINKED -> "요구사항-태스크 연결 해제";
+            case SPRINT_CREATED -> "스프린트 생성";
+            case SPRINT_STARTED -> "스프린트 시작";
+            case SPRINT_COMPLETED -> "스프린트 완료";
         };
     }
 }

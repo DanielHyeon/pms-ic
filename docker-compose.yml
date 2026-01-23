@@ -118,6 +118,7 @@ services:
     container_name: pms-llm-service
     ports:
       - "8000:8000"
+      - "5678:5678"  # debugpy remote debugging port
     volumes:
       - ./llm-service:/app
     networks:
@@ -148,6 +149,22 @@ services:
       USE_GRAPH_RAG: true
       QDRANT_HOST: qdrant
       QDRANT_PORT: 6333
+      DEBUG_MODE: ${DEBUG_MODE:-false}
+      DEBUG_PORT: 5678
+      DEBUG_WAIT_FOR_CLIENT: ${DEBUG_WAIT_FOR_CLIENT:-false}
+      # OCR Engine Configuration
+      # Options: varco (best Korean, non-commercial), paddle (commercial OK), tesseract, pypdf
+      OCR_ENGINE: ${OCR_ENGINE:-varco}
+      # VARCO-VISION settings (non-commercial use only)
+      VARCO_MODEL_PATH: /app/models/VARCO-VISION-2.0-1.7B-OCR
+      VARCO_DEVICE: ${VARCO_DEVICE:-cuda}
+      VARCO_IMAGE_SIZE: ${VARCO_IMAGE_SIZE:-1536}
+      # PaddleOCR settings (Apache 2.0, commercial use allowed)
+      # Local model path for offline use (auto-download if not present)
+      PADDLE_MODEL_PATH: /app/models/paddleocr
+      PADDLE_USE_GPU: ${PADDLE_USE_GPU:-true}
+      PADDLE_LANG: ${PADDLE_LANG:-korean}
+      PADDLE_USE_STRUCTURE: ${PADDLE_USE_STRUCTURE:-true}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

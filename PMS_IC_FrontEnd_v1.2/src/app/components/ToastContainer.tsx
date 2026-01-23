@@ -135,21 +135,6 @@ const ToastContainer: React.FC = () => {
           onClose={handleClose}
         />
       ))}
-      <style jsx>{`
-        @keyframes slideIn {
-          from {
-            transform: translateX(400px);
-            opacity: 0;
-          }
-          to {
-            transform: translateX(0);
-            opacity: 1;
-          }
-        }
-        .animate-slide-in {
-          animation: slideIn 0.3s ease-out;
-        }
-      `}</style>
     </div>
   );
 };

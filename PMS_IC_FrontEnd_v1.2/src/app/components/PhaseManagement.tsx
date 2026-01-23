@@ -51,7 +51,7 @@ const initialPhases: Phase[] = [
   {
     id: '1',
     name: '1단계: 업무 진단 및 목표 설정',
-    description: 'Business Analysis & Goal Setting',
+    description: '업무 분석 및 목표 설정',
     status: 'completed',
     progress: 100,
     startDate: '2025-01-02',
@@ -69,7 +69,7 @@ const initialPhases: Phase[] = [
   {
     id: '2',
     name: '2단계: 데이터 수집 및 준비',
-    description: 'Data Acquisition & Preparation',
+    description: '데이터 수집 및 준비',
     status: 'completed',
     progress: 100,
     startDate: '2025-02-16',
@@ -87,7 +87,7 @@ const initialPhases: Phase[] = [
   {
     id: '3',
     name: '3단계: AI 모델링 및 학습',
-    description: 'AI Modeling & Training',
+    description: 'AI 모델링 및 학습',
     status: 'inProgress',
     progress: 85,
     startDate: '2025-05-01',
@@ -107,7 +107,7 @@ const initialPhases: Phase[] = [
   {
     id: '4',
     name: '4단계: 시스템 통합 및 연동',
-    description: 'System Integration',
+    description: '시스템 통합 및 연동',
     status: 'pending',
     progress: 0,
     startDate: '2025-09-01',
@@ -122,7 +122,7 @@ const initialPhases: Phase[] = [
   {
     id: '5',
     name: '5단계: 성능 검증 및 PoC',
-    description: 'Validation & Proof of Concept',
+    description: '성능 검증 및 PoC',
     status: 'pending',
     progress: 0,
     startDate: '2025-11-01',
@@ -137,7 +137,7 @@ const initialPhases: Phase[] = [
   {
     id: '6',
     name: '6단계: 변화 관리 및 확산',
-    description: 'Change Management & Roll-out',
+    description: '변화 관리 및 확산',
     status: 'pending',
     progress: 0,
     startDate: '2025-12-01',

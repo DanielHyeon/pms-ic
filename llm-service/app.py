@@ -236,7 +236,7 @@ def get_two_track_workflow():
 @app.route("/api/chat/v2", methods=["POST"])
 def chat_v2():
     """
-    Two-Track Chat API v2
+    Two-Track Chat API v2 with Access Control
 
     Track A: Fast responses for FAQ, status queries (p95 < 500ms target)
     Track B: Quality responses for reports, analysis (30-90s acceptable)
@@ -247,6 +247,8 @@ def chat_v2():
         "context": [{"role": "user/assistant", "content": "..."}],
         "retrieved_docs": ["doc1", "doc2"],  // optional
         "user_id": "user-123",  // optional, for policy checks
+        "user_role": "DEVELOPER",  // optional, for RAG access control
+        "user_access_level": 1,  // optional, explicit access level (overrides role)
         "project_id": "project-456"  // optional, for scope validation
     }
 
@@ -271,6 +273,15 @@ def chat_v2():
         user_id = data.get("user_id")
         project_id = data.get("project_id")
 
+        # Access control parameters
+        user_role = data.get("user_role", "MEMBER")
+        user_access_level = data.get("user_access_level")
+
+        # If access level not explicitly provided, derive from role
+        if user_access_level is None:
+            from rag_service_neo4j import get_access_level
+            user_access_level = get_access_level(user_role)
+
         if not message:
             return jsonify({"error": "Message is required"}), 400
 
@@ -283,8 +294,8 @@ def chat_v2():
             logger.info("Falling back to v1 chat endpoint")
             return chat()
 
-        # Run two-track workflow
-        logger.info(f"Processing chat v2: {message[:50]}...")
+        # Run two-track workflow with access control
+        logger.info(f"Processing chat v2: {message[:50]}... (project={project_id}, role={user_role}, level={user_access_level})")
         try:
             result = workflow.run(
                 message=message,
@@ -292,6 +303,8 @@ def chat_v2():
                 retrieved_docs=retrieved_docs,
                 user_id=user_id,
                 project_id=project_id,
+                user_role=user_role,
+                user_access_level=user_access_level,
             )
 
             reply = result.get("reply")
@@ -665,11 +678,32 @@ def get_stats():
 
 @app.route("/api/documents/search", methods=["POST"])
 def search_documents():
-    """문서 검색 API"""
+    """
+    문서 검색 API with access control
+
+    Request body:
+    {
+        "query": "search query",
+        "top_k": 3,
+        "project_id": "project-123",       // optional: filter by project
+        "user_role": "DEVELOPER",          // optional: user's role for access control
+        "user_access_level": 1             // optional: explicit access level (overrides role)
+    }
+    """
     try:
         data = request.json
         query = data.get("query", "")
         top_k = data.get("top_k", 3)
+
+        # Access control parameters
+        project_id = data.get("project_id")
+        user_role = data.get("user_role", "MEMBER")
+        user_access_level = data.get("user_access_level")
+
+        # If access level not explicitly provided, derive from role
+        if user_access_level is None:
+            from rag_service_neo4j import get_access_level
+            user_access_level = get_access_level(user_role)
 
         if not query:
             return jsonify({"error": "Query is required"}), 400
@@ -678,12 +712,23 @@ def search_documents():
         if not rag:
             return jsonify({"error": "RAG service not available"}), 503
 
-        results = rag.search(query, top_k=top_k)
+        # Build filter metadata with access control
+        filter_metadata = {
+            "project_id": project_id,
+            "user_access_level": user_access_level,
+        }
+
+        results = rag.search(query, top_k=top_k, filter_metadata=filter_metadata)
 
         return jsonify({
             "query": query,
             "results": results,
-            "count": len(results)
+            "count": len(results),
+            "access_control": {
+                "project_id": project_id,
+                "user_role": user_role,
+                "user_access_level": user_access_level
+            }
         })
 
     except Exception as e:
@@ -988,6 +1033,298 @@ def get_available_models():
     except Exception as e:
         logger.error(f"Error listing models: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
+
+
+# ============================================
+# Lightweight Model API Endpoints
+# ============================================
+
+@app.route("/api/model/lightweight", methods=["GET"])
+def get_lightweight_model():
+    """경량 모델 설정 조회"""
+    try:
+        model_path = state.lightweight_model_path
+        model_name = os.path.basename(model_path) if model_path else ""
+        model_exists = os.path.exists(model_path) if model_path else False
+
+        return jsonify({
+            "currentModel": model_path,
+            "modelName": model_name,
+            "exists": model_exists,
+            "status": "active" if model_exists else "not_found",
+            "category": "lightweight",
+            "timestamp": datetime.now().isoformat()
+        })
+    except Exception as e:
+        logger.error(f"Error getting lightweight model: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/model/lightweight", methods=["PUT"])
+def change_lightweight_model():
+    """경량 모델 변경"""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({
+                "status": "error",
+                "error": "Request body is required"
+            }), 400
+
+        model_path = data.get("modelPath", "").strip()
+        if not model_path:
+            return jsonify({
+                "status": "error",
+                "error": "modelPath is required"
+            }), 400
+
+        # Normalize path
+        if not model_path.startswith("/"):
+            model_path = os.path.join("./models", model_path)
+
+        # Verify file exists
+        if not os.path.exists(model_path):
+            return jsonify({
+                "status": "error",
+                "error": f"Model file not found: {model_path}"
+            }), 404
+
+        old_path = state.lightweight_model_path
+        state.lightweight_model_path = model_path
+
+        logger.info(f"Lightweight model changed: {old_path} -> {model_path}")
+
+        return jsonify({
+            "status": "success",
+            "currentModel": model_path,
+            "previousModel": old_path,
+            "category": "lightweight",
+            "message": f"Lightweight model changed to {os.path.basename(model_path)}",
+            "timestamp": datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        logger.error(f"Error changing lightweight model: {e}", exc_info=True)
+        return jsonify({
+            "status": "error",
+            "error": str(e)
+        }), 500
+
+
+# ============================================
+# Medium Model API Endpoints
+# ============================================
+
+@app.route("/api/model/medium", methods=["GET"])
+def get_medium_model():
+    """중형 모델 설정 조회"""
+    try:
+        model_path = state.medium_model_path
+        model_name = os.path.basename(model_path) if model_path else ""
+        model_exists = os.path.exists(model_path) if model_path else False
+
+        return jsonify({
+            "currentModel": model_path,
+            "modelName": model_name,
+            "exists": model_exists,
+            "status": "active" if model_exists else "not_found",
+            "category": "medium",
+            "timestamp": datetime.now().isoformat()
+        })
+    except Exception as e:
+        logger.error(f"Error getting medium model: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/model/medium", methods=["PUT"])
+def change_medium_model():
+    """중형 모델 변경"""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({
+                "status": "error",
+                "error": "Request body is required"
+            }), 400
+
+        model_path = data.get("modelPath", "").strip()
+        if not model_path:
+            return jsonify({
+                "status": "error",
+                "error": "modelPath is required"
+            }), 400
+
+        # Normalize path
+        if not model_path.startswith("/"):
+            model_path = os.path.join("./models", model_path)
+
+        # Verify file exists
+        if not os.path.exists(model_path):
+            return jsonify({
+                "status": "error",
+                "error": f"Model file not found: {model_path}"
+            }), 404
+
+        old_path = state.medium_model_path
+        state.medium_model_path = model_path
+
+        logger.info(f"Medium model changed: {old_path} -> {model_path}")
+
+        return jsonify({
+            "status": "success",
+            "currentModel": model_path,
+            "previousModel": old_path,
+            "category": "medium",
+            "message": f"Medium model changed to {os.path.basename(model_path)}",
+            "timestamp": datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        logger.error(f"Error changing medium model: {e}", exc_info=True)
+        return jsonify({
+            "status": "error",
+            "error": str(e)
+        }), 500
+
+
+# ============================================
+# OCR Configuration API Endpoints
+# ============================================
+
+VALID_OCR_ENGINES = {"varco", "paddle", "tesseract", "pypdf"}
+
+OCR_ENGINE_INFO = {
+    "varco": {
+        "name": "VARCO-VISION (고정밀)",
+        "license": "CC-BY-NC-4.0",
+        "commercial_use": False,
+        "accuracy": "97%",
+        "description": "Korean OCR with highest accuracy, non-commercial use only"
+    },
+    "paddle": {
+        "name": "PaddleOCR (상업용)",
+        "license": "Apache 2.0",
+        "commercial_use": True,
+        "accuracy": "88%",
+        "description": "Korean OCR with good accuracy, commercial use allowed"
+    },
+    "tesseract": {
+        "name": "Tesseract (경량)",
+        "license": "Apache 2.0",
+        "commercial_use": True,
+        "accuracy": "75%",
+        "description": "Lightweight OCR, good for simple documents"
+    },
+    "pypdf": {
+        "name": "직접 추출 (OCR 없음)",
+        "license": "MIT",
+        "commercial_use": True,
+        "accuracy": "-",
+        "description": "Direct text extraction from native PDFs, no OCR processing"
+    }
+}
+
+
+@app.route("/api/ocr/current", methods=["GET"])
+def get_current_ocr_engine():
+    """현재 OCR 엔진 설정 조회"""
+    try:
+        current_engine = state.ocr_engine
+        engine_info = OCR_ENGINE_INFO.get(current_engine, {})
+
+        return jsonify({
+            "ocrEngine": current_engine,
+            "status": "active",
+            "info": engine_info,
+            "timestamp": datetime.now().isoformat()
+        })
+    except Exception as e:
+        logger.error(f"Error getting current OCR engine: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/ocr/change", methods=["PUT"])
+def change_ocr_engine():
+    """OCR 엔진 변경 API"""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({
+                "status": "error",
+                "error": "Request body is required"
+            }), 400
+
+        new_engine = data.get("ocrEngine", "").lower()
+
+        if not new_engine:
+            return jsonify({
+                "status": "error",
+                "error": "ocrEngine field is required"
+            }), 400
+
+        if new_engine not in VALID_OCR_ENGINES:
+            return jsonify({
+                "status": "error",
+                "error": f"Invalid OCR engine: {new_engine}. Valid options: {list(VALID_OCR_ENGINES)}"
+            }), 400
+
+        old_engine = state.ocr_engine
+        logger.info(f"Changing OCR engine from {old_engine} to {new_engine}")
+
+        # Update state (this also updates the environment variable)
+        state.ocr_engine = new_engine
+
+        engine_info = OCR_ENGINE_INFO.get(new_engine, {})
+
+        return jsonify({
+            "status": "success",
+            "ocrEngine": new_engine,
+            "previousEngine": old_engine,
+            "info": engine_info,
+            "message": f"OCR engine successfully changed to {new_engine}",
+            "timestamp": datetime.now().isoformat()
+        })
+
+    except ValueError as e:
+        logger.error(f"Invalid OCR engine: {e}")
+        return jsonify({
+            "status": "error",
+            "error": str(e)
+        }), 400
+    except Exception as e:
+        logger.error(f"Error changing OCR engine: {e}", exc_info=True)
+        return jsonify({
+            "status": "error",
+            "error": str(e)
+        }), 500
+
+
+@app.route("/api/ocr/available", methods=["GET"])
+def get_available_ocr_engines():
+    """사용 가능한 OCR 엔진 목록 조회"""
+    try:
+        engines = []
+        current_engine = state.ocr_engine
+
+        for engine_id, info in OCR_ENGINE_INFO.items():
+            engines.append({
+                "id": engine_id,
+                "name": info["name"],
+                "license": info["license"],
+                "commercial_use": info["commercial_use"],
+                "accuracy": info["accuracy"],
+                "description": info["description"],
+                "is_current": engine_id == current_engine
+            })
+
+        return jsonify({
+            "engines": engines,
+            "current": current_engine
+        })
+    except Exception as e:
+        logger.error(f"Error listing OCR engines: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
 
 # 서비스 시작 시 모델 자동 로드 (앱 컨텍스트에서)
 def init_llm_service():
@@ -1296,6 +1633,22 @@ def reset_monitoring():
 
 
 if __name__ == "__main__":
+    # debugpy remote debugging setup (VS Code)
+    if os.getenv("DEBUG_MODE", "").lower() == "true":
+        try:
+            import debugpy
+            debug_port = int(os.getenv("DEBUG_PORT", "5678"))
+            debugpy.listen(("0.0.0.0", debug_port))
+            logger.info(f"debugpy listening on 0.0.0.0:{debug_port}")
+            logger.info("Waiting for VS Code debugger to attach...")
+            if os.getenv("DEBUG_WAIT_FOR_CLIENT", "").lower() == "true":
+                debugpy.wait_for_client()
+                logger.info("Debugger attached!")
+        except ImportError:
+            logger.warning("debugpy not installed, remote debugging disabled")
+        except Exception as e:
+            logger.warning(f"Failed to start debugpy: {e}")
+
     # 앱 시작 전에 모델 로드
     init_llm_service()
 

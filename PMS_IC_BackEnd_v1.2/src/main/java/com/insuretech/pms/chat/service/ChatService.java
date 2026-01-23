@@ -9,6 +9,7 @@ import com.insuretech.pms.chat.entity.ChatSession;
 import com.insuretech.pms.chat.repository.ChatMessageRepository;
 import com.insuretech.pms.chat.repository.ChatSessionRepository;
 import com.insuretech.pms.common.exception.CustomException;
+import com.insuretech.pms.common.security.RoleAccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -17,7 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -34,12 +34,25 @@ public class ChatService {
     public ChatResponse sendMessage(ChatRequest request) {
         User user = resolveCurrentUser();
         String userId = user != null ? user.getId() : "guest";
-        
+
         ChatSession session = getOrCreateSession(request.getSessionId(), userId);
         ChatMessage userMessage = saveUserMessage(session, request.getMessage());
 
         List<ChatMessage> recentMessages = getRecentMessages(session.getId(), 10);
-        ChatResponse aiResponse = callAIService(userId, request.getMessage(), recentMessages);
+
+        // Resolve access control parameters
+        String projectId = request.getProjectId();
+        String userRole = resolveUserRole(user, request.getUserRole());
+        Integer userAccessLevel = resolveAccessLevel(user, request.getUserAccessLevel());
+
+        ChatResponse aiResponse = callAIService(
+                userId,
+                request.getMessage(),
+                recentMessages,
+                projectId,
+                userRole,
+                userAccessLevel
+        );
 
         ChatMessage assistantMessage = saveAssistantMessage(session, aiResponse.getReply());
         cacheMessages(session.getId(), userMessage, assistantMessage);
@@ -80,8 +93,41 @@ public class ChatService {
         return chatMessageRepository.save(userMessage);
     }
 
-    private ChatResponse callAIService(String userId, String message, List<ChatMessage> recentMessages) {
-        return aiChatClient.chat(userId, message, recentMessages);
+    private ChatResponse callAIService(
+            String userId,
+            String message,
+            List<ChatMessage> recentMessages,
+            String projectId,
+            String userRole,
+            Integer userAccessLevel
+    ) {
+        return aiChatClient.chat(userId, message, recentMessages, projectId, userRole, userAccessLevel);
+    }
+
+    /**
+     * Resolve user role from User entity or request override
+     */
+    private String resolveUserRole(User user, String requestUserRole) {
+        if (requestUserRole != null && !requestUserRole.isBlank()) {
+            return requestUserRole;
+        }
+        if (user != null && user.getRole() != null) {
+            return user.getRole().name();
+        }
+        return "MEMBER";
+    }
+
+    /**
+     * Resolve access level from User entity or request override
+     */
+    private Integer resolveAccessLevel(User user, Integer requestAccessLevel) {
+        if (requestAccessLevel != null) {
+            return requestAccessLevel;
+        }
+        if (user != null && user.getRole() != null) {
+            return RoleAccessLevel.getLevel(user.getRole());
+        }
+        return 1; // Default to lowest level for guests
     }
 
     private ChatMessage saveAssistantMessage(ChatSession session, String reply) {

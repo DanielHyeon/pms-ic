@@ -7,10 +7,10 @@ interface LoginScreenProps {
   onLogin: (userInfo: UserInfo) => void;
 }
 
-// 데모용 사용자 계정 (실제 환경에서는 백엔드 인증)
+// Demo user accounts - password is 'password123' for all users (matches database)
 const demoUsers: Record<string, { password: string; userInfo: UserInfo }> = {
   'sponsor@insure.com': {
-    password: 'sponsor123',
+    password: 'password123',
     userInfo: {
       id: 'U001',
       name: '이사장',
@@ -20,7 +20,7 @@ const demoUsers: Record<string, { password: string; userInfo: UserInfo }> = {
     },
   },
   'pmo@insure.com': {
-    password: 'pmo123',
+    password: 'password123',
     userInfo: {
       id: 'U002',
       name: 'PMO 총괄',
@@ -30,7 +30,7 @@ const demoUsers: Record<string, { password: string; userInfo: UserInfo }> = {
     },
   },
   'pm@insure.com': {
-    password: 'pm123',
+    password: 'password123',
     userInfo: {
       id: 'U003',
       name: '김철수',
@@ -40,7 +40,7 @@ const demoUsers: Record<string, { password: string; userInfo: UserInfo }> = {
     },
   },
   'dev@insure.com': {
-    password: 'dev123',
+    password: 'password123',
     userInfo: {
       id: 'U004',
       name: '박민수',
@@ -50,7 +50,7 @@ const demoUsers: Record<string, { password: string; userInfo: UserInfo }> = {
     },
   },
   'qa@insure.com': {
-    password: 'qa123',
+    password: 'password123',
     userInfo: {
       id: 'U005',
       name: '최지훈',
@@ -60,7 +60,7 @@ const demoUsers: Record<string, { password: string; userInfo: UserInfo }> = {
     },
   },
   'ba@insure.com': {
-    password: 'ba123',
+    password: 'password123',
     userInfo: {
       id: 'U006',
       name: '이영희',
@@ -70,7 +70,7 @@ const demoUsers: Record<string, { password: string; userInfo: UserInfo }> = {
     },
   },
   'auditor@insure.com': {
-    password: 'auditor123',
+    password: 'password123',
     userInfo: {
       id: 'U007',
       name: '감리인',
@@ -80,7 +80,7 @@ const demoUsers: Record<string, { password: string; userInfo: UserInfo }> = {
     },
   },
   'admin@insure.com': {
-    password: 'admin123',
+    password: 'password123',
     userInfo: {
       id: 'U008',
       name: '시스템관리자',

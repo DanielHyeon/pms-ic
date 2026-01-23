@@ -29,9 +29,33 @@ public class AIChatClient {
     @Value("${ai.service.model:llama3}")
     private String aiModel;
 
+    /**
+     * Send chat message to AI service (legacy method for backward compatibility)
+     */
     public ChatResponse chat(String userId, String message, List<ChatMessage> context) {
+        return chat(userId, message, context, null, null, null);
+    }
+
+    /**
+     * Send chat message to AI service with access control parameters
+     *
+     * @param userId          User ID
+     * @param message         Chat message
+     * @param context         Conversation context
+     * @param projectId       Project ID for RAG filtering (optional)
+     * @param userRole        User's role for access control (optional)
+     * @param userAccessLevel Explicit access level 1-6 (optional)
+     */
+    public ChatResponse chat(
+            String userId,
+            String message,
+            List<ChatMessage> context,
+            String projectId,
+            String userRole,
+            Integer userAccessLevel
+    ) {
         try {
-            return callOllama(message, context);
+            return callOllama(message, context, userId, projectId, userRole, userAccessLevel);
         } catch (Exception e) {
             log.warn("Primary AI service call failed, falling back to mock: {}", e.getMessage());
             try {
@@ -46,7 +70,14 @@ public class AIChatClient {
         }
     }
 
-    private ChatResponse callOllama(String message, List<ChatMessage> context) {
+    private ChatResponse callOllama(
+            String message,
+            List<ChatMessage> context,
+            String userId,
+            String projectId,
+            String userRole,
+            Integer userAccessLevel
+    ) {
         // Convert context to the format expected by the LLM service
         List<Map<String, String>> contextList = new ArrayList<>();
         for (ChatMessage msg : context) {
@@ -60,6 +91,23 @@ public class AIChatClient {
         request.put("message", message);
         request.put("context", contextList);
         request.put("retrieved_docs", List.of());  // Empty for now, RAG will be populated by the service
+
+        // Add access control parameters
+        if (userId != null) {
+            request.put("user_id", userId);
+        }
+        if (projectId != null) {
+            request.put("project_id", projectId);
+        }
+        if (userRole != null) {
+            request.put("user_role", userRole);
+        }
+        if (userAccessLevel != null) {
+            request.put("user_access_level", userAccessLevel);
+        }
+
+        log.info("Sending chat request with access control: project={}, role={}, level={}",
+                projectId, userRole, userAccessLevel);
 
         WebClient webClient = webClientBuilder.baseUrl(aiServiceUrl).build();
 

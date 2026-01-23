@@ -1,0 +1,18 @@
+FROM pytorch/pytorch:2.4.1-cuda12.4-cudnn9-runtime
+
+WORKDIR /app
+
+# Install required packages
+RUN pip install --no-cache-dir \
+    transformers>=4.53.0 \
+    flask \
+    flask-cors \
+    pillow \
+    accelerate
+
+# Copy server script
+COPY varco_vision_server.py /app/
+
+ENV PORT=8000
+
+CMD ["python", "varco_vision_server.py"]

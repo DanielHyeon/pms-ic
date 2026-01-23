@@ -226,7 +226,7 @@ const initialColumns: ColumnType[] = [
         priority: 'medium',
         storyPoints: 5,
         dueDate: '2025-08-15',
-        labels: ['인프라', '모���터링'],
+        labels: ['인프라', '모니터링'],
       },
       {
         id: 10,

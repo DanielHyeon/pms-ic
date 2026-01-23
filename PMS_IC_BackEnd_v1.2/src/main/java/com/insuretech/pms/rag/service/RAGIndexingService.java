@@ -1,9 +1,19 @@
 package com.insuretech.pms.rag.service;
 
+import com.insuretech.pms.common.security.RoleAccessLevel;
+import com.insuretech.pms.project.entity.ProjectMember.ProjectRole;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.xslf.usermodel.XMLSlideShow;
+import org.apache.poi.xslf.usermodel.XSLFShape;
+import org.apache.poi.xslf.usermodel.XSLFSlide;
+import org.apache.poi.xslf.usermodel.XSLFTextShape;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,7 +23,6 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -35,11 +44,31 @@ public class RAGIndexingService {
     private String llmServiceUrl;
 
     /**
-     * 파일을 RAG 시스템에 인덱싱
+     * Index file to RAG system (legacy method for backward compatibility)
      */
     public boolean indexFile(String documentId, Path filePath, Map<String, String> metadata) {
+        return indexFile(documentId, filePath, metadata, null, null, null);
+    }
+
+    /**
+     * Index file to RAG system with project partitioning and access control
+     *
+     * @param documentId       Unique document identifier
+     * @param filePath         Path to the file
+     * @param metadata         Additional metadata
+     * @param projectId        Project ID for partitioning
+     * @param uploadedByUserId User ID who uploaded the file
+     * @param uploadedByRole   Role of the uploader (determines access level)
+     */
+    public boolean indexFile(
+            String documentId,
+            Path filePath,
+            Map<String, String> metadata,
+            String projectId,
+            String uploadedByUserId,
+            ProjectRole uploadedByRole
+    ) {
         try {
-            // 파일에서 텍스트 추출
             String content = extractTextFromFile(filePath);
 
             if (content == null || content.trim().isEmpty()) {
@@ -47,8 +76,21 @@ public class RAGIndexingService {
                 return false;
             }
 
-            // LLM 서비스에 문서 전송
-            return indexDocument(documentId, content, metadata);
+            // Build metadata with access control info
+            Map<String, String> enrichedMetadata = new HashMap<>(metadata != null ? metadata : new HashMap<>());
+
+            if (projectId != null) {
+                enrichedMetadata.put("project_id", projectId);
+            }
+            if (uploadedByUserId != null) {
+                enrichedMetadata.put("uploaded_by_user_id", uploadedByUserId);
+            }
+            if (uploadedByRole != null) {
+                enrichedMetadata.put("uploaded_by_role", uploadedByRole.name());
+                enrichedMetadata.put("access_level", String.valueOf(RoleAccessLevel.getLevel(uploadedByRole)));
+            }
+
+            return indexDocument(documentId, content, enrichedMetadata);
 
         } catch (Exception e) {
             log.error("Failed to index file: {}", filePath, e);
@@ -57,7 +99,7 @@ public class RAGIndexingService {
     }
 
     /**
-     * 파일에서 텍스트 추출
+     * Extract text from file based on file extension
      */
     private String extractTextFromFile(Path filePath) throws IOException {
         String fileName = filePath.getFileName().toString().toLowerCase();
@@ -66,7 +108,11 @@ public class RAGIndexingService {
             return extractFromPdf(filePath);
         } else if (fileName.endsWith(".docx") || fileName.endsWith(".doc")) {
             return extractFromDocx(filePath);
-        } else if (fileName.endsWith(".txt") || fileName.endsWith(".md")) {
+        } else if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
+            return extractFromExcel(filePath);
+        } else if (fileName.endsWith(".pptx") || fileName.endsWith(".ppt")) {
+            return extractFromPowerPoint(filePath);
+        } else if (fileName.endsWith(".txt") || fileName.endsWith(".md") || fileName.endsWith(".csv")) {
             return Files.readString(filePath);
         } else {
             log.warn("Unsupported file type: {}", fileName);
@@ -85,7 +131,7 @@ public class RAGIndexingService {
     }
 
     /**
-     * Word 문서에서 텍스트 추출
+     * Extract text from Word document (.docx)
      */
     private String extractFromDocx(Path filePath) throws IOException {
         try (FileInputStream fis = new FileInputStream(filePath.toFile());
@@ -94,6 +140,93 @@ public class RAGIndexingService {
             StringBuilder text = new StringBuilder();
             for (XWPFParagraph paragraph : document.getParagraphs()) {
                 text.append(paragraph.getText()).append("\n\n");
+            }
+            return text.toString();
+        }
+    }
+
+    /**
+     * Extract text from Excel file (.xlsx, .xls)
+     */
+    private String extractFromExcel(Path filePath) throws IOException {
+        try (FileInputStream fis = new FileInputStream(filePath.toFile());
+             XSSFWorkbook workbook = new XSSFWorkbook(fis)) {
+
+            StringBuilder text = new StringBuilder();
+
+            for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+                Sheet sheet = workbook.getSheetAt(i);
+                text.append("### Sheet: ").append(sheet.getSheetName()).append("\n\n");
+
+                for (Row row : sheet) {
+                    StringBuilder rowText = new StringBuilder();
+                    for (Cell cell : row) {
+                        String cellValue = getCellValueAsString(cell);
+                        if (!cellValue.isEmpty()) {
+                            if (rowText.length() > 0) {
+                                rowText.append("\t");
+                            }
+                            rowText.append(cellValue);
+                        }
+                    }
+                    if (rowText.length() > 0) {
+                        text.append(rowText).append("\n");
+                    }
+                }
+                text.append("\n");
+            }
+            return text.toString();
+        }
+    }
+
+    /**
+     * Get cell value as string regardless of cell type
+     */
+    private String getCellValueAsString(Cell cell) {
+        if (cell == null) {
+            return "";
+        }
+        return switch (cell.getCellType()) {
+            case STRING -> cell.getStringCellValue();
+            case NUMERIC -> {
+                if (org.apache.poi.ss.usermodel.DateUtil.isCellDateFormatted(cell)) {
+                    yield cell.getLocalDateTimeCellValue().toString();
+                }
+                yield String.valueOf(cell.getNumericCellValue());
+            }
+            case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
+            case FORMULA -> {
+                try {
+                    yield cell.getStringCellValue();
+                } catch (Exception e) {
+                    yield String.valueOf(cell.getNumericCellValue());
+                }
+            }
+            default -> "";
+        };
+    }
+
+    /**
+     * Extract text from PowerPoint file (.pptx, .ppt)
+     */
+    private String extractFromPowerPoint(Path filePath) throws IOException {
+        try (FileInputStream fis = new FileInputStream(filePath.toFile());
+             XMLSlideShow ppt = new XMLSlideShow(fis)) {
+
+            StringBuilder text = new StringBuilder();
+            int slideNum = 1;
+
+            for (XSLFSlide slide : ppt.getSlides()) {
+                text.append("### Slide ").append(slideNum++).append("\n\n");
+
+                for (XSLFShape shape : slide.getShapes()) {
+                    if (shape instanceof XSLFTextShape textShape) {
+                        String shapeText = textShape.getText();
+                        if (shapeText != null && !shapeText.trim().isEmpty()) {
+                            text.append(shapeText.trim()).append("\n\n");
+                        }
+                    }
+                }
             }
             return text.toString();
         }

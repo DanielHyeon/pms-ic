@@ -10,6 +10,7 @@ import {
   useEdgesState,
   MarkerType,
   Position,
+  Handle,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import dagre from '@dagrejs/dagre';
@@ -64,15 +65,43 @@ function getLayoutedElements(
   return { nodes: layoutedNodes, edges };
 }
 
+// Status label mapping
+const STATUS_LABELS: Record<string, string> = {
+  // Requirement status
+  DRAFT: '초안',
+  SUBMITTED: '제출됨',
+  IN_REVIEW: '검토중',
+  APPROVED: '승인됨',
+  REJECTED: '반려됨',
+  IMPLEMENTED: '구현됨',
+  // Task/Story status
+  TODO: '할일',
+  IN_PROGRESS: '진행중',
+  DONE: '완료',
+  BLOCKED: '차단됨',
+  // Sprint status
+  PLANNING: '계획중',
+  ACTIVE: '활성',
+  COMPLETED: '완료',
+  CANCELLED: '취소됨',
+};
+
+function getStatusLabel(status?: string): string {
+  if (!status) return '';
+  return STATUS_LABELS[status] || status;
+}
+
 // Custom node component
 function LineageNode({ data }: { data: { label: string; nodeType: LineageNodeType; status?: string; code?: string } }) {
   const config = NODE_TYPE_CONFIG[data.nodeType];
 
   return (
     <div
-      className="px-4 py-3 rounded-lg border-2 bg-white shadow-sm min-w-[200px]"
+      className="px-4 py-3 rounded-lg border-2 bg-white shadow-sm min-w-[200px] relative"
       style={{ borderColor: config.color }}
     >
+      <Handle type="target" position={Position.Left} className="!bg-gray-400" />
+      <Handle type="source" position={Position.Right} className="!bg-gray-400" />
       <div className="flex items-center justify-between gap-2 mb-1">
         <Badge
           className="text-xs"
@@ -82,7 +111,7 @@ function LineageNode({ data }: { data: { label: string; nodeType: LineageNodeTyp
         </Badge>
         {data.status && (
           <Badge variant="outline" className="text-xs">
-            {data.status}
+            {getStatusLabel(data.status)}
           </Badge>
         )}
       </div>
@@ -154,8 +183,8 @@ export default function LineageGraph({ data, onNodeClick }: LineageGraphProps) {
     return (
       <div className="flex flex-col items-center justify-center h-[600px] text-gray-500">
         <GitBranch className="h-16 w-16 mb-4 text-gray-300" />
-        <p className="text-lg font-medium">No lineage data available</p>
-        <p className="text-sm">Create requirements and link them to tasks to see the lineage graph</p>
+        <p className="text-lg font-medium">리니지 데이터가 없습니다</p>
+        <p className="text-sm">요구사항을 생성하고 태스크와 연결하면 리니지 그래프를 볼 수 있습니다</p>
       </div>
     );
   }

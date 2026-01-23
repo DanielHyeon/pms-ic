@@ -23,6 +23,7 @@ import {
   LineageEventType,
 } from '../../../types/lineage';
 import { formatDistanceToNow, format } from 'date-fns';
+import { ko } from 'date-fns/locale';
 
 interface LineageTimelineProps {
   data: PageResponse<LineageEventDto>;
@@ -66,8 +67,8 @@ export default function LineageTimeline({
     return (
       <div className="flex flex-col items-center justify-center h-[400px] text-gray-500">
         <Clock className="h-16 w-16 mb-4 text-gray-300" />
-        <p className="text-lg font-medium">No activity yet</p>
-        <p className="text-sm">Changes to requirements, stories, and tasks will appear here</p>
+        <p className="text-lg font-medium">활동 내역이 없습니다</p>
+        <p className="text-sm">요구사항, 스토리, 태스크의 변경 사항이 여기에 표시됩니다</p>
       </div>
     );
   }
@@ -81,10 +82,10 @@ export default function LineageTimeline({
             <div className="flex items-center gap-2 mb-4">
               <Calendar className="h-4 w-4 text-gray-400" />
               <span className="text-sm font-semibold text-gray-700">
-                {format(new Date(date), 'MMMM d, yyyy')}
+                {format(new Date(date), 'yyyy년 M월 d일', { locale: ko })}
               </span>
               <Badge variant="secondary" className="text-xs">
-                {dateEvents.length} events
+                {dateEvents.length}건
               </Badge>
             </div>
 
@@ -105,7 +106,7 @@ export default function LineageTimeline({
       {totalPages > 1 && (
         <div className="flex items-center justify-between pt-4 border-t">
           <p className="text-sm text-gray-500">
-            Showing {events.length} of {totalElements} events
+            전체 {totalElements}건 중 {events.length}건 표시
           </p>
           <div className="flex items-center gap-2">
             <Button
@@ -115,10 +116,10 @@ export default function LineageTimeline({
               disabled={currentPage === 0}
             >
               <ChevronLeft className="h-4 w-4" />
-              Previous
+              이전
             </Button>
             <span className="text-sm text-gray-600 px-2">
-              Page {currentPage + 1} of {totalPages}
+              {currentPage + 1} / {totalPages} 페이지
             </span>
             <Button
               variant="outline"
@@ -126,7 +127,7 @@ export default function LineageTimeline({
               onClick={() => onPageChange(currentPage + 1)}
               disabled={currentPage >= totalPages - 1}
             >
-              Next
+              다음
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
@@ -149,7 +150,7 @@ function TimelineEvent({ event, onClick }: TimelineEventProps) {
   };
 
   const Icon = iconMap[config.icon] || Edit;
-  const timeAgo = formatDistanceToNow(new Date(event.timestamp), { addSuffix: true });
+  const timeAgo = formatDistanceToNow(new Date(event.timestamp), { addSuffix: true, locale: ko });
 
   return (
     <div
@@ -208,7 +209,7 @@ function TimelineEvent({ event, onClick }: TimelineEventProps) {
         {/* Changes preview */}
         {event.changes && Object.keys(event.changes).length > 0 && (
           <div className="mt-3 pt-3 border-t">
-            <p className="text-xs text-gray-400 mb-1">Changes:</p>
+            <p className="text-xs text-gray-400 mb-1">변경 항목:</p>
             <div className="flex flex-wrap gap-1">
               {Object.keys(event.changes).slice(0, 5).map((key) => (
                 <Badge key={key} variant="secondary" className="text-xs">
@@ -217,7 +218,7 @@ function TimelineEvent({ event, onClick }: TimelineEventProps) {
               ))}
               {Object.keys(event.changes).length > 5 && (
                 <Badge variant="secondary" className="text-xs">
-                  +{Object.keys(event.changes).length - 5} more
+                  +{Object.keys(event.changes).length - 5}개 더
                 </Badge>
               )}
             </div>

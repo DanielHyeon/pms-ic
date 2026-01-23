@@ -2,6 +2,19 @@ import { useEffect, useRef, useState } from 'react';
 import { X, Send, Bot, Sparkles, TrendingUp, FileText, AlertTriangle } from 'lucide-react';
 import { UserRole } from '../App';
 import { apiService } from '../../services/api';
+import { useProject } from '../../contexts/ProjectContext';
+
+// Role-based access level mapping (matches backend RoleAccessLevel.java)
+const ROLE_ACCESS_LEVELS: Record<string, number> = {
+  admin: 6,
+  sponsor: 5,
+  pmo_head: 4,
+  pm: 3,
+  business_analyst: 2,
+  qa: 2,
+  developer: 1,
+  auditor: 0,
+};
 
 interface Message {
   id: number;
@@ -17,6 +30,7 @@ interface SuggestedPrompt {
 }
 
 export default function AIAssistant({ onClose, userRole }: { onClose: () => void; userRole: UserRole }) {
+  const { currentProject } = useProject();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
@@ -79,6 +93,9 @@ export default function AIAssistant({ onClose, userRole }: { onClose: () => void
       const response = await apiService.sendChatMessage({
         sessionId,
         message: userMessage.content,
+        projectId: currentProject?.id,
+        userRole: userRole.toUpperCase(),
+        userAccessLevel: ROLE_ACCESS_LEVELS[userRole] ?? 1,
       });
       const aiResponse: Message = {
         id: messages.length + 2,

@@ -132,6 +132,14 @@ cors:
   allowed-headers: "*"
   allow-credentials: true
 
+# Neo4j (for Lineage Graph Queries)
+neo4j:
+  uri: ${NEO4J_URI:bolt://localhost:7687}
+  username: ${NEO4J_USER:neo4j}
+  password: ${NEO4J_PASSWORD:pmspassword123}
+  connection-timeout: 30s
+  max-connection-pool-size: 50
+
 # Lineage Event Streaming (Outbox Pattern)
 lineage:
   outbox:

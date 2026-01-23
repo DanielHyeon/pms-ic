@@ -20,6 +20,7 @@ import RfpManagement from './components/RfpManagement';
 import RequirementManagement from './components/RequirementManagement';
 import { LineageManagement } from './components/lineage';
 import { ProjectProvider } from '../contexts/ProjectContext';
+import ToastContainer from './components/ToastContainer';
 
 export type View = 'dashboard' | 'projects' | 'parts' | 'rfp' | 'requirements' | 'lineage' | 'phases' | 'kanban' | 'backlog' | 'roles' | 'common' | 'education' | 'settings';
 
@@ -143,16 +144,17 @@ export default function App() {
               onLogout={handleLogout}
               canUseAI={canUseAI}
             />
-            
+
             <main className="flex-1 overflow-auto">
               {renderContent()}
             </main>
           </div>
-        </ProjectProvider>
 
-        {aiPanelOpen && canUseAI && (
-          <AIAssistant onClose={() => setAiPanelOpen(false)} userRole={currentUser.role} />
-        )}
+          {aiPanelOpen && canUseAI && (
+            <AIAssistant onClose={() => setAiPanelOpen(false)} userRole={currentUser.role} />
+          )}
+        </ProjectProvider>
+        <ToastContainer />
       </div>
     </DndProvider>
   );

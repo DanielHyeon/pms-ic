@@ -4,6 +4,9 @@ import com.insuretech.pms.common.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.util.HashSet;
+import java.util.Set;
+
 @Entity
 @Table(name = "user_stories", schema = "task")
 @Getter
@@ -55,6 +58,21 @@ public class UserStory extends BaseEntity {
 
     @Column(name = "priority_order")
     private Integer priorityOrder;
+
+    @ElementCollection
+    @CollectionTable(name = "user_story_requirement_links", schema = "task",
+            joinColumns = @JoinColumn(name = "user_story_id"))
+    @Column(name = "requirement_id")
+    @Builder.Default
+    private Set<String> linkedRequirementIds = new HashSet<>();
+
+    public void linkRequirement(String requirementId) {
+        linkedRequirementIds.add(requirementId);
+    }
+
+    public void unlinkRequirement(String requirementId) {
+        linkedRequirementIds.remove(requirementId);
+    }
 
     public enum Priority {
         LOW, MEDIUM, HIGH, CRITICAL

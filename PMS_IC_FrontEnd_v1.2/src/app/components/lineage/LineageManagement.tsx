@@ -32,11 +32,13 @@ import {
   LineageGraphDto,
   LineageStatisticsDto,
   LineageEventDto,
+  LineageNodeDto,
   PageResponse,
   NODE_TYPE_CONFIG,
 } from '../../../types/lineage';
 import LineageGraph from './LineageGraph';
 import LineageTimeline from './LineageTimeline';
+import ImpactAnalysis from './ImpactAnalysis';
 
 interface LineageManagementProps {
   userRole: UserRole;
@@ -54,6 +56,7 @@ export default function LineageManagement({ userRole }: LineageManagementProps) 
     page: 0,
     size: 20,
   });
+  const [selectedNode, setSelectedNode] = useState<LineageNodeDto | null>(null);
 
   const loadGraphData = useCallback(async () => {
     if (!currentProject?.id) return;
@@ -113,8 +116,8 @@ export default function LineageManagement({ userRole }: LineageManagementProps) 
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <GitBranch className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-lg font-medium text-gray-900">No Project Selected</h2>
-          <p className="text-gray-500 mt-1">Please select a project to view lineage data</p>
+          <h2 className="text-lg font-medium text-gray-900">프로젝트가 선택되지 않았습니다</h2>
+          <p className="text-gray-500 mt-1">리니지 데이터를 보려면 프로젝트를 선택하세요</p>
         </div>
       </div>
     );
@@ -130,7 +133,7 @@ export default function LineageManagement({ userRole }: LineageManagementProps) 
             Lineage & History
           </h1>
           <p className="text-gray-500 mt-1">
-            Track relationships, changes, and impact across requirements, stories, and tasks
+            요구사항, 스토리, 태스크 간의 관계, 변경 사항 및 영향도를 추적합니다
           </p>
         </div>
         <Button variant="outline" onClick={handleRefresh} disabled={loading}>
@@ -139,7 +142,7 @@ export default function LineageManagement({ userRole }: LineageManagementProps) 
           ) : (
             <RefreshCw className="h-4 w-4 mr-2" />
           )}
-          Refresh
+          새로고침
         </Button>
       </div>
 
@@ -147,43 +150,43 @@ export default function LineageManagement({ userRole }: LineageManagementProps) 
       {statistics && (
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
           <StatCard
-            label="Requirements"
+            label="요구사항"
             value={statistics.requirements}
             icon={FileText}
             color="blue"
           />
           <StatCard
-            label="User Stories"
+            label="유저스토리"
             value={statistics.stories}
             icon={BookOpen}
             color="purple"
           />
           <StatCard
-            label="Tasks"
+            label="태스크"
             value={statistics.tasks}
             icon={CheckSquare}
             color="green"
           />
           <StatCard
-            label="Sprints"
+            label="스프린트"
             value={statistics.sprints}
             icon={Zap}
             color="red"
           />
           <StatCard
-            label="Linked"
+            label="연결됨"
             value={statistics.linkedRequirements}
             icon={ArrowRight}
             color="cyan"
           />
           <StatCard
-            label="Unlinked"
+            label="미연결"
             value={statistics.unlinkedRequirements}
             icon={Target}
             color="amber"
           />
           <StatCard
-            label="Coverage"
+            label="커버리지"
             value={`${statistics.coverage}%`}
             icon={TrendingUp}
             color="emerald"
@@ -197,15 +200,15 @@ export default function LineageManagement({ userRole }: LineageManagementProps) 
           <TabsList>
             <TabsTrigger value="graph" className="flex items-center gap-2">
               <GitBranch className="h-4 w-4" />
-              Lineage Graph
+              리니지 그래프
             </TabsTrigger>
             <TabsTrigger value="timeline" className="flex items-center gap-2">
               <Clock className="h-4 w-4" />
-              Activity Timeline
+              활동 타임라인
             </TabsTrigger>
             <TabsTrigger value="impact" className="flex items-center gap-2">
               <Target className="h-4 w-4" />
-              Impact Analysis
+              영향도 분석
             </TabsTrigger>
           </TabsList>
 
@@ -217,14 +220,14 @@ export default function LineageManagement({ userRole }: LineageManagementProps) 
                 onValueChange={handleFilterChange}
               >
                 <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Filter by type" />
+                  <SelectValue placeholder="유형 필터" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="REQUIREMENT">Requirements</SelectItem>
-                  <SelectItem value="USER_STORY">User Stories</SelectItem>
-                  <SelectItem value="TASK">Tasks</SelectItem>
-                  <SelectItem value="SPRINT">Sprints</SelectItem>
+                  <SelectItem value="all">전체</SelectItem>
+                  <SelectItem value="REQUIREMENT">요구사항</SelectItem>
+                  <SelectItem value="USER_STORY">유저스토리</SelectItem>
+                  <SelectItem value="TASK">태스크</SelectItem>
+                  <SelectItem value="SPRINT">스프린트</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -239,10 +242,16 @@ export default function LineageManagement({ userRole }: LineageManagementProps) 
                   <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
                 </div>
               ) : graphData ? (
-                <LineageGraph data={graphData} />
+                <LineageGraph
+                  data={graphData}
+                  onNodeClick={(node) => {
+                    setSelectedNode(node);
+                    setActiveTab('impact');
+                  }}
+                />
               ) : (
                 <div className="flex items-center justify-center h-[600px] text-gray-500">
-                  No lineage data available
+                  리니지 데이터가 없습니다
                 </div>
               )}
             </CardContent>
@@ -265,7 +274,7 @@ export default function LineageManagement({ userRole }: LineageManagementProps) 
                 />
               ) : (
                 <div className="flex items-center justify-center h-[400px] text-gray-500">
-                  No activity data available
+                  활동 데이터가 없습니다
                 </div>
               )}
             </CardContent>
@@ -273,20 +282,11 @@ export default function LineageManagement({ userRole }: LineageManagementProps) 
         </TabsContent>
 
         <TabsContent value="impact" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Target className="h-5 w-5" />
-                Impact Analysis
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-12 text-gray-500">
-                <BarChart3 className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                <p>Select an entity from the graph or timeline to analyze its impact</p>
-              </div>
-            </CardContent>
-          </Card>
+          <ImpactAnalysis
+            projectId={currentProject.id}
+            selectedNode={selectedNode}
+            onNodeSelect={(node) => setSelectedNode(node)}
+          />
         </TabsContent>
       </Tabs>
 

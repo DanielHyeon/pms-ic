@@ -14,6 +14,11 @@ public class ChatRequest {
     private String message;
     private List<MessageContext> context;
 
+    // Access control fields for RAG filtering
+    private String projectId;      // Filter RAG results by project
+    private String userRole;       // User's role (DEVELOPER, PM, etc.)
+    private Integer userAccessLevel; // Explicit access level (1-6)
+
     @Data
     @NoArgsConstructor
     @AllArgsConstructor

@@ -159,13 +159,22 @@ export class ApiService {
     const response = await this.fetchWithFallback('/projects', {}, {
       data: [
         {
-          id: '1',
-          name: '보험금 청구 AI 자동심사 시스템',
-          code: 'PMS-IC-2025',
+          id: 'proj-001',
+          name: 'AI 보험심사 처리 시스템',
+          code: 'PMS-IC-2026',
           status: 'IN_PROGRESS',
-          progress: 62,
-          startDate: '2025-01-02',
-          endDate: '2025-12-31',
+          progress: 25,
+          startDate: '2026-01-15',
+          endDate: '2026-06-30',
+        },
+        {
+          id: 'proj-002',
+          name: '모바일 보험 플랫폼',
+          code: 'PMS-MIP-2026',
+          status: 'PLANNING',
+          progress: 5,
+          startDate: '2026-02-01',
+          endDate: '2026-08-31',
         },
       ],
     });
@@ -176,15 +185,17 @@ export class ApiService {
     const response = await this.fetchWithFallback(`/projects/${projectId}`, {}, {
       data: {
         id: projectId,
-        name: '보험금 청구 AI 자동심사 시스템',
-        code: 'PMS-IC-2025',
-        description: 'AI 기반 보험금 청구 자동심사 시스템 구축 프로젝트',
-        status: 'IN_PROGRESS',
-        progress: 62,
-        startDate: '2025-01-02',
-        endDate: '2025-12-31',
-        budget: 1000000000,
-        budgetUsed: 580000000,
+        name: projectId === 'proj-001' ? 'AI 보험심사 처리 시스템' : '모바일 보험 플랫폼',
+        code: projectId === 'proj-001' ? 'PMS-IC-2026' : 'PMS-MIP-2026',
+        description: projectId === 'proj-001'
+          ? 'AI 기반 보험 청구 처리 시스템 개발. 자동 문서 분석, 사기 탐지, 지능형 라우팅 기능 포함.'
+          : '보험 서비스를 위한 종합 모바일 플랫폼 구축. 보험증권 관리, 청구 제출, 실시간 상태 조회 기능 포함.',
+        status: projectId === 'proj-001' ? 'IN_PROGRESS' : 'PLANNING',
+        progress: projectId === 'proj-001' ? 25 : 5,
+        startDate: projectId === 'proj-001' ? '2026-01-15' : '2026-02-01',
+        endDate: projectId === 'proj-001' ? '2026-06-30' : '2026-08-31',
+        budget: projectId === 'proj-001' ? 500000000 : 350000000,
+        budgetUsed: 0,
       },
     });
     return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
@@ -1026,7 +1037,21 @@ export class ApiService {
 
   // ========== Requirement API ==========
   async getRequirements(projectId: string) {
-    const response = await this.fetchWithFallback(`/projects/${projectId}/requirements`, {}, { data: [] });
+    const mockRequirements = projectId === 'proj-001' ? [
+      { id: 'req-001-01', code: 'REQ-AI-001', title: '문서 OCR 처리', description: '시스템은 스캔된 보험 문서에서 99% 정확도로 텍스트를 추출할 수 있어야 함', category: 'AI', priority: 'CRITICAL', status: 'APPROVED', progress: 60, linkedTaskIds: ['task-001-01', 'task-001-02'] },
+      { id: 'req-001-02', code: 'REQ-AI-002', title: '사기 탐지 알고리즘', description: '설정 가능한 민감도 임계값을 가진 ML 기반 사기 탐지 구현', category: 'AI', priority: 'CRITICAL', status: 'ANALYZED', progress: 30, linkedTaskIds: ['task-001-09', 'task-001-10'] },
+      { id: 'req-001-03', code: 'REQ-SI-001', title: '보험청구 관리 API', description: '보험청구 전체 생명주기 관리를 위한 RESTful API', category: 'FUNCTIONAL', priority: 'HIGH', status: 'IDENTIFIED', progress: 0, linkedTaskIds: ['task-001-11'] },
+      { id: 'req-001-04', code: 'REQ-SI-002', title: '레거시 시스템 연동', description: 'ESB를 통한 기존 보험증권 관리 시스템과의 연동', category: 'INTEGRATION', priority: 'HIGH', status: 'IDENTIFIED', progress: 0, linkedTaskIds: [] },
+      { id: 'req-001-05', code: 'REQ-SEC-001', title: '데이터 암호화', description: '모든 개인정보는 AES-256을 사용하여 저장 및 전송 시 암호화되어야 함', category: 'SECURITY', priority: 'CRITICAL', status: 'APPROVED', progress: 0, linkedTaskIds: [] },
+      { id: 'req-001-06', code: 'REQ-NF-001', title: '성능 요구사항', description: '시스템은 2초 미만의 응답 시간으로 1000명의 동시 사용자를 처리할 수 있어야 함', category: 'NON_FUNCTIONAL', priority: 'HIGH', status: 'ANALYZED', progress: 0, linkedTaskIds: [] },
+    ] : [
+      { id: 'req-002-01', code: 'REQ-MOB-001', title: '사용자 인증', description: '모바일 앱을 위한 생체인식 및 비밀번호 기반 인증', category: 'SECURITY', priority: 'CRITICAL', status: 'IDENTIFIED', progress: 0, linkedTaskIds: [] },
+      { id: 'req-002-02', code: 'REQ-MOB-002', title: '보험증권 대시보드', description: '대시보드에 모든 사용자 보험증권과 주요 정보 표시', category: 'FUNCTIONAL', priority: 'HIGH', status: 'IDENTIFIED', progress: 0, linkedTaskIds: [] },
+      { id: 'req-002-03', code: 'REQ-MOB-003', title: '청구 제출', description: '사용자가 모바일에서 사진 업로드와 함께 청구를 제출할 수 있도록 허용', category: 'FUNCTIONAL', priority: 'CRITICAL', status: 'IDENTIFIED', progress: 0, linkedTaskIds: [] },
+      { id: 'req-002-04', code: 'REQ-MOB-004', title: '푸시 알림', description: '청구 상태 업데이트를 위한 실시간 알림', category: 'FUNCTIONAL', priority: 'MEDIUM', status: 'IDENTIFIED', progress: 0, linkedTaskIds: [] },
+      { id: 'req-002-05', code: 'REQ-MOB-005', title: '오프라인 모드', description: '앱은 오프라인에서 작동하고 연결 시 데이터 동기화 가능해야 함', category: 'NON_FUNCTIONAL', priority: 'MEDIUM', status: 'IDENTIFIED', progress: 0, linkedTaskIds: [] },
+    ];
+    const response = await this.fetchWithFallback(`/projects/${projectId}/requirements`, {}, { data: mockRequirements });
     return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
   }
 
@@ -1073,7 +1098,12 @@ export class ApiService {
 
   // ========== RFP CRUD API ==========
   async getRfps(projectId: string) {
-    const response = await this.fetchWithFallback(`/projects/${projectId}/rfps`, {}, { data: [] });
+    const mockRfps = projectId === 'proj-001' ? [
+      { id: 'rfp-001', title: 'AI 보험심사 처리 시스템 RFP', content: 'AI 기반 보험 청구 처리 시스템 개발을 위한 제안요청서. 주요 요구사항: 자동 문서 분석, 사기 탐지 기능, 기존 시스템과의 연동, 보험 규정 준수.', status: 'APPROVED', processingStatus: 'COMPLETED', createdAt: '2026-01-10T09:00:00Z', updatedAt: '2026-01-15T14:30:00Z' },
+    ] : [
+      { id: 'rfp-002', title: '모바일 보험 플랫폼 RFP', content: '보험 서비스를 위한 종합 모바일 플랫폼 구축 제안요청서. 필수 포함사항: 보험증권 관리, 청구 제출, 실시간 알림, 보안 인증, 오프라인 기능.', status: 'SUBMITTED', processingStatus: 'PENDING', createdAt: '2026-01-20T10:00:00Z', updatedAt: '2026-01-20T10:00:00Z' },
+    ];
+    const response = await this.fetchWithFallback(`/projects/${projectId}/rfps`, {}, { data: mockRfps });
     return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
   }
 
@@ -1297,7 +1327,13 @@ export class ApiService {
     return response;
   }
 
-  async sendChatMessage(params: { sessionId?: string | null; message: string }) {
+  async sendChatMessage(params: {
+    sessionId?: string | null;
+    message: string;
+    projectId?: string | null;
+    userRole?: string;
+    userAccessLevel?: number;
+  }) {
     // Chat API needs longer timeout for LLM response
     try {
       const headers: HeadersInit = {
@@ -1311,6 +1347,9 @@ export class ApiService {
         body: JSON.stringify({
           sessionId: params.sessionId ?? null,
           message: params.message,
+          projectId: params.projectId ?? null,
+          userRole: params.userRole ?? null,
+          userAccessLevel: params.userAccessLevel ?? null,
         }),
         signal: AbortSignal.timeout(120000), // 120 seconds for LLM response
       });

@@ -30,6 +30,10 @@ class TwoTrackState(TypedDict):
     user_id: Optional[str]
     project_id: Optional[str]
 
+    # Access control
+    user_role: Optional[str]
+    user_access_level: int
+
     # Track routing
     track: str  # "track_a" or "track_b"
 
@@ -303,13 +307,18 @@ class TwoTrackWorkflow:
         return "continue"
 
     def _rag_search_node(self, state: TwoTrackState) -> TwoTrackState:
-        """Node: RAG search"""
+        """Node: RAG search with access control filtering"""
         start_time = time.time()
 
         search_query = state.get("current_query", state["message"])
         retry_count = state.get("retry_count", 0)
 
-        logger.info(f"RAG search (retry={retry_count}): {search_query[:50]}...")
+        # Access control parameters
+        project_id = state.get("project_id")
+        user_access_level = state.get("user_access_level", 6)
+        user_role = state.get("user_role", "MEMBER")
+
+        logger.info(f"RAG search (retry={retry_count}): {search_query[:50]}... (project={project_id}, level={user_access_level})")
 
         # Use pre-provided docs if available and first attempt
         if state.get("retrieved_docs") and retry_count == 0:
@@ -321,7 +330,17 @@ class TwoTrackWorkflow:
 
         if self.rag_service:
             try:
-                results = self.rag_service.search(search_query, top_k=5)
+                # Build filter metadata with access control
+                filter_metadata = {
+                    "project_id": project_id,
+                    "user_access_level": user_access_level,
+                }
+
+                results = self.rag_service.search(
+                    search_query,
+                    top_k=5,
+                    filter_metadata=filter_metadata
+                )
 
                 # Filter by relevance score
                 MIN_RELEVANCE_SCORE = 0.3
@@ -331,13 +350,18 @@ class TwoTrackWorkflow:
                 ]
 
                 retrieved_docs = [doc['content'] for doc in filtered]
-                logger.info(f"RAG found {len(retrieved_docs)} docs (filtered from {len(results)})")
+                logger.info(f"RAG found {len(retrieved_docs)} docs (filtered from {len(results)}, access_level={user_access_level})")
 
             except Exception as e:
                 logger.error(f"RAG search failed: {e}")
 
         state["retrieved_docs"] = retrieved_docs
         state["debug_info"]["rag_docs_count"] = len(retrieved_docs)
+        state["debug_info"]["access_control"] = {
+            "project_id": project_id,
+            "user_role": user_role,
+            "user_access_level": user_access_level,
+        }
         state["metrics"]["rag_time_ms"] = (time.time() - start_time) * 1000
 
         return state
@@ -526,7 +550,7 @@ class TwoTrackWorkflow:
                     is_short_question = len(message) < 30
 
                     if is_simple_question and is_short_question:
-                        max_tokens = min(base_max_tokens, 600)
+                        max_tokens = min(base_max_tokens, 1000)
                         logger.info(f"  → Track A: reduced max_tokens={max_tokens} for simple question")
                     else:
                         max_tokens = base_max_tokens
@@ -696,9 +720,17 @@ class TwoTrackWorkflow:
         model_path: Optional[str]
     ) -> str:
         """Build prompt for L1 (fast) response"""
-        system_prompt = """당신은 PMS 관리 어시스턴트입니다.
-제공된 컨텍스트만 사용하여 간결하게 답변하세요.
-추측하지 말고, 모르면 "확인이 필요합니다"라고 답변하세요."""
+        system_prompt = """당신은 PMS(프로젝트 관리 시스템) 전문 어시스턴트입니다.
+
+답변 규칙:
+1. 제공된 컨텍스트를 충분히 활용하여 **구체적이고 상세하게** 답변하세요.
+2. 질문 유형에 맞게 답변 형식을 조절하세요:
+   - 개념/용어 질문("~이란", "~가 뭐야"): 정의와 핵심 특징 위주로 설명
+   - 현황/상태 질문("~상황은", "~목록"): 현재 데이터 기반으로 요약
+   - 방법/절차 질문("~어떻게", "~방법"): 단계별로 구조화하여 설명
+3. 필요시 bullet point나 번호 목록을 사용하여 가독성을 높이세요.
+4. 추측하지 말고, 컨텍스트에 없는 내용은 "확인이 필요합니다"라고 답변하세요.
+5. 너무 짧게 답변하지 마세요. 최소 3-5문장 이상으로 충실히 답변하세요."""
 
         return self._build_prompt(message, context, retrieved_docs, system_prompt, model_path)
 
@@ -768,7 +800,7 @@ class TwoTrackWorkflow:
                 prompt_parts.append(f"<start_of_turn>{role}\n{msg.get('content', '')}<end_of_turn>")
 
             if docs:
-                context_text = "\n".join(doc[:300] for doc in docs[:3])
+                context_text = "\n".join(doc[:500] for doc in docs[:5])
                 prompt_parts.append(f"<start_of_turn>user\n참고 정보:\n{context_text}\n\n질문: {message}<end_of_turn>")
             else:
                 prompt_parts.append(f"<start_of_turn>user\n{message}<end_of_turn>")
@@ -784,7 +816,7 @@ class TwoTrackWorkflow:
                 prompt_parts.append(f"<|im_start|>{role}\n{msg.get('content', '')}<|im_end|>")
 
             if docs:
-                context_text = "\n".join(doc[:300] for doc in docs[:3])
+                context_text = "\n".join(doc[:500] for doc in docs[:5])
                 prompt_parts.append(f"<|im_start|>user\n참고 정보:\n{context_text}\n\n질문: {message} /no_think<|im_end|>")
             else:
                 prompt_parts.append(f"<|im_start|>user\n{message} /no_think<|im_end|>")
@@ -800,7 +832,7 @@ class TwoTrackWorkflow:
                 prompt_parts.append(f"<|im_start|>{role}\n{msg.get('content', '')}<|im_end|>")
 
             if docs:
-                context_text = "\n".join(doc[:300] for doc in docs[:3])
+                context_text = "\n".join(doc[:500] for doc in docs[:5])
                 prompt_parts.append(f"<|im_start|>user\n참고 정보:\n{context_text}\n\n질문: {message}<|im_end|>")
             else:
                 prompt_parts.append(f"<|im_start|>user\n{message}<|im_end|>")
@@ -867,16 +899,20 @@ class TwoTrackWorkflow:
         retrieved_docs: List[str] = None,
         user_id: Optional[str] = None,
         project_id: Optional[str] = None,
+        user_role: Optional[str] = None,
+        user_access_level: int = 6,
     ) -> dict:
         """
-        Run the two-track workflow.
+        Run the two-track workflow with access control.
 
         Args:
             message: User message
             context: Conversation history
             retrieved_docs: Pre-retrieved RAG documents (optional)
             user_id: User ID for policy checks
-            project_id: Project ID for scope validation
+            project_id: Project ID for scope validation and RAG filtering
+            user_role: User's role for access control (DEVELOPER, PM, etc.)
+            user_access_level: Explicit access level (1-6, higher = more access)
 
         Returns:
             dict with reply, confidence, intent, track, metrics
@@ -886,6 +922,8 @@ class TwoTrackWorkflow:
             "context": context or [],
             "user_id": user_id,
             "project_id": project_id,
+            "user_role": user_role or "MEMBER",
+            "user_access_level": user_access_level,
             "track": "track_a",
             "policy_result": {},
             "policy_passed": True,

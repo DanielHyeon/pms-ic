@@ -9,6 +9,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -62,4 +65,30 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
      * Check if idempotency key exists (for duplicate prevention)
      */
     boolean existsByIdempotencyKey(String idempotencyKey);
+
+    // ===== Timeline Query Methods =====
+
+    /**
+     * Find events with pagination and optional time range filtering
+     */
+    @Query("SELECT e FROM OutboxEvent e WHERE " +
+           "(:aggregateType IS NULL OR e.aggregateType = :aggregateType) AND " +
+           "(:since IS NULL OR e.createdAt >= :since) AND " +
+           "(:until IS NULL OR e.createdAt <= :until) " +
+           "ORDER BY e.createdAt DESC")
+    Page<OutboxEvent> findTimelineEvents(
+            @Param("aggregateType") String aggregateType,
+            @Param("since") LocalDateTime since,
+            @Param("until") LocalDateTime until,
+            Pageable pageable);
+
+    /**
+     * Find events by aggregate type with pagination
+     */
+    Page<OutboxEvent> findByAggregateTypeOrderByCreatedAtDesc(String aggregateType, Pageable pageable);
+
+    /**
+     * Find all events with pagination
+     */
+    Page<OutboxEvent> findAllByOrderByCreatedAtDesc(Pageable pageable);
 }

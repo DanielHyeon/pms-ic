@@ -1,5 +1,6 @@
 flask==3.0.0
 flask-cors==4.0.0
+debugpy>=1.8.0  # VS Code remote debugging
 llama-cpp-python>=0.3.5
 numpy<2.0.0
 
@@ -48,3 +49,7 @@ ultralytics>=8.3.0
 scikit-image>=0.23.0
 pdfminer.six>=20231228
 
+# PaddleOCR for Korean OCR (Apache 2.0, commercial use allowed)
+# Note: Install paddlepaddle-gpu separately based on CUDA version
+# pip install paddlepaddle-gpu==3.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu118/
+paddleocr>=2.9.0

@@ -162,12 +162,13 @@ public class Requirement extends BaseEntity {
     @PostPersist
     @PostUpdate
     private void calculateProgressStage() {
+        int progress = progressPercentage != null ? progressPercentage : 0;
         if (dueDate != null && LocalDate.now().isAfter(dueDate)
-            && progressPercentage < 100) {
+            && progress < 100) {
             this.progressStage = ProgressStage.DELAYED;
-        } else if (progressPercentage == 0) {
+        } else if (progress == 0) {
             this.progressStage = ProgressStage.NOT_STARTED;
-        } else if (progressPercentage == 100) {
+        } else if (progress == 100) {
             this.progressStage = ProgressStage.COMPLETED;
         } else {
             this.progressStage = ProgressStage.IN_PROGRESS;

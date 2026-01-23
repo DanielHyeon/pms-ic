@@ -14,4 +14,7 @@ public interface TaskRepository extends JpaRepository<Task, String> {
     List<Task> findBySprintId(String sprintId);
     int countByColumnIdAndStatusNot(String columnId, Task.TaskStatus status);
     int countBySprintIdAndStatusNot(String sprintId, Task.TaskStatus status);
+
+    // Lineage: find tasks by project via KanbanColumn relationship
+    List<Task> findByColumn_ProjectId(String projectId);
 }

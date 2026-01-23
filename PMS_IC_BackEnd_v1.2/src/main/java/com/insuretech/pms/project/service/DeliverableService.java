@@ -4,13 +4,18 @@ import com.insuretech.pms.common.exception.CustomException;
 import com.insuretech.pms.project.dto.DeliverableDto;
 import com.insuretech.pms.project.entity.Deliverable;
 import com.insuretech.pms.project.entity.Phase;
+import com.insuretech.pms.project.entity.ProjectMember;
+import com.insuretech.pms.project.entity.ProjectMember.ProjectRole;
 import com.insuretech.pms.project.repository.DeliverableRepository;
 import com.insuretech.pms.project.repository.PhaseRepository;
+import com.insuretech.pms.project.repository.ProjectMemberRepository;
+import com.insuretech.pms.rag.service.RAGIndexingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -21,7 +26,10 @@ import java.net.MalformedURLException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -32,6 +40,8 @@ public class DeliverableService {
 
     private final DeliverableRepository deliverableRepository;
     private final PhaseRepository phaseRepository;
+    private final ProjectMemberRepository projectMemberRepository;
+    private final RAGIndexingService ragIndexingService;
 
     @Value("${pms.storage.deliverables:uploads/deliverables}")
     private String deliverableStoragePath;
@@ -81,7 +91,68 @@ public class DeliverableService {
 
         Deliverable saved = deliverableRepository.save(deliverable);
         log.info("Deliverable uploaded: {} (phase={})", saved.getId(), phaseId);
+
+        // Trigger RAG indexing asynchronously
+        triggerRAGIndexing(saved, phase, uploadedBy, targetPath);
+
         return DeliverableDto.from(saved);
+    }
+
+    /**
+     * Trigger RAG indexing for uploaded deliverable with access control metadata
+     */
+    private void triggerRAGIndexing(Deliverable deliverable, Phase phase, String uploadedBy, Path filePath) {
+        try {
+            String projectId = phase.getProject().getId();
+
+            // Get uploader's project role for access control
+            ProjectRole uploaderRole = projectMemberRepository
+                    .findByProjectIdAndUserId(projectId, uploadedBy)
+                    .map(ProjectMember::getRole)
+                    .orElse(ProjectRole.MEMBER);
+
+            // Build metadata
+            Map<String, String> metadata = new HashMap<>();
+            metadata.put("title", deliverable.getFileName());
+            metadata.put("phase_id", phase.getId());
+            metadata.put("phase_name", phase.getName());
+            metadata.put("project_id", projectId);
+            metadata.put("project_name", phase.getProject().getName());
+            metadata.put("file_type", getFileExtension(deliverable.getFileName()));
+            metadata.put("category", deliverable.getType() != null ? deliverable.getType().name() : "DOCUMENT");
+            metadata.put("created_at", LocalDateTime.now().toString());
+
+            // Index with access control
+            boolean indexed = ragIndexingService.indexFile(
+                    deliverable.getId(),
+                    filePath,
+                    metadata,
+                    projectId,
+                    uploadedBy,
+                    uploaderRole
+            );
+
+            if (indexed) {
+                log.info("RAG indexing successful for deliverable: {} (project={}, role={})",
+                        deliverable.getId(), projectId, uploaderRole);
+            } else {
+                log.warn("RAG indexing returned false for deliverable: {}", deliverable.getId());
+            }
+
+        } catch (Exception e) {
+            // Don't fail the upload if RAG indexing fails
+            log.error("RAG indexing failed for deliverable: {}", deliverable.getId(), e);
+        }
+    }
+
+    /**
+     * Get file extension from filename
+     */
+    private String getFileExtension(String fileName) {
+        if (fileName == null || !fileName.contains(".")) {
+            return "unknown";
+        }
+        return fileName.substring(fileName.lastIndexOf(".") + 1).toLowerCase();
     }
 
     @Transactional

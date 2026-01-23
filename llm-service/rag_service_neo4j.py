@@ -1,6 +1,7 @@
 """
 Neo4j 기반 GraphRAG 서비스
 벡터 검색 + 그래프 관계를 Neo4j 단일 DB에서 처리
+프로젝트 파티셔닝 + 권한 기반 접근 제어 지원
 
 참조: https://github.com/gongwon-nayeon/graphrag-tools-retriever
 """
@@ -15,6 +16,23 @@ from sentence_transformers import SentenceTransformer
 from document_parser import MinerUDocumentParser, LayoutAwareChunker
 
 logger = logging.getLogger(__name__)
+
+# Role-based access levels (higher = more access privileges)
+ROLE_ACCESS_LEVELS = {
+    "ADMIN": 6,
+    "SPONSOR": 5,
+    "PMO_HEAD": 4,
+    "PM": 3,
+    "BUSINESS_ANALYST": 2,
+    "QA": 2,
+    "DEVELOPER": 1,
+    "MEMBER": 1,
+    "AUDITOR": 0,
+}
+
+def get_access_level(role: str) -> int:
+    """Get access level for a role name."""
+    return ROLE_ACCESS_LEVELS.get(role.upper() if role else "MEMBER", 1)
 
 class ToolsRetriever:
     """상황에 따라 검색 전략을 선택하는 간단한 ToolsRetriever."""
@@ -140,6 +158,7 @@ class RAGServiceNeo4j:
                     "CREATE CONSTRAINT IF NOT EXISTS FOR (d:Document) REQUIRE d.doc_id IS UNIQUE",
                     "CREATE CONSTRAINT IF NOT EXISTS FOR (c:Chunk) REQUIRE c.chunk_id IS UNIQUE",
                     "CREATE CONSTRAINT IF NOT EXISTS FOR (cat:Category) REQUIRE cat.name IS UNIQUE",
+                    "CREATE CONSTRAINT IF NOT EXISTS FOR (p:Project) REQUIRE p.project_id IS UNIQUE",
                 ]
 
                 for constraint in constraints:
@@ -147,6 +166,19 @@ class RAGServiceNeo4j:
                         session.run(constraint)
                     except Exception as e:
                         logger.debug(f"Constraint already exists or error: {e}")
+
+                # 2. Create indexes for access control filtering
+                indexes = [
+                    "CREATE INDEX IF NOT EXISTS FOR (c:Chunk) ON (c.project_id)",
+                    "CREATE INDEX IF NOT EXISTS FOR (c:Chunk) ON (c.access_level)",
+                    "CREATE INDEX IF NOT EXISTS FOR (d:Document) ON (d.project_id)",
+                    "CREATE INDEX IF NOT EXISTS FOR (d:Document) ON (d.access_level)",
+                ]
+                for index in indexes:
+                    try:
+                        session.run(index)
+                    except Exception as e:
+                        logger.debug(f"Index already exists or error: {e}")
 
                 # 2. 벡터 인덱스 생성
                 try:
@@ -179,7 +211,7 @@ class RAGServiceNeo4j:
         return success_count
 
     def add_document(self, document: Dict[str, str]) -> bool:
-        """단일 문서를 Neo4j 그래프 + 벡터로 추가"""
+        """단일 문서를 Neo4j 그래프 + 벡터로 추가 (프로젝트 파티셔닝 + 권한 제어 지원)"""
         try:
             doc_id = document.get("id")
             content = document.get("content", "")
@@ -192,6 +224,12 @@ class RAGServiceNeo4j:
             title = metadata.get("title") or metadata.get("file_name") or doc_id
             category = metadata.get("category", "general")
             file_type = metadata.get("file_type", "unknown")
+
+            # Access control metadata
+            project_id = metadata.get("project_id", "default")
+            uploaded_by_user_id = metadata.get("uploaded_by_user_id", "system")
+            uploaded_by_role = metadata.get("uploaded_by_role", "MEMBER")
+            access_level = int(metadata.get("access_level", get_access_level(uploaded_by_role)))
 
             # 구조 파싱 및 청킹
             logger.info(f"Parsing document {doc_id} with MinerU...")
@@ -206,20 +244,40 @@ class RAGServiceNeo4j:
             )
 
             with self.driver.session() as session:
-                # 1. Document 노드 생성
+                # 1. Project 노드 생성/조회
+                session.run("""
+                    MERGE (p:Project {project_id: $project_id})
+                """, project_id=project_id)
+
+                # 2. Document 노드 생성 (권한 정보 포함)
                 session.run("""
                     MERGE (d:Document {doc_id: $doc_id})
                     SET d.title = $title,
                         d.content = $content,
                         d.file_type = $file_type,
                         d.file_path = $file_path,
-                        d.created_at = $created_at
+                        d.created_at = $created_at,
+                        d.project_id = $project_id,
+                        d.uploaded_by_user_id = $uploaded_by_user_id,
+                        d.uploaded_by_role = $uploaded_by_role,
+                        d.access_level = $access_level
                 """, doc_id=doc_id, title=title, content=content[:1000],
                            file_type=file_type,
                            file_path=metadata.get("file_path", ""),
-                           created_at=metadata.get("created_at", ""))
+                           created_at=metadata.get("created_at", ""),
+                           project_id=project_id,
+                           uploaded_by_user_id=uploaded_by_user_id,
+                           uploaded_by_role=uploaded_by_role,
+                           access_level=access_level)
 
-                # 2. Category 노드와 관계 생성
+                # 3. Project -> Document 관계
+                session.run("""
+                    MATCH (p:Project {project_id: $project_id})
+                    MATCH (d:Document {doc_id: $doc_id})
+                    MERGE (p)-[:HAS_DOCUMENT]->(d)
+                """, project_id=project_id, doc_id=doc_id)
+
+                # 4. Category 노드와 관계 생성
                 session.run("""
                     MERGE (cat:Category {name: $category})
                     WITH cat
@@ -227,7 +285,7 @@ class RAGServiceNeo4j:
                     MERGE (d)-[:BELONGS_TO]->(cat)
                 """, category=category, doc_id=doc_id)
 
-                # 3. Chunk 노드들 생성 및 관계 설정
+                # 5. Chunk 노드들 생성 및 관계 설정
                 chunk_ids = []
                 for i, chunk_data in enumerate(chunks):
                     chunk_id = str(uuid.uuid4())
@@ -238,7 +296,7 @@ class RAGServiceNeo4j:
                     embedding_text = f"passage: {chunk_content}"
                     embedding = self.embedding_model.encode(embedding_text).tolist()
 
-                    # Chunk 노드 생성
+                    # Chunk 노드 생성 (권한 정보 포함 for faster filtering)
                     session.run("""
                         MERGE (c:Chunk {chunk_id: $chunk_id})
                         SET c.content = $content,
@@ -250,7 +308,9 @@ class RAGServiceNeo4j:
                             c.has_list = $has_list,
                             c.section_title = $section_title,
                             c.page_number = $page_number,
-                            c.embedding = $embedding
+                            c.embedding = $embedding,
+                            c.project_id = $project_id,
+                            c.access_level = $access_level
                     """, chunk_id=chunk_id, content=chunk_content,
                                chunk_index=i, title=title, doc_id=doc_id,
                                structure_type=chunk_metadata.get("structure_type", "paragraph"),
@@ -258,7 +318,9 @@ class RAGServiceNeo4j:
                                has_list=bool(chunk_metadata.get("has_list", False)),
                                section_title=chunk_metadata.get("section_title", ""),
                                page_number=int(chunk_metadata.get("page_number", 0)),
-                               embedding=embedding)
+                               embedding=embedding,
+                               project_id=project_id,
+                               access_level=access_level)
 
                     # Document -> Chunk 관계 생성
                     session.run("""
@@ -343,12 +405,21 @@ class RAGServiceNeo4j:
             query_embedding = self.embedding_model.encode(query_with_prefix).tolist()
             logger.info(f"  - Generated embedding vector of length: {len(query_embedding)}")
 
+            # Extract access control filters
+            project_id = filter_metadata.get("project_id") if filter_metadata else None
+            user_access_level = int(filter_metadata.get("user_access_level", 6)) if filter_metadata else 6
+            logger.info(f"  - Access control: project_id={project_id}, user_access_level={user_access_level}")
+
             with self.driver.session() as session:
                 if use_graph_expansion:
-                    # GraphRAG: 벡터 검색 + 순차 컨텍스트 확장
+                    # GraphRAG: 벡터 검색 + 순차 컨텍스트 확장 + 권한 필터
                     cypher_query = """
-                        CALL db.index.vector.queryNodes('chunk_embeddings', $top_k, $embedding)
+                        CALL db.index.vector.queryNodes('chunk_embeddings', $top_k_fetch, $embedding)
                         YIELD node AS c, score
+
+                        // Access control filter: project + role level
+                        WHERE ($project_id IS NULL OR c.project_id = $project_id)
+                          AND c.access_level <= $user_access_level
 
                         // 순차 컨텍스트 확장
                         OPTIONAL MATCH (prev:Chunk)-[:NEXT_CHUNK]->(c)
@@ -356,11 +427,14 @@ class RAGServiceNeo4j:
 
                         // 문서 및 카테고리 정보
                         MATCH (d:Document)-[:HAS_CHUNK]->(c)
+                        WHERE d.access_level <= $user_access_level
                         OPTIONAL MATCH (d)-[:BELONGS_TO]->(cat:Category)
 
-                        // 같은 카테고리의 다른 최신 문서
+                        // 같은 카테고리의 다른 최신 문서 (권한 필터 적용)
                         OPTIONAL MATCH (cat)<-[:BELONGS_TO]-(related:Document)
                         WHERE related <> d
+                          AND related.access_level <= $user_access_level
+                          AND ($project_id IS NULL OR related.project_id = $project_id)
 
                         RETURN
                             c.chunk_id AS chunk_id,
@@ -370,12 +444,16 @@ class RAGServiceNeo4j:
                             c.structure_type AS structure_type,
                             c.has_table AS has_table,
                             c.has_list AS has_list,
+                            c.project_id AS chunk_project_id,
+                            c.access_level AS chunk_access_level,
                             score,
                             prev.content AS prev_context,
                             next.content AS next_context,
                             d.doc_id AS doc_id,
                             d.title AS doc_title,
                             d.file_path AS file_path,
+                            d.project_id AS doc_project_id,
+                            d.access_level AS doc_access_level,
                             cat.name AS category,
                             collect(DISTINCT {
                                 doc_id: related.doc_id,
@@ -386,12 +464,17 @@ class RAGServiceNeo4j:
                         LIMIT $top_k
                     """
                 else:
-                    # 단순 벡터 검색
+                    # 단순 벡터 검색 + 권한 필터
                     cypher_query = """
-                        CALL db.index.vector.queryNodes('chunk_embeddings', $top_k, $embedding)
+                        CALL db.index.vector.queryNodes('chunk_embeddings', $top_k_fetch, $embedding)
                         YIELD node AS c, score
 
+                        // Access control filter
+                        WHERE ($project_id IS NULL OR c.project_id = $project_id)
+                          AND c.access_level <= $user_access_level
+
                         MATCH (d:Document)-[:HAS_CHUNK]->(c)
+                        WHERE d.access_level <= $user_access_level
                         OPTIONAL MATCH (d)-[:BELONGS_TO]->(cat:Category)
 
                         RETURN
@@ -399,16 +482,27 @@ class RAGServiceNeo4j:
                             c.content AS content,
                             c.title AS title,
                             c.structure_type AS structure_type,
+                            c.project_id AS chunk_project_id,
+                            c.access_level AS chunk_access_level,
                             score,
                             d.doc_id AS doc_id,
                             d.title AS doc_title,
+                            d.project_id AS doc_project_id,
+                            d.access_level AS doc_access_level,
                             cat.name AS category
                         ORDER BY score DESC
                         LIMIT $top_k
                     """
 
-                logger.info(f"  - Executing {'graph expansion' if use_graph_expansion else 'simple vector'} search with top_k={top_k * 2}")
-                result = session.run(cypher_query, embedding=query_embedding, top_k=top_k * 2)
+                logger.info(f"  - Executing {'graph expansion' if use_graph_expansion else 'simple vector'} search with top_k_fetch={top_k * 3}")
+                result = session.run(
+                    cypher_query,
+                    embedding=query_embedding,
+                    top_k=top_k,
+                    top_k_fetch=top_k * 3,  # Fetch more to account for filtered results
+                    project_id=project_id,
+                    user_access_level=user_access_level
+                )
 
                 # 결과 포맷팅
                 results = []
@@ -428,6 +522,8 @@ class RAGServiceNeo4j:
                             "has_list": record.get("has_list"),
                             "category": record.get("category"),
                             "file_path": record.get("file_path"),
+                            "project_id": record.get("doc_project_id") or record.get("chunk_project_id"),
+                            "access_level": record.get("doc_access_level") or record.get("chunk_access_level"),
                         },
                         "distance": 1 - record.get("score", 0),  # 유사도 -> 거리 변환
                         "relevance_score": record.get("score", 0),
@@ -452,10 +548,12 @@ class RAGServiceNeo4j:
 
                     results.append(item)
 
-                # 카테고리 필터 적용 (메타데이터 필터)
+                # 카테고리 필터 적용 (메타데이터 필터) - 권한 필터는 이미 Cypher에서 적용됨
                 if filter_metadata and "category" in filter_metadata:
                     filter_category = filter_metadata["category"]
                     results = [r for r in results if r["metadata"].get("category") == filter_category]
+
+                logger.info(f"  - Access control filtered: project_id={project_id}, user_level={user_access_level}")
 
                 logger.info(f"  - Retrieved {record_count} raw results from Neo4j")
 
@@ -501,7 +599,7 @@ class RAGServiceNeo4j:
             return False
 
     def get_collection_stats(self) -> Dict:
-        """Neo4j 상태 정보 반환"""
+        """Neo4j 상태 정보 반환 (프로젝트별 통계 포함)"""
         try:
             with self.driver.session() as session:
                 # 문서 및 청크 수 조회
@@ -519,6 +617,20 @@ class RAGServiceNeo4j:
                     ORDER BY doc_count DESC
                 """).data()
 
+                # 프로젝트별 통계
+                project_stats = session.run("""
+                    MATCH (p:Project)-[:HAS_DOCUMENT]->(d:Document)
+                    RETURN p.project_id AS project_id, count(d) AS doc_count
+                    ORDER BY doc_count DESC
+                """).data()
+
+                # 권한 레벨별 통계
+                access_level_stats = session.run("""
+                    MATCH (d:Document)
+                    RETURN d.access_level AS access_level, count(d) AS doc_count
+                    ORDER BY access_level DESC
+                """).data()
+
                 return {
                     "vector_db": "neo4j",
                     "graph_db": "neo4j",
@@ -527,7 +639,10 @@ class RAGServiceNeo4j:
                     "total_chunks": record["chunk_count"] if record else 0,
                     "vector_size": self.embedding_dim,
                     "categories": category_stats,
+                    "projects": project_stats,
+                    "access_levels": access_level_stats,
                     "graph_rag_enabled": True,
+                    "access_control_enabled": True,
                 }
 
         except Exception as e:

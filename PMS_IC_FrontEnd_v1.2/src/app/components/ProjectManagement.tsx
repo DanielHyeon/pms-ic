@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Plus, Search, Star, Edit2, Trash2, Users, CheckCircle, Clock, Pause, XCircle, AlertCircle, ChevronRight } from 'lucide-react';
+import { toastService } from '../../services/toast';
 import { Project, ProjectStatus } from '../../types/project';
 import { useProject } from '../../contexts/ProjectContext';
 import { apiService } from '../../services/api';
@@ -122,7 +123,12 @@ export default function ProjectManagement({ userRole }: ProjectManagementProps) 
   // 선택한 프로젝트로 작업하기
   const handleWorkWithProject = async () => {
     if (selectedProjectId) {
+      const project = projects.find(p => p.id === selectedProjectId);
       await selectProject(selectedProjectId);
+      toastService.success(
+        `"${project?.name || '프로젝트'}"가 작업 프로젝트로 설정되었습니다.`,
+        '프로젝트 선택 완료'
+      );
     }
   };
 
@@ -337,13 +343,26 @@ export default function ProjectManagement({ userRole }: ProjectManagementProps) 
                     onClick={() => handleSelectProject(project.id)}
                   >
                     <td className="px-4 py-4">
-                      <input
-                        type="radio"
-                        name="selectedProject"
-                        checked={isSelected}
-                        onChange={() => handleSelectProject(project.id)}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500"
-                      />
+                      <div className="flex items-center gap-3">
+                        {/* Radio for selection */}
+                        <input
+                          type="radio"
+                          name="selectedProject"
+                          checked={isSelected}
+                          onChange={() => handleSelectProject(project.id)}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                          title="프로젝트 선택"
+                        />
+                        {/* Current working project indicator */}
+                        <div
+                          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                            isCurrent ? 'border-green-500 bg-green-500' : 'border-gray-300'
+                          }`}
+                          title={isCurrent ? '현재 작업 중인 프로젝트' : ''}
+                        >
+                          {isCurrent && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                        </div>
+                      </div>
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
@@ -458,8 +477,16 @@ export default function ProjectManagement({ userRole }: ProjectManagementProps) 
       )}
 
       {/* 범례 */}
-      <div className="text-sm text-gray-500">
-        <Star className="inline text-yellow-500 fill-yellow-500" size={14} /> = 대표 프로젝트 (대시보드 기본 표시)
+      <div className="flex items-center gap-6 text-sm text-gray-500">
+        <div>
+          <Star className="inline text-yellow-500 fill-yellow-500" size={14} /> = 대표 프로젝트 (대시보드 기본 표시)
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="inline-flex w-4 h-4 rounded-full border-2 border-green-500 bg-green-500 items-center justify-center">
+            <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+          </div>
+          <span>= 현재 작업 중인 프로젝트</span>
+        </div>
       </div>
 
       {/* 프로젝트 생성 다이얼로그 */}

@@ -630,7 +630,7 @@ function UserManagementTab() {
                 </div>
                 <div className="flex items-center gap-2">
                   <select
-                    value={user.systemRole}
+                    value={user.systemRole ?? 'user'}
                     onChange={(e) => {
                       e.stopPropagation();
                       handleChangeSystemRole(user.id, e.target.value as SystemRole);
@@ -1262,7 +1262,7 @@ function ProjectPermissionsTab({ userRole, canManage }: { userRole: UserRole; ca
             <label htmlFor="project-select" className="text-sm font-medium text-gray-700">프로젝트:</label>
             <select
               id="project-select"
-              value={selectedProjectId}
+              value={selectedProjectId ?? ''}
               onChange={(e) => setSelectedProjectId(e.target.value)}
               aria-label="프로젝트 선택"
               className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[300px]"

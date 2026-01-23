@@ -38,6 +38,18 @@ class LLMServiceState:
             "MODEL_PATH",
             "./models/google.gemma-3-12b-pt.Q5_K_M.gguf"
         )
+        # Lightweight and Medium model paths for dual-model configuration
+        self._lightweight_model_path: str = os.getenv(
+            "LIGHTWEIGHT_MODEL_PATH",
+            "./models/Qwen3-8B-Q5_K_M.gguf"
+        )
+        self._medium_model_path: str = os.getenv(
+            "MEDIUM_MODEL_PATH",
+            "./models/google.gemma-3-12b-pt.Q5_K_M.gguf"
+        )
+        # OCR engine configuration
+        # Options: varco, paddle, tesseract, pypdf
+        self._ocr_engine: str = os.getenv("OCR_ENGINE", "varco")
         self._initialized = True
         logger.info("LLMServiceState singleton initialized")
 
@@ -82,6 +94,46 @@ class LLMServiceState:
         self._current_model_path = value
 
     @property
+    def lightweight_model_path(self) -> str:
+        """Get the lightweight model path"""
+        return self._lightweight_model_path
+
+    @lightweight_model_path.setter
+    def lightweight_model_path(self, value: str):
+        """Set the lightweight model path"""
+        self._lightweight_model_path = value
+        os.environ["LIGHTWEIGHT_MODEL_PATH"] = value
+        logger.info(f"Lightweight model path changed to: {value}")
+
+    @property
+    def medium_model_path(self) -> str:
+        """Get the medium model path"""
+        return self._medium_model_path
+
+    @medium_model_path.setter
+    def medium_model_path(self, value: str):
+        """Set the medium model path"""
+        self._medium_model_path = value
+        os.environ["MEDIUM_MODEL_PATH"] = value
+        logger.info(f"Medium model path changed to: {value}")
+
+    @property
+    def ocr_engine(self) -> str:
+        """Get the current OCR engine"""
+        return self._ocr_engine
+
+    @ocr_engine.setter
+    def ocr_engine(self, value: str):
+        """Set the OCR engine"""
+        valid_engines = {"varco", "paddle", "tesseract", "pypdf"}
+        if value.lower() not in valid_engines:
+            raise ValueError(f"Invalid OCR engine: {value}. Valid options: {valid_engines}")
+        self._ocr_engine = value.lower()
+        # Update environment variable so pdf_ocr_pipeline picks it up
+        os.environ["OCR_ENGINE"] = value.lower()
+        logger.info(f"OCR engine changed to: {value}")
+
+    @property
     def is_model_loaded(self) -> bool:
         """Check if model is loaded"""
         return self._llm is not None
@@ -119,7 +171,10 @@ class LLMServiceState:
             "model_loaded": self.is_model_loaded,
             "rag_service_loaded": self.is_rag_loaded,
             "chat_workflow_loaded": self.is_workflow_loaded,
-            "current_model_path": self._current_model_path
+            "current_model_path": self._current_model_path,
+            "lightweight_model_path": self._lightweight_model_path,
+            "medium_model_path": self._medium_model_path,
+            "ocr_engine": self._ocr_engine
         }
 
 
