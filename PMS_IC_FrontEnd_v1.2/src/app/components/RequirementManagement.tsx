@@ -105,7 +105,7 @@ const categoryConfig: Record<RequirementCategory, { label: string; color: string
 
 export default function RequirementManagement({ userRole }: RequirementManagementProps) {
   const { currentProject } = useProject();
-  const { data: requirements = [], isLoading } = useRequirements(currentProject?.id);
+  const { data: requirements = [], isLoading, refetch } = useRequirements(currentProject?.id);
   const createMutation = useCreateRequirement();
   const updateMutation = useUpdateRequirement();
   const linkMutation = useLinkRequirementToTask();
@@ -361,7 +361,7 @@ export default function RequirementManagement({ userRole }: RequirementManagemen
                 ))}
               </SelectContent>
             </Select>
-            <Button variant="outline" onClick={loadRequirements} disabled={isLoading}>
+            <Button variant="outline" onClick={() => refetch()} disabled={isLoading}>
               <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
             </Button>
           </div>
