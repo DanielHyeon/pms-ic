@@ -848,15 +848,15 @@ export default function RequirementManagement({ userRole }: RequirementManagemen
             <Button
               variant="outline"
               onClick={() => setIsEditDialogOpen(false)}
-              disabled={isEditing}
+              disabled={updateMutation.isPending}
             >
               취소
             </Button>
             <Button
               onClick={handleUpdateRequirement}
-              disabled={!editRequirement.title.trim() || isEditing}
+              disabled={!editRequirement.title.trim() || updateMutation.isPending}
             >
-              {isEditing ? (
+              {updateMutation.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   저장 중...
