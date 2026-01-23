@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   CheckCircle2,
   Circle,
@@ -17,6 +17,19 @@ import {
 } from 'lucide-react';
 import { UserRole } from '../App';
 import { apiService } from '../../services/api';
+import {
+  useAllPhases,
+  usePhaseDeliverables,
+  usePhaseKpis,
+  useCreatePhase,
+  useUpdatePhase,
+  useDeletePhase,
+  useUploadDeliverable,
+  useApproveDeliverable,
+  useCreatePhaseKpi,
+  useUpdatePhaseKpi,
+  useDeletePhaseKpi,
+} from '../../hooks/api/usePhases';
 
 interface Phase {
   id: string;
@@ -154,7 +167,7 @@ const initialPhases: Phase[] = [
 
 export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
   const [phases, setPhases] = useState<Phase[]>(initialPhases);
-  const [selectedPhase, setSelectedPhase] = useState<Phase>(phases[2]); // 현재 진행 중인 3단계
+  const [selectedPhase, setSelectedPhase] = useState<Phase>(initialPhases[2]); // 현재 진행 중인 3단계
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedDeliverable, setSelectedDeliverable] = useState<Deliverable | null>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -175,6 +188,20 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
     endDate: '',
     progress: 0,
   });
+
+  // TanStack Query hooks
+  const { data: phasesData } = useAllPhases();
+  const { data: deliverables } = usePhaseDeliverables(selectedPhase.id);
+  const { data: kpis } = usePhaseKpis(selectedPhase.id);
+
+  const createPhaseMutation = useCreatePhase();
+  const updatePhaseMutation = useUpdatePhase();
+  const deletePhaseMutation = useDeletePhase();
+  const uploadDeliverableMutation = useUploadDeliverable();
+  const approveDeliverableMutation = useApproveDeliverable();
+  const createKpiMutation = useCreatePhaseKpi();
+  const updateKpiMutation = useUpdatePhaseKpi();
+  const deleteKpiMutation = useDeletePhaseKpi();
 
   const canEdit = !['auditor', 'business_analyst'].includes(userRole);
   const canApprove = ['sponsor', 'pmo_head', 'pm'].includes(userRole);
@@ -311,95 +338,49 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
     kpis: [],
   });
 
-  const loadPhaseDetails = async (phaseId: string) => {
-    try {
-      const [deliverableResponse, kpiResponse] = await Promise.all([
-        apiService.getPhaseDeliverables(phaseId),
-        apiService.getPhaseKpis(phaseId),
-      ]);
+  // Sync phases from query data
+  const syncedPhases = (() => {
+    if (!phasesData) return phases;
+    const phaseData = normalizeResponse(phasesData, initialPhases);
+    const phasesArray = Array.isArray(phaseData) ? phaseData : [];
 
-      const deliverableData = normalizeResponse(deliverableResponse, []);
-      const kpiData = normalizeResponse(kpiResponse, []);
+    if (!phasesArray.length) return phases;
 
-      const deliverables = Array.isArray(deliverableData)
-        ? deliverableData.map(mapDeliverableFromApi)
+    return phasesArray.map((phase: any) => {
+      const isUiPhase = ['completed', 'inProgress', 'pending'].includes(phase.status);
+      const basePhase = isUiPhase ? phase : mapPhaseFromApi(phase);
+      const phaseDeliverables = isUiPhase
+        ? phase.deliverables || []
+        : Array.isArray(phase.deliverables)
+        ? phase.deliverables.map(mapDeliverableFromApi)
         : [];
-      const kpis = Array.isArray(kpiData) ? kpiData.map(mapKpiFromApi) : [];
+      const phaseKpis = isUiPhase
+        ? phase.kpis || []
+        : Array.isArray(phase.kpis)
+        ? phase.kpis.map(mapKpiFromApi)
+        : [];
 
-      setPhases((prev) =>
-        prev.map((phase) =>
-          phase.id === phaseId
-            ? {
-                ...phase,
-                deliverables: deliverables.length ? deliverables : phase.deliverables,
-                kpis: kpis.length ? kpis : phase.kpis,
-              }
-            : phase
-        )
-      );
+      return {
+        ...basePhase,
+        deliverables: phaseDeliverables,
+        kpis: phaseKpis,
+      };
+    });
+  })();
 
-      setSelectedPhase((prev) =>
-        prev.id === phaseId
-          ? {
-              ...prev,
-              deliverables: deliverables.length ? deliverables : prev.deliverables,
-              kpis: kpis.length ? kpis : prev.kpis,
-            }
-          : prev
-      );
-    } catch (error) {
-      console.warn('Failed to load phase details', error);
-    }
+  // Merge deliverables and KPIs from dedicated queries
+  const currentPhaseWithDetails: Phase = {
+    ...selectedPhase,
+    deliverables: deliverables
+      ? (Array.isArray(deliverables) ? deliverables.map(mapDeliverableFromApi) : selectedPhase.deliverables)
+      : selectedPhase.deliverables,
+    kpis: kpis
+      ? (Array.isArray(kpis) ? kpis.map(mapKpiFromApi) : selectedPhase.kpis)
+      : selectedPhase.kpis,
   };
-
-  useEffect(() => {
-    const loadPhases = async () => {
-      try {
-        const response = await apiService.getPhases();
-        const phaseData = normalizeResponse(response, initialPhases);
-        const phasesArray = Array.isArray(phaseData) ? phaseData : [];
-
-        const mappedPhases = phasesArray.length
-          ? phasesArray.map((phase: any) => {
-              const isUiPhase = ['completed', 'inProgress', 'pending'].includes(phase.status);
-              const basePhase = isUiPhase ? phase : mapPhaseFromApi(phase);
-              const deliverables = isUiPhase
-                ? phase.deliverables || []
-                : Array.isArray(phase.deliverables)
-                ? phase.deliverables.map(mapDeliverableFromApi)
-                : [];
-              const kpis = isUiPhase
-                ? phase.kpis || []
-                : Array.isArray(phase.kpis)
-                ? phase.kpis.map(mapKpiFromApi)
-                : [];
-
-              return {
-                ...basePhase,
-                deliverables,
-                kpis,
-              };
-            })
-          : initialPhases;
-
-        setPhases(mappedPhases);
-        const nextSelected =
-          mappedPhases.find((phase) => phase.status === 'inProgress') || mappedPhases[0];
-        if (nextSelected) {
-          setSelectedPhase(nextSelected);
-          await loadPhaseDetails(nextSelected.id);
-        }
-      } catch (error) {
-        console.warn('Failed to load phases', error);
-      }
-    };
-
-    void loadPhases();
-  }, []);
 
   const handlePhaseSelect = (phase: Phase) => {
     setSelectedPhase(phase);
-    void loadPhaseDetails(phase.id);
   };
 
   const handleUpload = (deliverableId: string) => {
@@ -417,80 +398,24 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
     if (isNewDeliverable && !newDeliverableName.trim()) return;
     if (!isNewDeliverable && !selectedDeliverable) return;
 
+    const formData = new FormData();
+    formData.append('file', uploadFile);
+    if (isNewDeliverable) {
+      formData.append('name', newDeliverableName.trim());
+      if (newDeliverableDescription.trim()) {
+        formData.append('description', newDeliverableDescription.trim());
+      }
+      formData.append('type', newDeliverableType);
+    } else if (selectedDeliverable) {
+      formData.append('deliverableId', selectedDeliverable.id);
+      formData.append('name', selectedDeliverable.name);
+    }
+
     try {
-      const response = await apiService.uploadDeliverable({
+      await uploadDeliverableMutation.mutateAsync({
         phaseId: selectedPhase.id,
-        deliverableId: isNewDeliverable ? undefined : selectedDeliverable?.id,
-        file: uploadFile,
-        name: isNewDeliverable ? newDeliverableName.trim() : selectedDeliverable?.name,
-        description: isNewDeliverable ? newDeliverableDescription.trim() : undefined,
-        type: isNewDeliverable ? newDeliverableType : undefined,
+        formData,
       });
-
-      const deliverableData = normalizeResponse(response, null);
-      const updatedDeliverable =
-        deliverableData && deliverableData.id ? mapDeliverableFromApi(deliverableData) : null;
-
-      setPhases((prevPhases) =>
-        prevPhases.map((phase) => {
-          if (phase.id === selectedPhase.id) {
-            return {
-              ...phase,
-              deliverables: isNewDeliverable
-                ? [
-                    updatedDeliverable || {
-                      id: Date.now().toString(),
-                      name: newDeliverableName.trim(),
-                      status: 'review' as const,
-                      uploadDate: new Date().toISOString().split('T')[0],
-                      fileName: uploadFile.name,
-                      fileSize: uploadFile.size,
-                    },
-                    ...phase.deliverables,
-                  ]
-                : phase.deliverables.map((d) =>
-                    d.id === selectedDeliverable?.id
-                      ? updatedDeliverable || {
-                          ...d,
-                          status: 'review' as const,
-                          uploadDate: new Date().toISOString().split('T')[0],
-                          fileName: uploadFile.name,
-                          fileSize: uploadFile.size,
-                        }
-                      : d
-                  ),
-            };
-          }
-          return phase;
-        })
-      );
-
-      setSelectedPhase((prev) => ({
-        ...prev,
-        deliverables: isNewDeliverable
-          ? [
-              updatedDeliverable || {
-                id: Date.now().toString(),
-                name: newDeliverableName.trim(),
-                status: 'review' as const,
-                uploadDate: new Date().toISOString().split('T')[0],
-                fileName: uploadFile.name,
-                fileSize: uploadFile.size,
-              },
-              ...prev.deliverables,
-            ]
-          : prev.deliverables.map((d) =>
-              d.id === selectedDeliverable?.id
-                ? updatedDeliverable || {
-                    ...d,
-                    status: 'review' as const,
-                    uploadDate: new Date().toISOString().split('T')[0],
-                    fileName: uploadFile.name,
-                    fileSize: uploadFile.size,
-                  }
-                : d
-            ),
-      }));
     } catch (error) {
       console.warn('Deliverable upload failed', error);
     }
@@ -505,60 +430,15 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
   };
 
   const handleApprove = async (deliverableId: string, approved: boolean) => {
-    const roleNames: Record<UserRole, string> = {
-      sponsor: '프로젝트 스폰서',
-      pmo_head: 'PMO 총괄',
-      pm: 'PM',
-      developer: '개발팀',
-      qa: 'QA팀',
-      business_analyst: '현업 분석가',
-      auditor: '외부 감리',
-      admin: '시스템 관리자',
-    };
-
-    let updatedDeliverable: Deliverable | null = null;
-
     try {
-      const response = await apiService.approveDeliverable(deliverableId, approved);
-      const deliverableData = normalizeResponse(response, null);
-      updatedDeliverable =
-        deliverableData && deliverableData.id ? mapDeliverableFromApi(deliverableData) : null;
+      await approveDeliverableMutation.mutateAsync({
+        deliverableId,
+        approved,
+        phaseId: selectedPhase.id,
+      });
     } catch (error) {
       console.warn('Deliverable approval failed', error);
     }
-
-    setPhases((prevPhases) =>
-      prevPhases.map((phase) => {
-        if (phase.id === selectedPhase.id) {
-          return {
-            ...phase,
-            deliverables: phase.deliverables.map((d) =>
-              d.id === deliverableId
-                ? updatedDeliverable || {
-                    ...d,
-                    status: approved ? ('approved' as const) : ('rejected' as const),
-                    approver: approved ? roleNames[userRole] : undefined,
-                  }
-                : d
-            ),
-          };
-        }
-        return phase;
-      })
-    );
-
-    setSelectedPhase((prev) => ({
-      ...prev,
-      deliverables: prev.deliverables.map((d) =>
-        d.id === deliverableId
-          ? updatedDeliverable || {
-              ...d,
-              status: approved ? ('approved' as const) : ('rejected' as const),
-              approver: approved ? roleNames[userRole] : undefined,
-            }
-          : d
-      ),
-    }));
   };
 
   const handleDownload = async (deliverable: Deliverable) => {
@@ -593,40 +473,18 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
     };
 
     try {
-      const response = editingKpi
-        ? await apiService.updateKpi(selectedPhase.id, editingKpi.id, payload)
-        : await apiService.createKpi(selectedPhase.id, payload);
-
-      const kpiData = normalizeResponse(response, null);
-      const savedKpi = kpiData && kpiData.id
-        ? mapKpiFromApi(kpiData)
-        : {
-            id: editingKpi?.id || Date.now().toString(),
-            name: payload.name,
-            target: payload.target,
-            current: payload.current,
-            status: kpiForm.status,
-          };
-
-      setPhases((prev) =>
-        prev.map((phase) =>
-          phase.id === selectedPhase.id
-            ? {
-                ...phase,
-                kpis: editingKpi
-                  ? phase.kpis.map((item) => (item.id === editingKpi.id ? savedKpi : item))
-                  : [...phase.kpis, savedKpi],
-              }
-            : phase
-        )
-      );
-
-      setSelectedPhase((prev) => ({
-        ...prev,
-        kpis: editingKpi
-          ? prev.kpis.map((item) => (item.id === editingKpi.id ? savedKpi : item))
-          : [...prev.kpis, savedKpi],
-      }));
+      if (editingKpi) {
+        await updateKpiMutation.mutateAsync({
+          phaseId: selectedPhase.id,
+          kpiId: editingKpi.id,
+          data: payload,
+        });
+      } else {
+        await createKpiMutation.mutateAsync({
+          phaseId: selectedPhase.id,
+          data: payload,
+        });
+      }
     } catch (error) {
       console.warn('KPI save failed', error);
     }
@@ -656,73 +514,21 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
       startDate: phaseForm.startDate || undefined,
       endDate: phaseForm.endDate || undefined,
       progress: phaseForm.progress,
-      orderNum: editingPhase ? undefined : phases.length + 1,
+      orderNum: editingPhase ? undefined : syncedPhases.length + 1,
     };
 
     try {
-      let savedPhase: Phase;
-
       if (editingPhase) {
-        const response = await apiService.updatePhase(editingPhase.id, payload);
-        const phaseData = normalizeResponse(response, null);
-        savedPhase = phaseData
-          ? {
-              id: phaseData.id || editingPhase.id,
-              name: phaseData.name || payload.name,
-              description: phaseData.description || payload.description,
-              status: mapPhaseStatus(phaseData.status) || phaseForm.status,
-              progress: phaseData.progress ?? payload.progress,
-              startDate: formatDate(phaseData.startDate) || payload.startDate || '',
-              endDate: formatDate(phaseData.endDate) || payload.endDate || '',
-              deliverables: editingPhase.deliverables,
-              kpis: editingPhase.kpis,
-            }
-          : {
-              ...editingPhase,
-              name: payload.name,
-              description: payload.description,
-              status: phaseForm.status,
-              progress: payload.progress,
-              startDate: payload.startDate || editingPhase.startDate,
-              endDate: payload.endDate || editingPhase.endDate,
-            };
+        await updatePhaseMutation.mutateAsync({
+          id: editingPhase.id,
+          data: payload,
+        });
       } else {
         const projectId = 'proj-001';
-        const response = await apiService.createPhase(projectId, payload);
-        const phaseData = normalizeResponse(response, null);
-        savedPhase = phaseData
-          ? {
-              id: phaseData.id || `phase-${Date.now()}`,
-              name: phaseData.name || payload.name,
-              description: phaseData.description || payload.description,
-              status: mapPhaseStatus(phaseData.status) || phaseForm.status,
-              progress: phaseData.progress ?? payload.progress,
-              startDate: formatDate(phaseData.startDate) || payload.startDate || '',
-              endDate: formatDate(phaseData.endDate) || payload.endDate || '',
-              deliverables: [],
-              kpis: [],
-            }
-          : {
-              id: `phase-${Date.now()}`,
-              name: payload.name,
-              description: payload.description,
-              status: phaseForm.status,
-              progress: payload.progress,
-              startDate: payload.startDate || '',
-              endDate: payload.endDate || '',
-              deliverables: [],
-              kpis: [],
-            };
-      }
-
-      setPhases((prev) =>
-        editingPhase
-          ? prev.map((phase) => (phase.id === editingPhase.id ? savedPhase : phase))
-          : [...prev, savedPhase]
-      );
-
-      if (editingPhase && selectedPhase.id === editingPhase.id) {
-        setSelectedPhase(savedPhase);
+        await createPhaseMutation.mutateAsync({
+          projectId,
+          ...payload,
+        });
       }
     } catch (error) {
       console.warn('Phase save failed', error);
@@ -744,10 +550,9 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
     if (!confirm('이 단계를 삭제하시겠습니까?')) return;
 
     try {
-      await apiService.deletePhase(phaseId);
-      setPhases((prev) => prev.filter((phase) => phase.id !== phaseId));
-      if (selectedPhase.id === phaseId && phases.length > 1) {
-        const remaining = phases.filter((p) => p.id !== phaseId);
+      await deletePhaseMutation.mutateAsync(phaseId);
+      if (selectedPhase.id === phaseId && syncedPhases.length > 1) {
+        const remaining = syncedPhases.filter((p) => p.id !== phaseId);
         setSelectedPhase(remaining[0]);
       }
     } catch (error) {
@@ -811,7 +616,7 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Phase List */}
         <div className="space-y-3">
-          {phases.map((phase) => (
+          {syncedPhases.map((phase) => (
             <button
               key={phase.id}
               onClick={() => handlePhaseSelect(phase)}
@@ -876,26 +681,26 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-start justify-between mb-6">
               <div>
-                <h3 className="text-xl font-semibold text-gray-900">{selectedPhase.name}</h3>
-                <p className="text-sm text-gray-500 mt-1">{selectedPhase.description}</p>
+                <h3 className="text-xl font-semibold text-gray-900">{currentPhaseWithDetails.name}</h3>
+                <p className="text-sm text-gray-500 mt-1">{currentPhaseWithDetails.description}</p>
               </div>
               <span
                 className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(
-                  selectedPhase.status
+                  currentPhaseWithDetails.status
                 )}`}
               >
-                {getStatusLabel(selectedPhase.status)}
+                {getStatusLabel(currentPhaseWithDetails.status)}
               </span>
             </div>
 
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div className="p-4 bg-gray-50 rounded-lg">
                 <p className="text-xs text-gray-500">시작일</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">{selectedPhase.startDate}</p>
+                <p className="text-sm font-medium text-gray-900 mt-1">{currentPhaseWithDetails.startDate}</p>
               </div>
               <div className="p-4 bg-gray-50 rounded-lg">
                 <p className="text-xs text-gray-500">종료일</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">{selectedPhase.endDate}</p>
+                <p className="text-sm font-medium text-gray-900 mt-1">{currentPhaseWithDetails.endDate}</p>
               </div>
             </div>
 
@@ -925,7 +730,7 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
                 )}
               </div>
               <div className="space-y-2">
-                {selectedPhase.deliverables.map((deliverable) => (
+                {currentPhaseWithDetails.deliverables.map((deliverable) => (
                   <div
                     key={deliverable.id}
                     className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
@@ -996,7 +801,7 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
             </div>
 
             {/* KPIs */}
-            {(selectedPhase.kpis.length > 0 || canManageKpi) && (
+            {(currentPhaseWithDetails.kpis.length > 0 || canManageKpi) && (
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="font-medium text-gray-900 flex items-center gap-2">
@@ -1018,7 +823,7 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
                   )}
                 </div>
                 <div className="space-y-2">
-                  {selectedPhase.kpis.map((kpi) => (
+                  {currentPhaseWithDetails.kpis.map((kpi) => (
                     <div
                       key={kpi.id}
                       className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
@@ -1057,18 +862,10 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
                               onClick={async () => {
                                 if (!confirm('해당 KPI를 삭제하시겠습니까?')) return;
                                 try {
-                                  await apiService.deleteKpi(selectedPhase.id, kpi.id);
-                                  setPhases((prev) =>
-                                    prev.map((phase) =>
-                                      phase.id === selectedPhase.id
-                                        ? { ...phase, kpis: phase.kpis.filter((item) => item.id !== kpi.id) }
-                                        : phase
-                                    )
-                                  );
-                                  setSelectedPhase((prev) => ({
-                                    ...prev,
-                                    kpis: prev.kpis.filter((item) => item.id !== kpi.id),
-                                  }));
+                                  await deleteKpiMutation.mutateAsync({
+                                    phaseId: selectedPhase.id,
+                                    kpiId: kpi.id,
+                                  });
                                 } catch (error) {
                                   console.warn('KPI delete failed', error);
                                 }
@@ -1088,7 +885,7 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
             )}
           </div>
 
-          {selectedPhase.status === 'inProgress' && (
+          {currentPhaseWithDetails.status === 'inProgress' && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
               <div className="flex items-start gap-3">
                 <AlertCircle className="text-amber-600 mt-0.5" size={20} />
