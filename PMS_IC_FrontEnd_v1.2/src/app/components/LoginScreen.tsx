@@ -1,11 +1,8 @@
 import { useState } from 'react';
-import { UserInfo, UserRole } from '../App';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Shield, Lock, User, AlertCircle, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 import { apiService } from '../../services/api';
-
-interface LoginScreenProps {
-  onLogin: (userInfo: UserInfo) => void;
-}
+import { useAuthStore, UserRole, UserInfo } from '../../stores/authStore';
 
 // Demo user accounts - password is 'password123' for all users (matches database)
 const demoUsers: Record<string, { password: string; userInfo: UserInfo }> = {
@@ -91,13 +88,25 @@ const demoUsers: Record<string, { password: string; userInfo: UserInfo }> = {
   },
 };
 
-export default function LoginScreen({ onLogin }: LoginScreenProps) {
+export default function LoginScreen() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { login } = useAuthStore();
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showQuickLogin, setShowQuickLogin] = useState(true);
+
+  // Get the redirect path from location state or default to '/'
+  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/';
+
+  const handleLogin = (userInfo: UserInfo, token?: string) => {
+    login(userInfo, token);
+    navigate(from, { replace: true });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,26 +118,26 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
 
       if (response.token && response.user) {
         apiService.setToken(response.token);
-        onLogin(response.user);
+        handleLogin(response.user as UserInfo, response.token);
       } else {
         // Fallback to demo users
         const user = demoUsers[email.toLowerCase()];
 
         if (user && user.password === password) {
           apiService.setToken('demo-token-' + email);
-          onLogin(user.userInfo);
+          handleLogin(user.userInfo);
         } else {
           setError('이메일 또는 비밀번호가 올바르지 않습니다.');
           setIsLoading(false);
         }
       }
     } catch (err) {
-      // API 실패 시 데모 사용자로 fallback
+      // API fail fallback to demo users
       const user = demoUsers[email.toLowerCase()];
 
       if (user && user.password === password) {
         apiService.setToken('demo-token-' + email);
-        onLogin(user.userInfo);
+        handleLogin(user.userInfo);
       } else {
         setError('이메일 또는 비밀번호가 올바르지 않습니다.');
         setIsLoading(false);
@@ -144,22 +153,19 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
       setPassword(user.password);
 
       try {
-        // 실제 백엔드 로그인 시도
         const response = await apiService.login(userEmail, user.password);
 
         if (response.token && response.user) {
           apiService.setToken(response.token);
-          onLogin(response.user);
+          handleLogin(response.user as UserInfo, response.token);
         } else {
-          // Fallback: Mock 토큰 설정
           apiService.setToken('demo-token-' + userEmail);
-          onLogin(user.userInfo);
+          handleLogin(user.userInfo);
         }
       } catch (err) {
-        // API 실패 시에도 Mock 토큰 설정
         apiService.setToken('demo-token-' + userEmail);
         setTimeout(() => {
-          onLogin(user.userInfo);
+          handleLogin(user.userInfo);
         }, 800);
       }
     }
@@ -338,7 +344,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
 
       {/* Footer */}
       <div className="absolute bottom-6 left-0 right-0 text-center text-white/60 text-xs">
-        <p>© 2025 InsureTech AI-PMS. All rights reserved. | Version 1.0 | On-Premise Secure Mode</p>
+        <p>© 2025 InsureTech AI-PMS. All rights reserved. | Version 2.0 | React 19 + Router v7</p>
       </div>
     </div>
   );
