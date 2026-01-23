@@ -1,9 +1,19 @@
 import { useState, useEffect } from 'react';
 import { Shield, User, Lock, Check, X, AlertCircle, Building2, FolderKanban, Users, Crown, UserPlus, Trash2, Edit2, Search, UserCog, ChevronDown, ChevronRight, Briefcase } from 'lucide-react';
 import { UserRole } from '../App';
-import { apiService } from '../../services/api';
 import { useProject } from '../../contexts/ProjectContext';
 import { ProjectRole, PROJECT_ROLE_LABELS, SystemRole, SYSTEM_ROLE_LABELS } from '../../types/auth';
+import {
+  useUsers,
+  useUpdateUserSystemRole,
+  useAssignPM,
+  useRevokePM,
+  usePermissions,
+  useUpdateRolePermission,
+  useProjectMembers,
+  useUpdateProjectMemberRole,
+  useRemoveProjectMember,
+} from '../../hooks/api/useRoles';
 
 type TabType = 'users' | 'system' | 'project';
 
@@ -394,8 +404,6 @@ export default function RoleManagement({ userRole }: { userRole: UserRole }) {
 // ========== User Management Tab (Admin Only) ==========
 function UserManagementTab() {
   const { projects } = useProject();
-  const [users, setUsers] = useState<SystemUser[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -403,29 +411,11 @@ function UserManagementTab() {
   const [showAssignPMDialog, setShowAssignPMDialog] = useState(false);
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadUsers();
-  }, []);
-
-  const loadUsers = async () => {
-    setLoading(true);
-    try {
-      const data = await apiService.getUsers();
-      // Add mock project roles
-      const usersWithRoles = (data as SystemUser[]).map(user => ({
-        ...user,
-        projectRoles: user.legacyRole === 'pm' ? [
-          { projectId: '1', projectName: 'AI 기반 손해보험 지급심사', role: 'pm' as ProjectRole }
-        ] : []
-      }));
-      setUsers(usersWithRoles);
-    } catch (error) {
-      console.error('Failed to load users:', error);
-      setMessage({ type: 'error', text: '사용자 목록을 불러오는데 실패했습니다' });
-    } finally {
-      setLoading(false);
-    }
-  };
+  // TanStack Query hooks
+  const { data: users = [], isLoading: loading } = useUsers();
+  const updateSystemRoleMutation = useUpdateUserSystemRole();
+  const assignPMMutation = useAssignPM();
+  const revokePMMutation = useRevokePM();
 
   // Filter users
   const filteredUsers = users.filter(user => {
@@ -439,8 +429,7 @@ function UserManagementTab() {
   // Change system role
   const handleChangeSystemRole = async (userId: string, newRole: SystemRole) => {
     try {
-      await apiService.updateUserSystemRole(userId, newRole);
-      setUsers(users.map(u => u.id === userId ? { ...u, systemRole: newRole } : u));
+      await updateSystemRoleMutation.mutateAsync({ userId, role: newRole });
       setMessage({ type: 'success', text: `시스템 역할이 ${SYSTEM_ROLE_LABELS[newRole]}(으)로 변경되었습니다` });
       setTimeout(() => setMessage(null), 3000);
     } catch (error) {
@@ -452,25 +441,7 @@ function UserManagementTab() {
   // Assign PM to project
   const handleAssignPM = async (userId: string, projectIds: string[]) => {
     try {
-      await apiService.assignPM(userId, projectIds);
-      // Update local state
-      const projectNames = projectIds.map(id =>
-        projects.find(p => p.id === id)?.name || 'Unknown Project'
-      );
-      setUsers(users.map(u => {
-        if (u.id === userId) {
-          const newRoles = projectIds.map((id, i) => ({
-            projectId: id,
-            projectName: projectNames[i],
-            role: 'pm' as ProjectRole
-          }));
-          return {
-            ...u,
-            projectRoles: [...(u.projectRoles || []), ...newRoles]
-          };
-        }
-        return u;
-      }));
+      await assignPMMutation.mutateAsync({ userId, projectIds });
       setMessage({ type: 'success', text: 'PM 역할이 지정되었습니다' });
       setShowAssignPMDialog(false);
       setTimeout(() => setMessage(null), 3000);
@@ -485,16 +456,7 @@ function UserManagementTab() {
     if (!confirm('이 사용자의 PM 역할을 해제하시겠습니까?')) return;
 
     try {
-      await apiService.revokePM(userId, projectId);
-      setUsers(users.map(u => {
-        if (u.id === userId) {
-          return {
-            ...u,
-            projectRoles: (u.projectRoles || []).filter(r => r.projectId !== projectId)
-          };
-        }
-        return u;
-      }));
+      await revokePMMutation.mutateAsync({ userId, projectId });
       setMessage({ type: 'success', text: 'PM 역할이 해제되었습니다' });
       setTimeout(() => setMessage(null), 3000);
     } catch (error) {
@@ -852,36 +814,14 @@ function AssignPMDialog({ user, projects, existingProjectIds, onClose, onAssign 
 // ========== System Permissions Tab ==========
 function SystemPermissionsTab({ userRole }: { userRole: UserRole }) {
   const [selectedRole, setSelectedRole] = useState<string>(userRole);
-  const [permissions, setPermissions] = useState<Permission[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const canManageRoles = userRole === 'admin';
 
-  useEffect(() => {
-    loadPermissions();
-  }, []);
+  // TanStack Query hooks
+  const { data: permissions = [], isLoading: loading } = usePermissions();
+  const updatePermissionMutation = useUpdateRolePermission();
 
-  const loadPermissions = async () => {
-    try {
-      setLoading(true);
-      const response = await apiService.getPermissions() as any;
-      if (Array.isArray(response)) {
-        setPermissions(response);
-      } else if (response?.data && Array.isArray(response.data)) {
-        setPermissions(response.data);
-      } else {
-        console.warn('Unexpected response format:', response);
-        setPermissions([]);
-      }
-    } catch (error) {
-      console.error('Failed to load permissions:', error);
-      setMessage({ type: 'error', text: '권한 데이터를 불러오는데 실패했습니다' });
-      setPermissions([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const saving = updatePermissionMutation.isPending;
 
   const handlePermissionToggle = async (permissionId: string, currentValue: boolean) => {
     if (!canManageRoles) {
@@ -890,29 +830,17 @@ function SystemPermissionsTab({ userRole }: { userRole: UserRole }) {
     }
 
     try {
-      setSaving(true);
-      await apiService.updateRolePermission(selectedRole, permissionId, !currentValue);
-
-      setPermissions(permissions.map(p => {
-        if (p.id === permissionId) {
-          return {
-            ...p,
-            roles: {
-              ...p.roles,
-              [selectedRole]: !currentValue
-            }
-          };
-        }
-        return p;
-      }));
+      await updatePermissionMutation.mutateAsync({
+        role: selectedRole,
+        permissionId,
+        value: !currentValue,
+      });
 
       setMessage({ type: 'success', text: '권한이 업데이트되었습니다' });
       setTimeout(() => setMessage(null), 3000);
     } catch (error) {
       console.error('Failed to update permission:', error);
       setMessage({ type: 'error', text: '권한 업데이트에 실패했습니다' });
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -1142,8 +1070,6 @@ function SystemPermissionsTab({ userRole }: { userRole: UserRole }) {
 function ProjectPermissionsTab({ userRole, canManage }: { userRole: UserRole; canManage: boolean }) {
   const { currentProject, projects } = useProject();
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [members, setMembers] = useState<ProjectMember[]>([]);
-  const [loading, setLoading] = useState(false);
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -1153,60 +1079,40 @@ function ProjectPermissionsTab({ userRole, canManage }: { userRole: UserRole; ca
     }
   }, [currentProject, selectedProjectId]);
 
-  useEffect(() => {
-    if (selectedProjectId) {
-      loadProjectMembers(selectedProjectId);
-    }
-  }, [selectedProjectId]);
-
-  const loadProjectMembers = async (projectId: string) => {
-    setLoading(true);
-    try {
-      const data = await apiService.getProjectMembers(projectId);
-      setMembers(data);
-    } catch (error) {
-      console.error('Failed to load project members:', error);
-      setMembers([
-        { id: 'm1', userId: 'user-001', userName: '김철수', userEmail: 'kim@example.com', role: 'pm', assignedAt: '2025-01-02' },
-        { id: 'm2', userId: 'user-002', userName: '이영희', userEmail: 'lee@example.com', role: 'owner', assignedAt: '2025-01-02' },
-        { id: 'm3', userId: 'user-003', userName: '박민수', userEmail: 'park@example.com', role: 'part_leader', partName: 'UI/UX 파트', assignedAt: '2025-01-05' },
-        { id: 'm4', userId: 'user-004', userName: '최영수', userEmail: 'choi@example.com', role: 'part_leader', partName: '백엔드 파트', assignedAt: '2025-01-05' },
-        { id: 'm5', userId: 'user-005', userName: '정수진', userEmail: 'jung@example.com', role: 'education_mgr', assignedAt: '2025-01-10' },
-        { id: 'm6', userId: 'user-006', userName: '한미영', userEmail: 'han@example.com', role: 'qa_lead', assignedAt: '2025-01-10' },
-        { id: 'm7', userId: 'user-007', userName: '오현우', userEmail: 'oh@example.com', role: 'ba', assignedAt: '2025-01-10' },
-        { id: 'm8', userId: 'user-008', userName: '김지은', userEmail: 'kim2@example.com', role: 'member', partName: 'UI/UX 파트', assignedAt: '2025-01-15' },
-        { id: 'm9', userId: 'user-009', userName: '이준호', userEmail: 'lee2@example.com', role: 'member', partName: '백엔드 파트', assignedAt: '2025-01-15' },
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // TanStack Query hooks
+  const { data: members = [], isLoading: loading } = useProjectMembers(selectedProjectId || undefined);
+  const updateMemberRoleMutation = useUpdateProjectMemberRole();
+  const removeMemberMutation = useRemoveProjectMember();
 
   const handleChangeRole = async (memberId: string, newRole: ProjectRole) => {
+    if (!selectedProjectId) return;
     try {
-      await apiService.updateProjectMemberRole(selectedProjectId!, memberId, newRole);
-      setMembers(members.map(m => m.id === memberId ? { ...m, role: newRole } : m));
+      await updateMemberRoleMutation.mutateAsync({
+        projectId: selectedProjectId,
+        memberId,
+        role: newRole,
+      });
       setMessage({ type: 'success', text: '역할이 변경되었습니다' });
       setTimeout(() => setMessage(null), 3000);
     } catch (error) {
       console.error('Failed to update role:', error);
-      setMembers(members.map(m => m.id === memberId ? { ...m, role: newRole } : m));
       setMessage({ type: 'success', text: '역할이 변경되었습니다' });
       setTimeout(() => setMessage(null), 3000);
     }
   };
 
   const handleRemoveMember = async (memberId: string) => {
-    if (!confirm('정말 이 멤버를 프로젝트에서 제거하시겠습니까?')) return;
+    if (!selectedProjectId || !confirm('정말 이 멤버를 프로젝트에서 제거하시겠습니까?')) return;
 
     try {
-      await apiService.removeProjectMember(selectedProjectId!, memberId);
-      setMembers(members.filter(m => m.id !== memberId));
+      await removeMemberMutation.mutateAsync({
+        projectId: selectedProjectId,
+        memberId,
+      });
       setMessage({ type: 'success', text: '멤버가 제거되었습니다' });
       setTimeout(() => setMessage(null), 3000);
     } catch (error) {
       console.error('Failed to remove member:', error);
-      setMembers(members.filter(m => m.id !== memberId));
       setMessage({ type: 'success', text: '멤버가 제거되었습니다' });
       setTimeout(() => setMessage(null), 3000);
     }

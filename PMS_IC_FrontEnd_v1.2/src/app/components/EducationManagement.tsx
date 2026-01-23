@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   BookOpen,
   Calendar,
@@ -21,7 +21,17 @@ import {
   Layers,
 } from 'lucide-react';
 import { UserRole } from '../App';
-import { apiService } from '../../services/api';
+import {
+  useEducations,
+  useEducationRoadmaps,
+  useEducationSessions,
+  useCreateEducation,
+  useUpdateEducation,
+  useDeleteEducation,
+  useCreateEducationSession,
+  useUpdateEducationSession,
+  useDeleteEducationSession,
+} from '../../hooks/api/useEducations';
 
 // ========================================
 // 타입 정의
@@ -137,10 +147,6 @@ const getSessionStatusConfig = (status: EducationSession['status']) => {
 
 export default function EducationManagement({ userRole }: { userRole: UserRole }) {
   const [activeTab, setActiveTab] = useState<TabType>('courses');
-  const [educations, setEducations] = useState<Education[]>([]);
-  const [sessions, setSessions] = useState<EducationSession[]>([]);
-  const [roadmaps, setRoadmaps] = useState<EducationRoadmap[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<string>('');
   const [filterRole, setFilterRole] = useState<string>('');
@@ -154,44 +160,28 @@ export default function EducationManagement({ userRole }: { userRole: UserRole }
 
   const canManage = ['pmo_head', 'pm', 'admin'].includes(userRole);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  // TanStack Query hooks
+  const { data: educations = [], isLoading: educationsLoading } = useEducations();
+  const { data: roadmaps = [], isLoading: roadmapsLoading } = useEducationRoadmaps();
+  const { data: sessions = [] } = useEducationSessions(selectedEducationId || undefined);
 
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const [educationsData, roadmapsData] = await Promise.all([
-        apiService.getEducations(),
-        apiService.getEducationRoadmaps(),
-      ]);
-      setEducations(educationsData || []);
-      setRoadmaps(roadmapsData || []);
-    } catch (error) {
-      console.error('Failed to load education data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const createEducationMutation = useCreateEducation();
+  const updateEducationMutation = useUpdateEducation();
+  const deleteEducationMutation = useDeleteEducation();
 
-  const loadSessions = async (educationId: string) => {
-    try {
-      const sessionsData = await apiService.getEducationSessions(educationId);
-      setSessions(sessionsData || []);
-    } catch (error) {
-      console.error('Failed to load sessions:', error);
-    }
-  };
+  const createSessionMutation = useCreateEducationSession();
+  const updateSessionMutation = useUpdateEducationSession();
+  const deleteSessionMutation = useDeleteEducationSession();
+
+  const loading = educationsLoading || roadmapsLoading;
 
   // Education CRUD
   const handleSaveEducation = async (data: Partial<Education>) => {
     try {
       if (editingEducation) {
-        const updated = await apiService.updateEducation(editingEducation.id, data);
-        setEducations(prev => prev.map(e => e.id === editingEducation.id ? { ...e, ...updated } : e));
+        await updateEducationMutation.mutateAsync({ id: editingEducation.id, data });
       } else {
-        const created = await apiService.createEducation(data);
-        setEducations(prev => [created, ...prev]);
+        await createEducationMutation.mutateAsync(data);
       }
       setShowEducationModal(false);
       setEditingEducation(null);
@@ -203,8 +193,7 @@ export default function EducationManagement({ userRole }: { userRole: UserRole }
   const handleDeleteEducation = async (educationId: string) => {
     if (!window.confirm('이 교육 과정을 삭제하시겠습니까?')) return;
     try {
-      await apiService.deleteEducation(educationId);
-      setEducations(prev => prev.filter(e => e.id !== educationId));
+      await deleteEducationMutation.mutateAsync(educationId);
     } catch (error) {
       console.error('Failed to delete education:', error);
     }
@@ -215,11 +204,16 @@ export default function EducationManagement({ userRole }: { userRole: UserRole }
     if (!selectedEducationId) return;
     try {
       if (editingSession) {
-        const updated = await apiService.updateEducationSession(selectedEducationId, editingSession.id, data);
-        setSessions(prev => prev.map(s => s.id === editingSession.id ? { ...s, ...updated } : s));
+        await updateSessionMutation.mutateAsync({
+          educationId: selectedEducationId,
+          sessionId: editingSession.id,
+          data,
+        });
       } else {
-        const created = await apiService.createEducationSession(selectedEducationId, data);
-        setSessions(prev => [created, ...prev]);
+        await createSessionMutation.mutateAsync({
+          educationId: selectedEducationId,
+          data,
+        });
       }
       setShowSessionModal(false);
       setEditingSession(null);
@@ -231,8 +225,10 @@ export default function EducationManagement({ userRole }: { userRole: UserRole }
   const handleDeleteSession = async (sessionId: string) => {
     if (!selectedEducationId || !window.confirm('이 세션을 삭제하시겠습니까?')) return;
     try {
-      await apiService.deleteEducationSession(selectedEducationId, sessionId);
-      setSessions(prev => prev.filter(s => s.id !== sessionId));
+      await deleteSessionMutation.mutateAsync({
+        educationId: selectedEducationId,
+        sessionId,
+      });
     } catch (error) {
       console.error('Failed to delete session:', error);
     }
@@ -400,7 +396,7 @@ export default function EducationManagement({ userRole }: { userRole: UserRole }
                   </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => { setSelectedEducationId(education.id); loadSessions(education.id); setActiveTab('sessions'); }}
+                      onClick={() => { setSelectedEducationId(education.id); setActiveTab('sessions'); }}
                       className="p-2 text-blue-600 hover:bg-blue-50 rounded"
                       title="세션 보기"
                     >

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   FileText,
   Calendar,
@@ -18,8 +18,18 @@ import {
   Search,
 } from 'lucide-react';
 import { UserRole } from '../App';
-import { apiService } from '../../services/api';
 import { useProject } from '../../contexts/ProjectContext';
+import {
+  useMeetings,
+  useCreateMeeting,
+  useUpdateMeeting,
+  useDeleteMeeting,
+  useIssues,
+  useCreateIssue,
+  useUpdateIssue,
+  useDeleteIssue,
+  useUpdateIssueStatus,
+} from '../../hooks/api/useCommon';
 
 // ========================================
 // 타입 정의
@@ -284,10 +294,22 @@ const initialDeliverables: Deliverable[] = [
 export default function CommonManagement({ userRole }: { userRole: UserRole }) {
   const { currentProject } = useProject();
   const [activeTab, setActiveTab] = useState<TabType>('deliverables');
-  const [meetings, setMeetings] = useState<Meeting[]>(initialMeetings);
-  const [issues, setIssues] = useState<Issue[]>(initialIssues);
-  const [deliverables, setDeliverables] = useState<Deliverable[]>(initialDeliverables);
-  const [loading, setLoading] = useState(false);
+  const [deliverables] = useState<Deliverable[]>(initialDeliverables);
+
+  // TanStack Query hooks
+  const { data: meetings = [], isLoading: meetingsLoading } = useMeetings(currentProject?.id);
+  const { data: issues = [], isLoading: issuesLoading } = useIssues(currentProject?.id);
+
+  const createMeetingMutation = useCreateMeeting();
+  const updateMeetingMutation = useUpdateMeeting();
+  const deleteMeetingMutation = useDeleteMeeting();
+
+  const createIssueMutation = useCreateIssue();
+  const updateIssueMutation = useUpdateIssue();
+  const deleteIssueMutation = useDeleteIssue();
+  const updateIssueStatusMutation = useUpdateIssueStatus();
+
+  const loading = meetingsLoading || issuesLoading;
 
   // 필터 상태
   const [meetingFilter, setMeetingFilter] = useState<string>('');
@@ -307,45 +329,22 @@ export default function CommonManagement({ userRole }: { userRole: UserRole }) {
   const canManageIssues = ['pm', 'pmo_head', 'developer', 'qa'].includes(userRole);
   const canManageMeetings = ['pm', 'pmo_head'].includes(userRole);
 
-  // 데이터 로드 (프로젝트가 있을 때만 API 호출, 없으면 초기 데이터 유지)
-  useEffect(() => {
-    if (!currentProject?.id) return;
-
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        const [meetingsData, issuesData] = await Promise.all([
-          apiService.getMeetings(currentProject.id),
-          apiService.getIssues(currentProject.id),
-        ]);
-        // API에서 데이터가 있으면 업데이트, 없으면 초기 데이터 유지
-        if (Array.isArray(meetingsData) && meetingsData.length > 0) {
-          setMeetings(meetingsData);
-        }
-        if (Array.isArray(issuesData) && issuesData.length > 0) {
-          setIssues(issuesData);
-        }
-      } catch (error) {
-        console.warn('Failed to load common management data, using initial data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadData();
-  }, [currentProject?.id]);
-
   // 회의 저장
   const handleSaveMeeting = async (meetingData: Partial<Meeting>) => {
     if (!currentProject?.id) return;
 
     try {
       if (editingMeeting) {
-        const updated = await apiService.updateMeeting(currentProject.id, editingMeeting.id, meetingData);
-        setMeetings(prev => prev.map(m => m.id === editingMeeting.id ? { ...m, ...updated } : m));
+        await updateMeetingMutation.mutateAsync({
+          projectId: currentProject.id,
+          meetingId: editingMeeting.id,
+          data: meetingData,
+        });
       } else {
-        const created = await apiService.createMeeting(currentProject.id, meetingData);
-        setMeetings(prev => [created, ...prev]);
+        await createMeetingMutation.mutateAsync({
+          projectId: currentProject.id,
+          data: meetingData,
+        });
       }
       setShowMeetingModal(false);
       setEditingMeeting(null);
@@ -359,8 +358,10 @@ export default function CommonManagement({ userRole }: { userRole: UserRole }) {
     if (!currentProject?.id || !confirm('이 회의를 삭제하시겠습니까?')) return;
 
     try {
-      await apiService.deleteMeeting(currentProject.id, meetingId);
-      setMeetings(prev => prev.filter(m => m.id !== meetingId));
+      await deleteMeetingMutation.mutateAsync({
+        projectId: currentProject.id,
+        meetingId,
+      });
     } catch (error) {
       console.warn('Failed to delete meeting:', error);
     }
@@ -372,11 +373,16 @@ export default function CommonManagement({ userRole }: { userRole: UserRole }) {
 
     try {
       if (editingIssue) {
-        const updated = await apiService.updateIssue(currentProject.id, editingIssue.id, issueData);
-        setIssues(prev => prev.map(i => i.id === editingIssue.id ? { ...i, ...updated } : i));
+        await updateIssueMutation.mutateAsync({
+          projectId: currentProject.id,
+          issueId: editingIssue.id,
+          data: issueData,
+        });
       } else {
-        const created = await apiService.createIssue(currentProject.id, issueData);
-        setIssues(prev => [created, ...prev]);
+        await createIssueMutation.mutateAsync({
+          projectId: currentProject.id,
+          data: issueData,
+        });
       }
       setShowIssueModal(false);
       setEditingIssue(null);
@@ -390,8 +396,10 @@ export default function CommonManagement({ userRole }: { userRole: UserRole }) {
     if (!currentProject?.id || !confirm('이 이슈를 삭제하시겠습니까?')) return;
 
     try {
-      await apiService.deleteIssue(currentProject.id, issueId);
-      setIssues(prev => prev.filter(i => i.id !== issueId));
+      await deleteIssueMutation.mutateAsync({
+        projectId: currentProject.id,
+        issueId,
+      });
     } catch (error) {
       console.warn('Failed to delete issue:', error);
     }
@@ -402,8 +410,11 @@ export default function CommonManagement({ userRole }: { userRole: UserRole }) {
     if (!currentProject?.id) return;
 
     try {
-      await apiService.updateIssueStatus(currentProject.id, issueId, newStatus);
-      setIssues(prev => prev.map(i => i.id === issueId ? { ...i, status: newStatus } : i));
+      await updateIssueStatusMutation.mutateAsync({
+        projectId: currentProject.id,
+        issueId,
+        status: newStatus,
+      });
     } catch (error) {
       console.warn('Failed to update issue status:', error);
     }
