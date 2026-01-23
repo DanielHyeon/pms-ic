@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import {
   GitBranch,
   Clock,
@@ -15,7 +15,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { useProject } from '../../../contexts/ProjectContext';
-import { apiService } from '../../../services/api';
+import { useLineageGraph, useLineageTimeline } from '../../../hooks/api';
 import { UserRole } from '../../App';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -47,10 +47,6 @@ interface LineageManagementProps {
 export default function LineageManagement({ userRole }: LineageManagementProps) {
   const { currentProject } = useProject();
   const [activeTab, setActiveTab] = useState<'graph' | 'timeline' | 'impact'>('graph');
-  const [loading, setLoading] = useState(false);
-  const [graphData, setGraphData] = useState<LineageGraphDto | null>(null);
-  const [statistics, setStatistics] = useState<LineageStatisticsDto | null>(null);
-  const [timelineData, setTimelineData] = useState<PageResponse<LineageEventDto> | null>(null);
   const [timelineFilters, setTimelineFilters] = useState({
     aggregateType: '',
     page: 0,
@@ -58,48 +54,30 @@ export default function LineageManagement({ userRole }: LineageManagementProps) 
   });
   const [selectedNode, setSelectedNode] = useState<LineageNodeDto | null>(null);
 
-  const loadGraphData = useCallback(async () => {
-    if (!currentProject?.id) return;
-    setLoading(true);
-    try {
-      const data = await apiService.getLineageGraph(currentProject.id);
-      setGraphData(data);
-      setStatistics(data.statistics);
-    } catch (error) {
-      console.error('Failed to load lineage graph:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [currentProject?.id]);
+  // TanStack Query hooks
+  const {
+    data: graphData,
+    isLoading: graphLoading,
+    refetch: refetchGraph,
+  } = useLineageGraph(activeTab === 'graph' ? currentProject?.id : undefined);
 
-  const loadTimelineData = useCallback(async () => {
-    if (!currentProject?.id) return;
-    setLoading(true);
-    try {
-      const data = await apiService.getLineageTimeline(currentProject.id, timelineFilters);
-      setTimelineData(data);
-    } catch (error) {
-      console.error('Failed to load timeline:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [currentProject?.id, timelineFilters]);
+  const {
+    data: timelineData,
+    isLoading: timelineLoading,
+    refetch: refetchTimeline,
+  } = useLineageTimeline(
+    activeTab === 'timeline' ? currentProject?.id : undefined,
+    timelineFilters
+  );
 
-  useEffect(() => {
-    if (currentProject?.id) {
-      if (activeTab === 'graph') {
-        loadGraphData();
-      } else if (activeTab === 'timeline') {
-        loadTimelineData();
-      }
-    }
-  }, [currentProject?.id, activeTab, loadGraphData, loadTimelineData]);
+  const loading = activeTab === 'graph' ? graphLoading : activeTab === 'timeline' ? timelineLoading : false;
+  const statistics = graphData?.statistics || null;
 
   const handleRefresh = () => {
     if (activeTab === 'graph') {
-      loadGraphData();
+      refetchGraph();
     } else if (activeTab === 'timeline') {
-      loadTimelineData();
+      refetchTimeline();
     }
   };
 

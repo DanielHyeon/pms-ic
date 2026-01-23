@@ -36,3 +36,9 @@ export * from './useWeeklyReports';
 
 // WIP hooks
 export * from './useWip';
+
+// Lineage hooks
+export * from './useLineage';
+
+// Chat hooks
+export * from './useChat';

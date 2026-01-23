@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { X, Send, Bot, Sparkles, TrendingUp, FileText, AlertTriangle } from 'lucide-react';
 import { UserRole } from '../App';
-import { apiService } from '../../services/api';
+import { useSendChatMessage } from '../../hooks/api';
 import { useProject } from '../../contexts/ProjectContext';
 
 // Role-based access level mapping (matches backend RoleAccessLevel.java)
@@ -31,6 +31,7 @@ interface SuggestedPrompt {
 
 export default function AIAssistant({ onClose, userRole }: { onClose: () => void; userRole: UserRole }) {
   const { currentProject } = useProject();
+  const sendChatMutation = useSendChatMessage();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
@@ -40,9 +41,10 @@ export default function AIAssistant({ onClose, userRole }: { onClose: () => void
     },
   ]);
   const [input, setInput] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const isTyping = sendChatMutation.isPending;
 
   useEffect(() => {
     if (!messagesContainerRef.current) return;
@@ -87,10 +89,9 @@ export default function AIAssistant({ onClose, userRole }: { onClose: () => void
 
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
-    setIsTyping(true);
 
     try {
-      const response = await apiService.sendChatMessage({
+      const response = await sendChatMutation.mutateAsync({
         sessionId,
         message: userMessage.content,
         projectId: currentProject?.id,
@@ -117,8 +118,6 @@ export default function AIAssistant({ onClose, userRole }: { onClose: () => void
           timestamp: new Date(),
         },
       ]);
-    } finally {
-      setIsTyping(false);
     }
   };
 

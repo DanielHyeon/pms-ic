@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Target,
   AlertTriangle,
@@ -9,7 +9,7 @@ import {
   Loader2,
   Search,
 } from 'lucide-react';
-import { apiService } from '../../../services/api';
+import { useImpactAnalysis } from '../../../hooks/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Input } from '../ui/input';
@@ -40,35 +40,28 @@ export default function ImpactAnalysis({
   selectedNode,
   onNodeSelect,
 }: ImpactAnalysisProps) {
-  const [loading, setLoading] = useState(false);
-  const [impactData, setImpactData] = useState<ImpactAnalysisDto | null>(null);
   const [searchType, setSearchType] = useState<string>('REQUIREMENT');
   const [searchId, setSearchId] = useState<string>('');
 
-  const loadImpactAnalysis = useCallback(async (type: string, id: string) => {
-    if (!type || !id) return;
+  // Track which item to analyze (selected node or search input)
+  const [analysisTarget, setAnalysisTarget] = useState<{ type: string; id: string } | null>(null);
 
-    setLoading(true);
-    try {
-      const data = await apiService.getImpactAnalysis(type, id);
-      setImpactData(data);
-    } catch (error) {
-      console.error('Failed to load impact analysis:', error);
-      setImpactData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // TanStack Query hook
+  const { data: impactData, isLoading: loading } = useImpactAnalysis(
+    analysisTarget?.type,
+    analysisTarget?.id
+  );
 
+  // Update analysis target when selectedNode changes
   useEffect(() => {
     if (selectedNode) {
-      loadImpactAnalysis(selectedNode.type, selectedNode.id);
+      setAnalysisTarget({ type: selectedNode.type, id: selectedNode.id });
     }
-  }, [selectedNode, loadImpactAnalysis]);
+  }, [selectedNode]);
 
   const handleSearch = () => {
     if (searchId.trim()) {
-      loadImpactAnalysis(searchType, searchId.trim());
+      setAnalysisTarget({ type: searchType, id: searchId.trim() });
     }
   };
 
