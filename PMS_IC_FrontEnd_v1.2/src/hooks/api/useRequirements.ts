@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../../services/api';
+import { Requirement } from '../../types/project';
 
 export const requirementKeys = {
   all: ['requirements'] as const,
@@ -10,9 +11,10 @@ export const requirementKeys = {
 };
 
 export function useRequirements(projectId?: string) {
-  return useQuery({
+  return useQuery<Requirement[]>({
     queryKey: requirementKeys.list(projectId),
     queryFn: () => apiService.getRequirements(projectId),
+    enabled: !!projectId,
   });
 }
 
@@ -28,8 +30,8 @@ export function useCreateRequirement() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: Parameters<typeof apiService.createRequirement>[0]) =>
-      apiService.createRequirement(data),
+    mutationFn: ({ projectId, data }: { projectId: string; data: Record<string, unknown> }) =>
+      apiService.createRequirement(projectId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: requirementKeys.lists() });
     },
@@ -40,10 +42,21 @@ export function useUpdateRequirement() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof apiService.updateRequirement>[1] }) =>
-      apiService.updateRequirement(id, data),
-    onSuccess: (_, { id }) => {
-      queryClient.invalidateQueries({ queryKey: requirementKeys.detail(id) });
+    mutationFn: ({ projectId, requirementId, data }: { projectId: string; requirementId: string; data: Record<string, unknown> }) =>
+      apiService.updateRequirement(projectId, requirementId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: requirementKeys.lists() });
+    },
+  });
+}
+
+export function useLinkRequirementToTask() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ projectId, requirementId, taskId }: { projectId: string; requirementId: string; taskId: string }) =>
+      apiService.linkRequirementToTask(projectId, requirementId, taskId),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: requirementKeys.lists() });
     },
   });

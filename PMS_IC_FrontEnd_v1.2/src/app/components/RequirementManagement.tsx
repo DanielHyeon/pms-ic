@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import {
   ClipboardList,
   Search,
@@ -24,8 +24,13 @@ import {
   RequirementStatus,
   RequirementCategory,
 } from '../../types/project';
-import { apiService } from '../../services/api';
 import { UserRole } from '../App';
+import {
+  useRequirements,
+  useCreateRequirement,
+  useUpdateRequirement,
+  useLinkRequirementToTask,
+} from '../../hooks/api/useRequirements';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -100,8 +105,11 @@ const categoryConfig: Record<RequirementCategory, { label: string; color: string
 
 export default function RequirementManagement({ userRole }: RequirementManagementProps) {
   const { currentProject } = useProject();
-  const [requirements, setRequirements] = useState<Requirement[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const { data: requirements = [], isLoading } = useRequirements(currentProject?.id);
+  const createMutation = useCreateRequirement();
+  const updateMutation = useUpdateRequirement();
+  const linkMutation = useLinkRequirementToTask();
+
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<RequirementStatus | 'ALL'>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<RequirementCategory | 'ALL'>('ALL');
@@ -121,7 +129,6 @@ export default function RequirementManagement({ userRole }: RequirementManagemen
     priority: 'MEDIUM' as RequirementPriority,
     acceptanceCriteria: '',
   });
-  const [isCreating, setIsCreating] = useState(false);
 
   // 수정 폼 상태
   const [editRequirement, setEditRequirement] = useState({
@@ -132,30 +139,9 @@ export default function RequirementManagement({ userRole }: RequirementManagemen
     status: 'IDENTIFIED' as RequirementStatus,
     acceptanceCriteria: '',
   });
-  const [isEditing, setIsEditing] = useState(false);
 
   // 태스크 연결 상태
   const [taskIdToLink, setTaskIdToLink] = useState('');
-  const [isLinking, setIsLinking] = useState(false);
-
-  // 요구사항 목록 로드
-  const loadRequirements = useCallback(async () => {
-    if (!currentProject) return;
-
-    setIsLoading(true);
-    try {
-      const data = await apiService.getRequirements(currentProject.id);
-      setRequirements(data || []);
-    } catch (error) {
-      console.error('Failed to load requirements:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentProject]);
-
-  useEffect(() => {
-    loadRequirements();
-  }, [loadRequirements]);
 
   // 필터링된 요구사항 목록
   const filteredRequirements = requirements.filter((req) => {
@@ -169,47 +155,50 @@ export default function RequirementManagement({ userRole }: RequirementManagemen
   });
 
   // 요구사항 생성
-  const handleCreateRequirement = async () => {
+  const handleCreateRequirement = () => {
     if (!currentProject || !newRequirement.title.trim()) return;
 
-    setIsCreating(true);
-    try {
-      await apiService.createRequirement(currentProject.id, {
+    createMutation.mutate({
+      projectId: currentProject.id,
+      data: {
         ...newRequirement,
         status: 'IDENTIFIED',
-        rfpId: '', // 직접 생성 시 RFP 없음
-      });
-      setIsCreateDialogOpen(false);
-      setNewRequirement({
-        title: '',
-        description: '',
-        category: 'FUNCTIONAL',
-        priority: 'MEDIUM',
-        acceptanceCriteria: '',
-      });
-      await loadRequirements();
-    } catch (error) {
-      console.error('Failed to create requirement:', error);
-    } finally {
-      setIsCreating(false);
-    }
+        rfpId: '',
+      }
+    }, {
+      onSuccess: () => {
+        setIsCreateDialogOpen(false);
+        setNewRequirement({
+          title: '',
+          description: '',
+          category: 'FUNCTIONAL',
+          priority: 'MEDIUM',
+          acceptanceCriteria: '',
+        });
+      },
+      onError: (error) => {
+        console.error('Failed to create requirement:', error);
+      }
+    });
   };
 
   // 태스크 연결
-  const handleLinkTask = async () => {
+  const handleLinkTask = () => {
     if (!currentProject || !selectedRequirement || !taskIdToLink.trim()) return;
 
-    setIsLinking(true);
-    try {
-      await apiService.linkRequirementToTask(currentProject.id, selectedRequirement.id, taskIdToLink);
-      setIsLinkDialogOpen(false);
-      setTaskIdToLink('');
-      await loadRequirements();
-    } catch (error) {
-      console.error('Failed to link task:', error);
-    } finally {
-      setIsLinking(false);
-    }
+    linkMutation.mutate({
+      projectId: currentProject.id,
+      requirementId: selectedRequirement.id,
+      taskId: taskIdToLink,
+    }, {
+      onSuccess: () => {
+        setIsLinkDialogOpen(false);
+        setTaskIdToLink('');
+      },
+      onError: (error) => {
+        console.error('Failed to link task:', error);
+      }
+    });
   };
 
   // 요구사항 상세 보기
@@ -239,19 +228,21 @@ export default function RequirementManagement({ userRole }: RequirementManagemen
   };
 
   // 요구사항 수정
-  const handleUpdateRequirement = async () => {
+  const handleUpdateRequirement = () => {
     if (!currentProject || !selectedRequirement || !editRequirement.title.trim()) return;
 
-    setIsEditing(true);
-    try {
-      await apiService.updateRequirement(currentProject.id, selectedRequirement.id, editRequirement);
-      setIsEditDialogOpen(false);
-      await loadRequirements();
-    } catch (error) {
-      console.error('Failed to update requirement:', error);
-    } finally {
-      setIsEditing(false);
-    }
+    updateMutation.mutate({
+      projectId: currentProject.id,
+      requirementId: selectedRequirement.id,
+      data: editRequirement,
+    }, {
+      onSuccess: () => {
+        setIsEditDialogOpen(false);
+      },
+      onError: (error) => {
+        console.error('Failed to update requirement:', error);
+      }
+    });
   };
 
   // 권한 체크
