@@ -128,7 +128,8 @@ export function organizeTasksIntoColumns(tasks: KanbanTask[]): KanbanColumn[] {
     { id: 'backlog', title: '제품 백로그', statuses: ['BACKLOG'] },
     { id: 'sprint', title: '이번 스프린트', statuses: ['TODO'] },
     { id: 'inProgress', title: '진행 중', statuses: ['IN_PROGRESS'] },
-    { id: 'review', title: '검토', statuses: ['REVIEW'] },
+    { id: 'review', title: '코드 리뷰', statuses: ['REVIEW'] },
+    { id: 'testing', title: '테스트 중', statuses: ['TESTING'] },
     { id: 'done', title: '완료', statuses: ['DONE'] },
   ];
 

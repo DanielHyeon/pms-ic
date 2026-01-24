@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Plus, Star, ArrowUp, ArrowDown, Users } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus, Star, ArrowUp, ArrowDown, Users, Check, RotateCcw, Pencil, Trash2 } from 'lucide-react';
 import { UserRole } from '../App';
 import { useStories, useCreateStory, useUpdateStory, useUpdateStoryPriority } from '../../hooks/api/useStories';
 
@@ -24,8 +24,18 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
   const [expandedStory, setExpandedStory] = useState<number | null>(null);
   const [showPlanningPoker, setShowPlanningPoker] = useState(false);
   const [selectedStoryForPoker, setSelectedStoryForPoker] = useState<number | null>(null);
+  const [selectedPokerCard, setSelectedPokerCard] = useState<number | null>(null);
+  const [isPokerConfirmed, setIsPokerConfirmed] = useState(false);
   const [showAddStoryModal, setShowAddStoryModal] = useState(false);
+  const [showEditStoryModal, setShowEditStoryModal] = useState(false);
+  const [editingStory, setEditingStory] = useState<UserStory | null>(null);
   const [newStory, setNewStory] = useState({
+    title: '',
+    description: '',
+    epic: '',
+    acceptanceCriteria: [''],
+  });
+  const [editStoryForm, setEditStoryForm] = useState({
     title: '',
     description: '',
     epic: '',
@@ -82,6 +92,61 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
   const removeFromSprint = (storyId: number) => {
     if (!canEdit) return;
     updateStoryMutation.mutate({ id: storyId, data: { status: 'BACKLOG' } });
+  };
+
+  const openEditModal = (story: UserStory) => {
+    setEditingStory(story);
+    setEditStoryForm({
+      title: story.title,
+      description: story.description,
+      epic: story.epic,
+      acceptanceCriteria: story.acceptanceCriteria.length > 0 ? [...story.acceptanceCriteria] : [''],
+    });
+    setShowEditStoryModal(true);
+  };
+
+  const handleEditStory = () => {
+    if (!editingStory || !editStoryForm.title || !editStoryForm.description || !editStoryForm.epic) {
+      alert('필수 항목을 모두 입력해주세요.');
+      return;
+    }
+
+    updateStoryMutation.mutate(
+      {
+        id: editingStory.id,
+        data: {
+          title: editStoryForm.title,
+          description: editStoryForm.description,
+          epic: editStoryForm.epic,
+          acceptanceCriteria: editStoryForm.acceptanceCriteria.filter((c) => c.trim() !== ''),
+        },
+      },
+      {
+        onSuccess: () => {
+          setShowEditStoryModal(false);
+          setEditingStory(null);
+        },
+        onError: (error) => {
+          console.error('Failed to update story:', error);
+          alert('스토리 수정에 실패했습니다.');
+        },
+      }
+    );
+  };
+
+  const handleDeleteStory = () => {
+    if (!editingStory) return;
+    if (!confirm('이 스토리를 삭제하시겠습니까?')) return;
+
+    updateStoryMutation.mutate(
+      { id: editingStory.id, data: { status: 'CANCELLED' } },
+      {
+        onSuccess: () => {
+          setShowEditStoryModal(false);
+          setEditingStory(null);
+        },
+      }
+    );
   };
 
   // Filter stories by epic
@@ -144,37 +209,166 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
         </div>
       </div>
 
-      {/* Planning Poker Modal */}
+      {/* Planning Poker Panel */}
       {showPlanningPoker && (
         <div className="mb-6 bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-300 rounded-xl p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-gray-900 flex items-center gap-2">
               <Users size={20} />
-              플래닝 포커 세션
+              플래닝 포커 - Story Point 산정
             </h3>
             <button
-              onClick={() => setShowPlanningPoker(false)}
+              onClick={() => {
+                setShowPlanningPoker(false);
+                setSelectedStoryForPoker(null);
+                setSelectedPokerCard(null);
+                setIsPokerConfirmed(false);
+              }}
               className="text-gray-500 hover:text-gray-700"
             >
               ✕
             </button>
           </div>
-          <p className="text-sm text-gray-600 mb-4">
-            팀원들이 각자 공수를 비공개로 산정한 후 동시에 공개하여 합의를 도출합니다.
-          </p>
-          <div className="flex gap-2 flex-wrap">
-            {[1, 2, 3, 5, 8, 13, 21].map((point) => (
-              <button
-                key={point}
-                className="w-16 h-20 bg-white rounded-lg border-2 border-purple-300 hover:bg-purple-100 hover:border-purple-500 transition-all flex items-center justify-center font-bold text-2xl text-purple-600"
-              >
-                {point}
-              </button>
-            ))}
+
+          {/* Selected Story Info */}
+          {selectedStoryForPoker ? (
+            (() => {
+              const story = stories.find((s) => s.id === selectedStoryForPoker);
+              if (!story) return null;
+              return (
+                <div className="bg-white rounded-lg p-4 mb-4 border border-purple-200">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs text-purple-600 font-medium">Story #{story.id}</span>
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">{story.epic}</span>
+                      </div>
+                      <h4 className="font-medium text-gray-900">{story.title}</h4>
+                      <p className="text-sm text-gray-500 mt-1">{story.description}</p>
+                    </div>
+                    {story.storyPoints && (
+                      <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-lg text-sm font-medium">
+                        현재: {story.storyPoints} SP
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })()
+          ) : (
+            <div className="bg-white rounded-lg p-4 mb-4 border border-purple-200 text-center text-gray-500">
+              아래 백로그에서 스토리를 선택하여 &quot;포커 산정&quot; 버튼을 클릭하세요
+            </div>
+          )}
+
+          {/* Poker Cards */}
+          <div className="mb-4">
+            <p className="text-sm text-gray-600 mb-3">
+              {isPokerConfirmed
+                ? '✅ Story Point가 선택되었습니다. 저장 버튼을 눌러 확정하세요.'
+                : '카드를 선택하여 공수를 산정하세요 (피보나치 수열)'}
+            </p>
+            <div className="flex gap-3 flex-wrap">
+              {[1, 2, 3, 5, 8, 13, 21].map((point) => (
+                <button
+                  key={point}
+                  onClick={() => {
+                    if (!isPokerConfirmed) {
+                      setSelectedPokerCard(point);
+                    }
+                  }}
+                  disabled={!selectedStoryForPoker || isPokerConfirmed}
+                  className={`w-16 h-24 rounded-lg border-2 transition-all flex flex-col items-center justify-center font-bold text-2xl
+                    ${selectedPokerCard === point
+                      ? 'bg-purple-600 border-purple-600 text-white shadow-lg scale-110'
+                      : 'bg-white border-purple-300 text-purple-600 hover:bg-purple-100 hover:border-purple-500'
+                    }
+                    ${!selectedStoryForPoker ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                    ${isPokerConfirmed && selectedPokerCard !== point ? 'opacity-30' : ''}
+                  `}
+                >
+                  {point}
+                  <span className="text-xs font-normal mt-1">SP</span>
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="mt-4 text-sm text-gray-600">
-            현재 세션: Story #2 - AI 설명 가능 기능
-          </div>
+
+          {/* Action Buttons */}
+          {selectedStoryForPoker && selectedPokerCard && (
+            <div className="flex gap-3">
+              {!isPokerConfirmed ? (
+                <button
+                  onClick={() => setIsPokerConfirmed(true)}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
+                >
+                  <Check size={18} />
+                  {selectedPokerCard} SP 선택 확정
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => {
+                      updateStoryMutation.mutate(
+                        { id: selectedStoryForPoker, data: { storyPoints: selectedPokerCard } },
+                        {
+                          onSuccess: () => {
+                            setShowPlanningPoker(false);
+                            setSelectedStoryForPoker(null);
+                            setSelectedPokerCard(null);
+                            setIsPokerConfirmed(false);
+                          },
+                        }
+                      );
+                    }}
+                    disabled={updateStoryMutation.isPending}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+                  >
+                    <Check size={18} />
+                    {updateStoryMutation.isPending ? '저장 중...' : `${selectedPokerCard} SP 저장`}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedPokerCard(null);
+                      setIsPokerConfirmed(false);
+                    }}
+                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2"
+                  >
+                    <RotateCcw size={18} />
+                    다시 선택
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Unestimated Stories Quick List */}
+          {!selectedStoryForPoker && (
+            <div className="mt-4 pt-4 border-t border-purple-200">
+              <p className="text-sm font-medium text-gray-700 mb-2">미산정 스토리:</p>
+              <div className="flex flex-wrap gap-2">
+                {stories
+                  .filter((s) => !s.storyPoints && s.status === 'BACKLOG')
+                  .slice(0, 5)
+                  .map((story) => (
+                    <button
+                      key={story.id}
+                      onClick={() => {
+                        setSelectedStoryForPoker(story.id);
+                        setSelectedPokerCard(null);
+                        setIsPokerConfirmed(false);
+                      }}
+                      className="px-3 py-1.5 bg-white border border-purple-200 rounded-lg text-sm text-gray-700 hover:bg-purple-50 hover:border-purple-400 transition-colors"
+                    >
+                      #{story.id} {story.title.slice(0, 30)}...
+                    </button>
+                  ))}
+                {stories.filter((s) => !s.storyPoints && s.status === 'BACKLOG').length === 0 && (
+                  <span className="text-sm text-gray-500">모든 스토리가 산정되었습니다!</span>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -312,6 +506,147 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
         </div>
       )}
 
+      {/* Edit Story Modal */}
+      {showEditStoryModal && editingStory && (
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-semibold text-gray-900">스토리 수정</h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEditStoryModal(false);
+                  setEditingStory(null);
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  스토리 제목 *
+                </label>
+                <input
+                  type="text"
+                  value={editStoryForm.title}
+                  onChange={(e) => setEditStoryForm({ ...editStoryForm, title: e.target.value })}
+                  placeholder="사용자로서 ... 원한다"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  설명 *
+                </label>
+                <textarea
+                  value={editStoryForm.description}
+                  onChange={(e) => setEditStoryForm({ ...editStoryForm, description: e.target.value })}
+                  placeholder="스토리에 대한 간단한 설명"
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  에픽 *
+                </label>
+                <select
+                  value={editStoryForm.epic}
+                  onChange={(e) => setEditStoryForm({ ...editStoryForm, epic: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">에픽 선택</option>
+                  {epics.map((epic) => (
+                    <option key={epic} value={epic}>
+                      {epic}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  완료 조건 (Acceptance Criteria)
+                </label>
+                {editStoryForm.acceptanceCriteria.map((criteria, idx) => (
+                  <div key={idx} className="flex gap-2 mb-2">
+                    <input
+                      type="text"
+                      value={criteria}
+                      onChange={(e) => {
+                        const updated = [...editStoryForm.acceptanceCriteria];
+                        updated[idx] = e.target.value;
+                        setEditStoryForm({ ...editStoryForm, acceptanceCriteria: updated });
+                      }}
+                      placeholder={`완료 조건 ${idx + 1}`}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    {editStoryForm.acceptanceCriteria.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = editStoryForm.acceptanceCriteria.filter((_, i) => i !== idx);
+                          setEditStoryForm({ ...editStoryForm, acceptanceCriteria: updated });
+                        }}
+                        className="px-3 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200"
+                      >
+                        삭제
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEditStoryForm({
+                      ...editStoryForm,
+                      acceptanceCriteria: [...editStoryForm.acceptanceCriteria, ''],
+                    })
+                  }
+                  className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                >
+                  <Plus size={16} />
+                  완료 조건 추가
+                </button>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                type="button"
+                onClick={handleEditStory}
+                disabled={updateStoryMutation.isPending}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {updateStoryMutation.isPending ? '저장 중...' : '저장'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEditStoryModal(false);
+                  setEditingStory(null);
+                }}
+                disabled={updateStoryMutation.isPending}
+                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                취소
+              </button>
+            </div>
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={handleDeleteStory}
+                disabled={updateStoryMutation.isPending}
+                className="w-full px-4 py-2 text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <Trash2 size={16} />
+                이 스토리 삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Epic Filter */}
       <div className="mb-6">
         <div className="flex gap-2 flex-wrap">
@@ -432,9 +767,15 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
                       >
                         포커 산정
                       </button>
-                      <button className="px-3 py-1.5 border border-gray-300 text-gray-700 rounded text-sm hover:bg-gray-100">
-                        수정
-                      </button>
+                      {canEdit && (
+                        <button
+                          className="px-3 py-1.5 border border-gray-300 text-gray-700 rounded text-sm hover:bg-gray-100 flex items-center gap-1"
+                          onClick={() => openEditModal(story)}
+                        >
+                          <Pencil size={14} />
+                          수정
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}

@@ -71,7 +71,7 @@ public class Task extends BaseEntity {
     }
 
     public enum TaskStatus {
-        TODO, IN_PROGRESS, REVIEW, DONE
+        BACKLOG, TODO, IN_PROGRESS, REVIEW, TESTING, DONE
     }
 
     public enum TrackType {

@@ -191,8 +191,12 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
 
   // TanStack Query hooks
   const { data: phasesData } = useAllPhases();
-  const { data: deliverables } = usePhaseDeliverables(selectedPhase.id);
-  const { data: kpis } = usePhaseKpis(selectedPhase.id);
+
+  // Check if selectedPhase has a valid API ID (not hardcoded '1', '2', '3', etc.)
+  const isValidApiPhaseId = selectedPhase.id && !/^[1-6]$/.test(selectedPhase.id);
+
+  const { data: deliverables } = usePhaseDeliverables(isValidApiPhaseId ? selectedPhase.id : '');
+  const { data: kpis } = usePhaseKpis(isValidApiPhaseId ? selectedPhase.id : '');
 
   const createPhaseMutation = useCreatePhase();
   const updatePhaseMutation = useUpdatePhase();
@@ -636,62 +640,60 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
         {/* Phase List */}
         <div className="space-y-3">
           {syncedPhases.map((phase) => (
-            <button
+            <div
               key={phase.id}
-              onClick={() => handlePhaseSelect(phase)}
-              className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+              className={`relative w-full text-left p-4 rounded-xl border-2 transition-all ${
                 selectedPhase.id === phase.id
                   ? 'border-blue-500 bg-blue-50 shadow-md'
                   : 'border-gray-200 bg-white hover:border-gray-300'
               }`}
             >
-              <div className="flex items-start gap-3">
-                <div className="mt-1">
-                  {phase.status === 'completed' && <CheckCircle2 className="text-green-600" size={24} />}
-                  {phase.status === 'inProgress' && <Clock className="text-blue-600" size={24} />}
-                  {phase.status === 'pending' && <Circle className="text-gray-400" size={24} />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="font-medium text-gray-900 text-sm">{phase.name}</h3>
-                      <p className="text-xs text-gray-500 mt-1">{phase.description}</p>
-                    </div>
-                    {canManagePhases && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openPhaseModal(phase);
-                        }}
-                        className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
-                        title="단계 설정"
-                      >
-                        <Settings size={16} />
-                      </button>
-                    )}
+              {canManagePhases && (
+                <button
+                  type="button"
+                  onClick={() => openPhaseModal(phase)}
+                  className="absolute top-3 right-3 p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors z-10"
+                  title="단계 설정"
+                >
+                  <Settings size={16} />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => handlePhaseSelect(phase)}
+                className="w-full text-left"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="mt-1">
+                    {phase.status === 'completed' && <CheckCircle2 className="text-green-600" size={24} />}
+                    {phase.status === 'inProgress' && <Clock className="text-blue-600" size={24} />}
+                    {phase.status === 'pending' && <Circle className="text-gray-400" size={24} />}
                   </div>
-                  <div className="mt-3">
-                    <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
-                      <span>진행률</span>
-                      <span className="font-medium">{phase.progress}%</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className={`h-2 rounded-full transition-all ${
-                          phase.status === 'completed'
-                            ? 'bg-green-500'
-                            : phase.status === 'inProgress'
-                            ? 'bg-blue-500'
-                            : 'bg-gray-400'
-                        }`}
-                        style={{ width: `${phase.progress}%` }}
-                      ></div>
+                  <div className="flex-1 min-w-0 pr-8">
+                    <h3 className="font-medium text-gray-900 text-sm">{phase.name}</h3>
+                    <p className="text-xs text-gray-500 mt-1">{phase.description}</p>
+                    <div className="mt-3">
+                      <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+                        <span>진행률</span>
+                        <span className="font-medium">{phase.progress}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className={`h-2 rounded-full transition-all ${
+                            phase.status === 'completed'
+                              ? 'bg-green-500'
+                              : phase.status === 'inProgress'
+                              ? 'bg-blue-500'
+                              : 'bg-gray-400'
+                          }`}
+                          style={{ width: `${phase.progress}%` }}
+                        ></div>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </button>
+              </button>
+            </div>
           ))}
         </div>
 
