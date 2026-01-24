@@ -34,6 +34,7 @@ class LLMServiceState:
         self._llm: Optional[Llama] = None
         self._rag_service: Optional[Any] = None
         self._chat_workflow: Optional[Any] = None
+        self._two_track_workflow: Optional[Any] = None
         self._current_model_path: str = os.getenv(
             "MODEL_PATH",
             "./models/google.gemma-3-12b-pt.Q5_K_M.gguf"
@@ -148,6 +149,31 @@ class LLMServiceState:
         """Check if chat workflow is loaded"""
         return self._chat_workflow is not None
 
+    @property
+    def two_track_workflow(self) -> Optional[Any]:
+        """Get the Two-Track workflow instance"""
+        return self._two_track_workflow
+
+    @two_track_workflow.setter
+    def two_track_workflow(self, value: Optional[Any]):
+        """Set the Two-Track workflow instance"""
+        self._two_track_workflow = value
+
+    @property
+    def is_two_track_workflow_loaded(self) -> bool:
+        """Check if Two-Track workflow is loaded"""
+        return self._two_track_workflow is not None
+
+    def reset_two_track_workflow(self):
+        """Reset Two-Track workflow to force reinitialization on next request."""
+        if self._two_track_workflow is not None:
+            try:
+                del self._two_track_workflow
+            except Exception as e:
+                logger.warning(f"Error deleting Two-Track workflow: {e}")
+        self._two_track_workflow = None
+        logger.info("Two-Track workflow reset - will reload on next request")
+
     def get_all(self) -> Tuple[Optional[Llama], Optional[Any], Optional[Any]]:
         """Get all service instances as a tuple"""
         return self._llm, self._rag_service, self._chat_workflow
@@ -163,6 +189,7 @@ class LLMServiceState:
         self._llm = None
         self._rag_service = None
         self._chat_workflow = None
+        self._two_track_workflow = None
         logger.info("LLMServiceState reset")
 
     def health_status(self) -> dict:
@@ -171,6 +198,7 @@ class LLMServiceState:
             "model_loaded": self.is_model_loaded,
             "rag_service_loaded": self.is_rag_loaded,
             "chat_workflow_loaded": self.is_workflow_loaded,
+            "two_track_workflow_loaded": self.is_two_track_workflow_loaded,
             "current_model_path": self._current_model_path,
             "lightweight_model_path": self._lightweight_model_path,
             "medium_model_path": self._medium_model_path,

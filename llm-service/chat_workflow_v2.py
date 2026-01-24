@@ -86,6 +86,9 @@ SIMPLE_QUESTION_PATTERNS = [
 # Keywords that indicate high-value output requests (Track B)
 # These require actual project data compilation and longer responses
 HIGH_VALUE_KEYWORDS = [
+    # Korean - Detailed explanation requests (use L2 for quality)
+    "자세하게", "자세히", "상세하게", "상세히", "구체적으로",
+    "깊이있게", "깊이 있게", "심층적으로", "더 알려줘", "더 설명해줘",
     # Korean - Report/Document generation
     "주간보고", "주간 보고", "보고서 작성", "리포트 작성",
     "스프린트계획 세워", "스프린트 계획 수립", "스프린트플래닝 진행",
@@ -102,6 +105,7 @@ HIGH_VALUE_KEYWORDS = [
     "weekly report", "sprint plan", "sprint planning",
     "impact analysis", "retrospective", "refinement",
     "project analysis", "sprint analysis",
+    "in detail", "detailed", "thoroughly", "elaborate",
 ]
 
 
@@ -109,21 +113,22 @@ def classify_track(message: str) -> str:
     """Classify message into Track A or Track B
 
     Track A: Fast responses for simple questions, definitions, explanations
-    Track B: High-value outputs requiring project data compilation
+    Track B: High-value outputs requiring project data compilation or detailed explanations
     """
     message_lower = message.lower()
 
-    # First, check for simple question patterns - always Track A
-    for pattern in SIMPLE_QUESTION_PATTERNS:
-        if pattern in message_lower:
-            logger.info(f"Track A: Simple question pattern matched: '{pattern}'")
-            return "track_a"
-
-    # Check for high-value keywords that require data compilation
+    # First, check for high-value keywords (detailed explanation, reports, analysis)
+    # These take priority over simple patterns
     for keyword in HIGH_VALUE_KEYWORDS:
         if keyword in message_lower:
             logger.info(f"Track B keyword matched: '{keyword}'")
             return "track_b"
+
+    # Then, check for simple question patterns - Track A (fast path)
+    for pattern in SIMPLE_QUESTION_PATTERNS:
+        if pattern in message_lower:
+            logger.info(f"Track A: Simple question pattern matched: '{pattern}'")
+            return "track_a"
 
     # Very long requests with specific data requests likely need Track B
     if len(message) > 300 and any(kw in message_lower for kw in ["현재", "이번", "금주", "지난주"]):
@@ -356,14 +361,19 @@ class TwoTrackWorkflow:
                 )
 
                 # Filter by relevance score
-                MIN_RELEVANCE_SCORE = 0.3
+                # RRF scores are much lower (max ~0.033) than weighted scores (0-1)
+                merge_method = os.getenv("HYBRID_MERGE_METHOD", "rrf").lower()
+                if merge_method in ("rrf", "rrf_rerank"):
+                    MIN_RELEVANCE_SCORE = 0.005  # RRF: k=60, max score ~0.033
+                else:
+                    MIN_RELEVANCE_SCORE = 0.3    # Weighted: scores 0-1
                 filtered = [
                     doc for doc in results
                     if doc.get('relevance_score', 0) >= MIN_RELEVANCE_SCORE
                 ]
 
                 retrieved_docs = [doc['content'] for doc in filtered]
-                logger.info(f"RAG found {len(retrieved_docs)} docs (filtered from {len(results)}, access_level={user_access_level})")
+                logger.info(f"RAG found {len(retrieved_docs)} docs (filtered from {len(results)}, threshold={MIN_RELEVANCE_SCORE}, method={merge_method})")
 
             except Exception as e:
                 logger.error(f"RAG search failed: {e}")
@@ -592,7 +602,7 @@ class TwoTrackWorkflow:
                     is_short_question = len(message) < 30
 
                     if is_simple_question and is_short_question:
-                        max_tokens = min(base_max_tokens, 512)
+                        max_tokens = min(base_max_tokens, 500)
                         logger.info(f"  → Track A: reduced max_tokens={max_tokens} for simple question")
                     else:
                         max_tokens = base_max_tokens
@@ -800,15 +810,15 @@ class TwoTrackWorkflow:
     def _get_greeting_response(self) -> str:
         """Get greeting response"""
         return (
-            "안녕하세요! 저는 프로젝트 관리(PMS) 전문 AI 어시스턴트입니다. "
-            "프로젝트 일정, 리스크, 이슈, 애자일 방법론 등에 대해 물어보세요!"
+            "안녕하세요! PMS 도우미예요 😊 "
+            "프로젝트 일정, 리스크, 이슈 등 궁금한 거 있으면 편하게 물어봐 주세요!"
         )
 
     def _get_out_of_scope_response(self) -> str:
         """Get out of scope response"""
         return (
-            "죄송합니다. 해당 질문은 제가 가진 프로젝트 관리 지식 범위를 벗어납니다. "
-            "프로젝트 일정, 진척, 예산, 리스크, 이슈, 또는 애자일 방법론에 대해 질문해주세요."
+            "음, 그건 제가 도움드리기 어려운 내용이에요 😅 "
+            "프로젝트 일정, 진척, 리스크, 이슈 같은 PMS 관련 질문이면 도와드릴 수 있어요!"
         )
 
     def _build_l1_prompt(
@@ -826,10 +836,10 @@ class TwoTrackWorkflow:
         is_short = len(message) < 30
 
         if is_definition and is_short:
-            system_prompt = "당신은 프로젝트 관리 전문가입니다. 컨텍스트를 활용해 정의와 핵심 특징을 3-5문장으로 설명하세요."
+            system_prompt = "당신은 프로젝트 관리 전문가입니다. 컨텍스트를 활용해 정의와 핵심 특징을 적절하게 설명하세요."
         else:
             system_prompt = """당신은 PMS 전문 어시스턴트입니다.
-규칙: 컨텍스트 활용, 추측 금지, 3-5문장으로 핵심 위주 답변."""
+규칙: 컨텍스트 활용, 추측 금지, 핵심 위주로 적절하게 답변."""
 
         return self._build_prompt(message, context, retrieved_docs, system_prompt, model_path)
 
@@ -1060,7 +1070,7 @@ class TwoTrackWorkflow:
         )
 
         return {
-            "reply": final_state.get("response", "응답을 생성할 수 없습니다."),
+            "reply": final_state.get("response", "음, 답변을 만들지 못했어요 🤔 다시 질문해주실래요?"),
             "confidence": final_state.get("confidence", 0.0),
             "intent": final_state.get("intent"),
             "track": final_state.get("track"),

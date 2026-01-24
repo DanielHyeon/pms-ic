@@ -4,7 +4,7 @@ services:
   # ============================================
 
   postgres:
-    image: postgres:15-alpine
+    image: postgres:17-alpine
     container_name: pms-postgres
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-pms_db}
@@ -29,7 +29,7 @@ services:
   # ============================================
 
   redis:
-    image: redis:7-alpine
+    image: redis:8-alpine
     container_name: pms-redis
     ports:
       - "6379:6379"
@@ -207,7 +207,7 @@ services:
   # ============================================
 
   neo4j:
-    image: neo4j:5.26.0-community
+    image: neo4j:5.26.20-community
     container_name: pms-neo4j
     ports:
       - "7474:7474"  # Browser UI

@@ -25,10 +25,6 @@ TOP_P = float(os.getenv("TOP_P", "0.90"))
 MIN_P = float(os.getenv("MIN_P", "0.12"))
 REPEAT_PENALTY = float(os.getenv("REPEAT_PENALTY", "1.10"))
 
-# Two-track workflow v2 (lazy loading)
-_two_track_workflow = None
-
-
 def _fallback_to_legacy(message: str, context: list, retrieved_docs: list):
     """
     Fallback handler when Two-Track Workflow fails.
@@ -42,7 +38,7 @@ def _fallback_to_legacy(message: str, context: list, retrieved_docs: list):
         return jsonify({
             "error": "Model not available",
             "message": f"Failed to load model: {str(load_error)}",
-            "reply": "죄송합니다. 현재 AI 모델을 로드할 수 없습니다. 잠시 후 다시 시도해주세요."
+            "reply": "앗, AI 모델 로딩에 문제가 생겼어요 😥 잠시 후 다시 시도해주세요!"
         }), 503
 
     if model is None:
@@ -50,7 +46,7 @@ def _fallback_to_legacy(message: str, context: list, retrieved_docs: list):
         return jsonify({
             "error": "Model not loaded",
             "message": "Model failed to load",
-            "reply": "죄송합니다. 현재 AI 모델을 사용할 수 없습니다. 잠시 후 다시 시도해주세요."
+            "reply": "앗, AI가 아직 준비되지 않았어요 😥 잠시만 기다려주세요!"
         }), 503
 
     try:
@@ -60,20 +56,21 @@ def _fallback_to_legacy(message: str, context: list, retrieved_docs: list):
         return jsonify({
             "error": "Chat processing failed",
             "message": str(legacy_error),
-            "reply": "죄송합니다. 응답 생성 중 오류가 발생했습니다."
+            "reply": "앗, 응답 생성 중 문제가 생겼어요 😥 다시 질문해주세요!"
         }), 500
 
 
 def get_two_track_workflow():
-    """Get or initialize Two-Track Workflow v2 (lazy loading)."""
-    global _two_track_workflow
-    if _two_track_workflow is None:
+    """Get or initialize Two-Track Workflow v2 (lazy loading via shared state)."""
+    from service_state import get_state
+
+    state = get_state()
+
+    if state.two_track_workflow is None:
         try:
             from llama_cpp import Llama
             from chat_workflow_v2 import TwoTrackWorkflow
-            from service_state import get_state
 
-            state = get_state()
             model_service = get_model_service()
 
             model_l2, rag, _ = model_service.load_model()
@@ -105,7 +102,7 @@ def get_two_track_workflow():
                 l1_path = l2_path
                 logger.info("Using same model for L1 and L2")
 
-            _two_track_workflow = TwoTrackWorkflow(
+            state.two_track_workflow = TwoTrackWorkflow(
                 llm_l1=model_l1,
                 llm_l2=model_l2,
                 rag_service=rag,
@@ -116,7 +113,7 @@ def get_two_track_workflow():
         except Exception as e:
             logger.error(f"Failed to initialize Two-Track Workflow: {e}")
             raise
-    return _two_track_workflow
+    return state.two_track_workflow
 
 
 @chat_bp.route("/api/chat/v2", methods=["POST"])
@@ -166,7 +163,7 @@ def chat_v2():
             reply = result.get("reply")
             if not reply or reply.strip() == "":
                 logger.warning("Workflow v2 returned empty reply")
-                reply = "죄송합니다. 응답을 생성할 수 없습니다."
+                reply = "음, 답변을 만들지 못했어요 🤔 다시 질문해주실래요?"
 
             return jsonify({
                 "reply": reply,
@@ -192,7 +189,7 @@ def chat_v2():
         return jsonify({
             "error": "Failed to process chat request",
             "message": str(e),
-            "reply": "죄송합니다. 현재 AI 서비스가 일시적으로 사용 불가합니다."
+            "reply": "앗, 지금 AI가 잠시 쉬고 있어요 😴 조금 뒤에 다시 시도해주세요!"
         }), 500
 
 

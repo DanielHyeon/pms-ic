@@ -190,6 +190,17 @@ class RAGServiceNeo4j:
                 except Exception as e:
                     logger.warning(f"Vector index creation: {e}")
 
+                # 3. Fulltext index for hybrid search (keyword matching)
+                try:
+                    session.run("""
+                        CREATE FULLTEXT INDEX chunk_fulltext IF NOT EXISTS
+                        FOR (c:Chunk)
+                        ON EACH [c.content, c.title]
+                    """)
+                    logger.info("✅ Fulltext index created/verified successfully")
+                except Exception as e:
+                    logger.warning(f"Fulltext index creation: {e}")
+
                 logger.info("✅ Neo4j database initialized successfully")
 
             except Exception as e:
@@ -392,9 +403,16 @@ class RAGServiceNeo4j:
         use_graph_expansion: bool = True,
     ) -> List[Dict]:
         try:
+            # Hybrid search weights (configurable via environment)
+            # Keyword-first approach: prioritize exact matches over semantic similarity
+            vector_weight = float(os.getenv("HYBRID_VECTOR_WEIGHT", "0.4"))
+            keyword_weight = float(os.getenv("HYBRID_KEYWORD_WEIGHT", "0.6"))
+            use_hybrid = os.getenv("HYBRID_SEARCH_ENABLED", "true").lower() == "true"
+
             # 쿼리 임베딩 생성
             query_with_prefix = f"query: {query}"
             logger.info(f"🔍 _search_impl called: query='{query}', top_k={top_k}, use_graph_expansion={use_graph_expansion}")
+            logger.info(f"  - Hybrid search: enabled={use_hybrid}, vector_weight={vector_weight}, keyword_weight={keyword_weight}")
             query_embedding = self.embedding_model.encode(query_with_prefix).tolist()
             logger.info(f"  - Generated embedding vector of length: {len(query_embedding)}")
 
@@ -541,14 +559,43 @@ class RAGServiceNeo4j:
 
                     results.append(item)
 
+                logger.info(f"  - Vector search returned {record_count} results")
+
+                # Hybrid search: Add keyword search results
+                if use_hybrid and query.strip():
+                    keyword_results = self._keyword_search(
+                        session, query, top_k * 2, project_id, user_access_level
+                    )
+                    logger.info(f"  - Keyword search returned {len(keyword_results)} results")
+
+                    # Select merge method: "rrf" (default), "weighted", or "rrf_rerank"
+                    merge_method = os.getenv("HYBRID_MERGE_METHOD", "rrf").lower()
+                    logger.info(f"  - Merge method: {merge_method}")
+
+                    if merge_method == "rrf":
+                        # RRF (Reciprocal Rank Fusion) - rank-based merging
+                        results = self._merge_hybrid_rrf(
+                            results, keyword_results, top_k
+                        )
+                    elif merge_method == "rrf_rerank":
+                        # RRF + Cross-encoder reranking
+                        results = self._merge_hybrid_rrf(
+                            results, keyword_results, top_k * 3  # Get more candidates for reranking
+                        )
+                        results = self._rerank_results(query, results, top_k)
+                    else:
+                        # Default: Weighted scoring
+                        results = self._merge_hybrid_results(
+                            results, keyword_results, vector_weight, keyword_weight, top_k
+                        )
+                    logger.info(f"  - Hybrid merge produced {len(results)} results")
+
                 # 카테고리 필터 적용 (메타데이터 필터) - 권한 필터는 이미 Cypher에서 적용됨
                 if filter_metadata and "category" in filter_metadata:
                     filter_category = filter_metadata["category"]
                     results = [r for r in results if r["metadata"].get("category") == filter_category]
 
                 logger.info(f"  - Access control filtered: project_id={project_id}, user_level={user_access_level}")
-
-                logger.info(f"  - Retrieved {record_count} raw results from Neo4j")
 
                 # top_k 개만 반환
                 results = results[:top_k]
@@ -565,6 +612,400 @@ class RAGServiceNeo4j:
         except Exception as e:
             logger.error(f"Search failed: {e}", exc_info=True)
             return []
+
+    def _keyword_search(
+        self,
+        session,
+        query: str,
+        top_k: int,
+        project_id: Optional[str],
+        user_access_level: int
+    ) -> List[Dict]:
+        """Perform keyword-based fulltext search with title boost and definition detection."""
+        try:
+            import re
+
+            # Extract core keywords (remove question markers like ~란, ~이란, ~무엇 etc.)
+            core_query = re.sub(r'(이?란|란\?|무엇|뭐|어떻게|왜|에 대해|에대해|설명|알려줘|해줘)\s*$', '', query).strip()
+            is_definition_query = bool(re.search(r'(이?란|무엇|뭐야|뭔가요)\s*$', query))
+
+            # Use core_query for Lucene search (better results without question markers)
+            search_query = core_query or query
+            escaped_query = self._escape_lucene_query(search_query)
+
+            logger.info(f"  - Keyword search: search_query='{search_query}', core_query='{core_query}', is_definition={is_definition_query}")
+
+            keyword_query = """
+                CALL db.index.fulltext.queryNodes('chunk_fulltext', $query)
+                YIELD node AS c, score
+
+                WHERE ($project_id IS NULL OR c.project_id = $project_id OR c.project_id = 'default')
+                  AND c.access_level <= $user_access_level
+
+                MATCH (d:Document)-[:HAS_CHUNK]->(c)
+                WHERE d.access_level <= $user_access_level
+                OPTIONAL MATCH (d)-[:BELONGS_TO]->(cat:Category)
+
+                RETURN
+                    c.chunk_id AS chunk_id,
+                    c.content AS content,
+                    c.title AS title,
+                    c.structure_type AS structure_type,
+                    c.project_id AS chunk_project_id,
+                    c.access_level AS chunk_access_level,
+                    score,
+                    d.doc_id AS doc_id,
+                    d.title AS doc_title,
+                    d.project_id AS doc_project_id,
+                    d.access_level AS doc_access_level,
+                    cat.name AS category
+                ORDER BY score DESC
+                LIMIT $top_k
+            """
+
+            result = session.run(
+                keyword_query,
+                parameters={
+                    "query": escaped_query,
+                    "top_k": top_k,
+                    "project_id": project_id,
+                    "user_access_level": user_access_level
+                }
+            )
+
+            # Collect all results first to find max score for normalization
+            raw_results = list(result)
+            max_raw_score = max((r.get("score", 0) for r in raw_results), default=1.0)
+            if max_raw_score == 0:
+                max_raw_score = 1.0
+
+            keyword_results = []
+            for record in raw_results:
+                raw_score = record.get("score", 0)
+                content = record.get("content") or ""
+                title = record.get("title") or ""
+
+                # Normalize using max score in result set (relative ranking)
+                normalized_score = raw_score / max_raw_score
+
+                # Title boost: if core query keywords appear in title
+                title_boost = 0.0
+                if core_query and core_query.lower() in title.lower():
+                    title_boost = 0.3
+                    logger.debug(f"  - Title boost applied for: {title[:50]}")
+
+                # Definition boost: if this looks like a definition (contains the term followed by explanation patterns)
+                definition_boost = 0.0
+                if is_definition_query and core_query:
+                    # Check if content contains definition patterns like "X라 불리는", "X는 ~이다", "X(영문)라"
+                    definition_patterns = [
+                        rf'{re.escape(core_query)}[은는이가]\s',  # X는, X은, X이, X가
+                        rf'{re.escape(core_query)}\s*\([^)]+\)\s*(라|란)',  # X(english)라
+                        rf'{re.escape(core_query)}.*방법',  # X 방법
+                    ]
+                    for pattern in definition_patterns:
+                        if re.search(pattern, content, re.IGNORECASE):
+                            definition_boost = 0.4
+                            logger.debug("  - Definition boost applied for pattern match")
+                            break
+
+                # Apply boosts
+                boosted_score = min(normalized_score + title_boost + definition_boost, 1.0)
+
+                item = {
+                    "chunk_id": record.get("chunk_id"),
+                    "content": content,
+                    "metadata": {
+                        "title": title,
+                        "doc_id": record.get("doc_id"),
+                        "doc_title": record.get("doc_title"),
+                        "structure_type": record.get("structure_type"),
+                        "category": record.get("category"),
+                        "project_id": record.get("doc_project_id") or record.get("chunk_project_id"),
+                        "access_level": record.get("doc_access_level") or record.get("chunk_access_level"),
+                    },
+                    "keyword_score": boosted_score,
+                    "raw_keyword_score": raw_score,
+                    "title_boost": title_boost,
+                    "definition_boost": definition_boost,
+                }
+                keyword_results.append(item)
+
+            # Re-sort by boosted keyword_score (boosts may change ranking)
+            keyword_results.sort(key=lambda x: x.get("keyword_score", 0), reverse=True)
+
+            # Log top keyword results with boost details
+            for i, item in enumerate(keyword_results[:3]):
+                logger.info(
+                    f"  - Keyword rank {i+1}: raw={item.get('raw_keyword_score', 0):.2f}, "
+                    f"title_boost={item.get('title_boost', 0):.1f}, "
+                    f"def_boost={item.get('definition_boost', 0):.1f}, "
+                    f"final={item.get('keyword_score', 0):.3f}"
+                )
+
+            return keyword_results
+
+        except Exception as e:
+            logger.warning(f"Keyword search failed (will use vector-only): {e}")
+            return []
+
+    def _escape_lucene_query(self, query: str) -> str:
+        """Escape special Lucene query characters."""
+        special_chars = ['+', '-', '&&', '||', '!', '(', ')', '{', '}', '[', ']', '^', '"', '~', '*', '?', ':', '\\', '/']
+        escaped = query
+        for char in special_chars:
+            escaped = escaped.replace(char, f'\\{char}')
+        return escaped
+
+    def _merge_hybrid_results(
+        self,
+        vector_results: List[Dict],
+        keyword_results: List[Dict],
+        vector_weight: float,
+        keyword_weight: float,
+        top_k: int
+    ) -> List[Dict]:
+        """Merge vector and keyword search results with weighted scoring."""
+        # Create lookup by chunk_id
+        merged = {}
+
+        # Add vector results
+        for item in vector_results:
+            chunk_id = item.get("chunk_id")
+            if chunk_id:
+                merged[chunk_id] = {
+                    **item,
+                    "vector_score": item.get("relevance_score", 0),
+                    "keyword_score": 0,
+                    "search_type": "vector"
+                }
+
+        # Merge keyword results
+        for item in keyword_results:
+            chunk_id = item.get("chunk_id")
+            if chunk_id:
+                if chunk_id in merged:
+                    # Found in both - combine scores
+                    merged[chunk_id]["keyword_score"] = item.get("keyword_score", 0)
+                    merged[chunk_id]["search_type"] = "hybrid"
+                else:
+                    # Only in keyword results
+                    merged[chunk_id] = {
+                        **item,
+                        "vector_score": 0,
+                        "keyword_score": item.get("keyword_score", 0),
+                        "relevance_score": 0,
+                        "distance": 1.0,
+                        "search_type": "keyword"
+                    }
+
+        # Calculate combined scores
+        for chunk_id, item in merged.items():
+            vector_score = item.get("vector_score", 0)
+            keyword_score = item.get("keyword_score", 0)
+
+            # Weighted combination
+            combined_score = (vector_score * vector_weight) + (keyword_score * keyword_weight)
+
+            # Boost if found in both searches
+            if item.get("search_type") == "hybrid":
+                combined_score *= 1.1  # 10% boost for appearing in both
+
+            item["relevance_score"] = min(combined_score, 1.0)
+            item["distance"] = 1 - item["relevance_score"]
+
+        # Sort by combined score and return top_k
+        sorted_results = sorted(merged.values(), key=lambda x: x.get("relevance_score", 0), reverse=True)
+
+        # Log hybrid search details
+        for i, item in enumerate(sorted_results[:3]):
+            logger.info(
+                f"  - Rank {i+1}: {item.get('search_type')} "
+                f"(v={item.get('vector_score', 0):.3f}, k={item.get('keyword_score', 0):.3f}, "
+                f"combined={item.get('relevance_score', 0):.3f})"
+            )
+
+        return sorted_results[:top_k]
+
+    def _merge_hybrid_rrf(
+        self,
+        vector_results: List[Dict],
+        keyword_results: List[Dict],
+        top_k: int,
+        k: int = 60
+    ) -> List[Dict]:
+        """
+        Merge using Reciprocal Rank Fusion (RRF).
+
+        RRF score = Σ 1/(k + rank) for each ranking list
+
+        Unlike weighted scoring, RRF is rank-based and doesn't depend on
+        absolute score values, making it more robust to score scale differences.
+
+        Args:
+            vector_results: Results from vector search (ordered by similarity)
+            keyword_results: Results from keyword search (ordered by BM25/Lucene score)
+            top_k: Number of results to return
+            k: RRF constant (default 60, as per original paper)
+
+        Returns:
+            Merged results sorted by RRF score
+        """
+        rrf_scores = {}  # chunk_id -> {"rrf_score": float, "data": dict, "ranks": dict}
+
+        # Calculate RRF contribution from vector results
+        for rank, item in enumerate(vector_results, start=1):
+            chunk_id = item.get("chunk_id")
+            if chunk_id:
+                rrf_score = 1.0 / (k + rank)
+                rrf_scores[chunk_id] = {
+                    "rrf_score": rrf_score,
+                    "data": item,
+                    "ranks": {"vector": rank, "keyword": None},
+                    "search_type": "vector"
+                }
+
+        # Calculate RRF contribution from keyword results
+        for rank, item in enumerate(keyword_results, start=1):
+            chunk_id = item.get("chunk_id")
+            if chunk_id:
+                rrf_contribution = 1.0 / (k + rank)
+
+                if chunk_id in rrf_scores:
+                    # Found in both - add RRF scores
+                    rrf_scores[chunk_id]["rrf_score"] += rrf_contribution
+                    rrf_scores[chunk_id]["ranks"]["keyword"] = rank
+                    rrf_scores[chunk_id]["search_type"] = "hybrid"
+                    # Prefer keyword data if it has higher keyword_score
+                    if item.get("keyword_score", 0) > rrf_scores[chunk_id]["data"].get("keyword_score", 0):
+                        rrf_scores[chunk_id]["data"]["keyword_score"] = item.get("keyword_score", 0)
+                else:
+                    # Only in keyword results
+                    rrf_scores[chunk_id] = {
+                        "rrf_score": rrf_contribution,
+                        "data": {**item, "vector_score": 0, "distance": 1.0},
+                        "ranks": {"vector": None, "keyword": rank},
+                        "search_type": "keyword"
+                    }
+
+        # Build final results with RRF score as relevance_score
+        results = []
+        for chunk_id, info in rrf_scores.items():
+            result = info["data"].copy()
+            result["relevance_score"] = info["rrf_score"]
+            result["rrf_score"] = info["rrf_score"]
+            result["search_type"] = info["search_type"]
+            result["rrf_ranks"] = info["ranks"]
+            # Normalize distance for compatibility (invert RRF to distance-like metric)
+            # RRF max is ~0.033 (1/61 + 1/61), so we scale it
+            result["distance"] = max(0, 1 - (info["rrf_score"] * 30))  # Scale for visibility
+            results.append(result)
+
+        # Sort by RRF score (descending)
+        results.sort(key=lambda x: x.get("rrf_score", 0), reverse=True)
+
+        # Log RRF merge details
+        logger.info(f"  - RRF merge: {len(vector_results)} vector + {len(keyword_results)} keyword = {len(results)} unique")
+        for i, item in enumerate(results[:5]):
+            ranks = item.get("rrf_ranks", {})
+            logger.info(
+                f"    Rank {i+1}: {item.get('search_type')} "
+                f"(v_rank={ranks.get('vector', '-')}, k_rank={ranks.get('keyword', '-')}, "
+                f"rrf={item.get('rrf_score', 0):.4f})"
+            )
+
+        return results[:top_k]
+
+    def _rerank_results(
+        self,
+        query: str,
+        results: List[Dict],
+        top_k: int,
+        model_name: str = None
+    ) -> List[Dict]:
+        """
+        Rerank results using a Cross-Encoder model.
+
+        Cross-encoders jointly encode query and document together,
+        providing more accurate relevance scores than bi-encoders
+        at the cost of higher latency.
+
+        Args:
+            query: Original search query
+            results: Candidate results to rerank
+            top_k: Number of top results to return
+            model_name: Cross-encoder model name (default from env)
+
+        Returns:
+            Reranked results sorted by cross-encoder score
+        """
+        if not results:
+            return results
+
+        # Get model name from env if not specified
+        if model_name is None:
+            model_name = os.getenv(
+                "RERANKER_MODEL",
+                "cross-encoder/ms-marco-MiniLM-L-6-v2"  # Fast, good quality
+            )
+
+        try:
+            from sentence_transformers import CrossEncoder
+
+            # Lazy load the cross-encoder model
+            if not hasattr(self, "_cross_encoder") or self._cross_encoder_name != model_name:
+                logger.info(f"Loading cross-encoder model: {model_name}")
+                self._cross_encoder = CrossEncoder(model_name, max_length=512)
+                self._cross_encoder_name = model_name
+
+            # Prepare query-document pairs for scoring
+            pairs = []
+            for result in results:
+                content = result.get("content", "")
+                title = result.get("title", "")
+                # Combine title and content for better context
+                doc_text = f"{title}\n{content}" if title else content
+                pairs.append([query, doc_text])
+
+            # Get cross-encoder scores
+            logger.info(f"  - Reranking {len(pairs)} candidates with {model_name}")
+            scores = self._cross_encoder.predict(pairs, show_progress_bar=False)
+
+            # Add cross-encoder scores to results
+            for i, result in enumerate(results):
+                result["cross_encoder_score"] = float(scores[i])
+                result["original_rank"] = i + 1
+
+            # Sort by cross-encoder score (descending)
+            results.sort(key=lambda x: x.get("cross_encoder_score", 0), reverse=True)
+
+            # Update relevance_score with cross-encoder score (normalized to 0-1)
+            # Cross-encoder scores are typically logits, so we apply sigmoid
+            import math
+            for result in results:
+                ce_score = result.get("cross_encoder_score", 0)
+                # Sigmoid normalization
+                normalized = 1 / (1 + math.exp(-ce_score))
+                result["relevance_score"] = normalized
+                result["distance"] = 1 - normalized
+
+            # Log reranking details
+            logger.info(f"  - Reranking complete, top results:")
+            for i, item in enumerate(results[:5]):
+                logger.info(
+                    f"    Rank {i+1} (was {item.get('original_rank', '?')}): "
+                    f"ce_score={item.get('cross_encoder_score', 0):.3f}, "
+                    f"relevance={item.get('relevance_score', 0):.3f}"
+                )
+
+            return results[:top_k]
+
+        except ImportError:
+            logger.warning("sentence-transformers not available for reranking, skipping")
+            return results[:top_k]
+        except Exception as e:
+            logger.error(f"Reranking failed: {e}", exc_info=True)
+            return results[:top_k]
 
     def delete_document(self, doc_id: str) -> bool:
         """문서 삭제 (Document 및 연결된 Chunk들 삭제)"""

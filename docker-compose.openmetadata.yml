@@ -8,7 +8,7 @@ services:
   # OpenMetadata Database Migration (runs once)
   # ============================================
   openmetadata-migrate:
-    image: openmetadata/server:1.4.0
+    image: openmetadata/server:1.6.1
     container_name: pms-openmetadata-migrate
     entrypoint: ["/bin/bash", "-c"]
     command:
@@ -42,7 +42,7 @@ services:
   # OpenMetadata Server
   # ============================================
   openmetadata:
-    image: openmetadata/server:1.4.0
+    image: openmetadata/server:1.6.1
     container_name: pms-openmetadata
     environment:
       OPENMETADATA_CLUSTER_NAME: openmetadata
@@ -118,7 +118,7 @@ services:
   # Elasticsearch (Search Engine)
   # ============================================
   openmetadata-elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.10.2
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
     container_name: pms-openmetadata-elasticsearch
     environment:
       - discovery.type=single-node
@@ -146,7 +146,7 @@ services:
   # OpenMetadata Ingestion (Optional - for automation)
   # ============================================
   openmetadata-ingestion:
-    image: openmetadata/ingestion:1.4.0
+    image: openmetadata/ingestion:1.6.1
     container_name: pms-openmetadata-ingestion
     profiles:
       - ingestion  # Only start with --profile ingestion

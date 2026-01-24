@@ -123,12 +123,12 @@ All persistent data is stored in the local `./data/` directory:
 
 | Service | Image | Version |
 |---------|-------|---------|
-| PostgreSQL | postgres:15-alpine | 15.x |
-| Redis | redis:7-alpine | 7.x |
-| Neo4j | neo4j:5.26.0-community | 5.26.0 |
+| PostgreSQL | postgres:17-alpine | 17.x |
+| Redis | redis:8-alpine | 8.x |
+| Neo4j | neo4j:5.26.20-community | 5.26.20 |
 | Qdrant | qdrant/qdrant:latest | latest |
-| Elasticsearch | elasticsearch:8.10.2 | 8.10.2 |
-| OpenMetadata | openmetadata/server:1.4.0 | 1.4.0 |
+| Elasticsearch | elasticsearch:8.17.0 | 8.17.0 |
+| OpenMetadata | openmetadata/server:1.6.1 | 1.6.1 |
 
 ## Commands
 

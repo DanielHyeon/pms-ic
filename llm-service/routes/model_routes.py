@@ -16,21 +16,6 @@ from services.model_service import get_model_service
 
 logger = logging.getLogger(__name__)
 
-# Reference to two-track workflow for reset on model change
-_two_track_workflow_ref = None
-
-
-def set_two_track_workflow_ref(ref):
-    """Set reference to two-track workflow for reset on model change."""
-    global _two_track_workflow_ref
-    _two_track_workflow_ref = ref
-
-
-def reset_two_track_workflow():
-    """Reset two-track workflow to force reinitialization."""
-    global _two_track_workflow_ref
-    _two_track_workflow_ref = None
-
 
 @model_bp.route("/api/model/current", methods=["GET"])
 def get_current_model():
@@ -179,7 +164,8 @@ def change_lightweight_model():
         old_path = state.lightweight_model_path
         state.lightweight_model_path = model_path
 
-        reset_two_track_workflow()
+        # Reset workflow via shared state to force reload with new model
+        state.reset_two_track_workflow()
 
         logger.info(f"Lightweight model changed: {old_path} -> {model_path}")
 
@@ -254,7 +240,8 @@ def change_medium_model():
         old_path = state.medium_model_path
         state.medium_model_path = model_path
 
-        reset_two_track_workflow()
+        # Reset workflow via shared state to force reload with new model
+        state.reset_two_track_workflow()
 
         logger.info(f"Medium model changed: {old_path} -> {model_path}")
 

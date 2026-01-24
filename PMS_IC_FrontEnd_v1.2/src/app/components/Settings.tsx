@@ -34,13 +34,20 @@ const availableModels: ModelInfo[] = [
     category: 'lightweight'
   },
   {
+    name: 'Qwen3-4B-Q4_K_M.gguf',
+    displayName: 'Qwen3 4B (권장)',
+    size: '4B',
+    description: '빠른 속도와 우수한 품질. Thinking Mode 지원, 일반 업무에 권장됩니다.',
+    category: 'lightweight'
+  },
+  // Medium models (중형 모델 - 8B 이상)
+  {
     name: 'Qwen3-8B-Q5_K_M.gguf',
     displayName: 'Qwen3 8B',
     size: '8B',
-    description: '강력한 추론 능력과 한국어 성능을 제공합니다. 일반 업무에 권장됩니다.',
-    category: 'lightweight'
+    description: '강력한 추론 능력과 한국어 성능을 제공합니다. 복잡한 업무에 적합합니다.',
+    category: 'medium'
   },
-  // Medium models (중형 모델)
   {
     name: 'google.gemma-3-12b-pt.Q5_K_M.gguf',
     displayName: 'Gemma 3 12B Q5',
