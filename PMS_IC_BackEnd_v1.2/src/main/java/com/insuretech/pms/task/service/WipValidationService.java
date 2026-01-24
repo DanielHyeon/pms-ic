@@ -1,5 +1,8 @@
 package com.insuretech.pms.task.service;
 
+import com.insuretech.pms.task.dto.ColumnWipStatusResponse;
+import com.insuretech.pms.task.dto.ProjectWipStatusResponse;
+import com.insuretech.pms.task.dto.SprintWipStatusResponse;
 import com.insuretech.pms.task.dto.WipValidationResult;
 import com.insuretech.pms.task.entity.KanbanColumn;
 import com.insuretech.pms.task.entity.Sprint;
@@ -11,7 +14,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -156,11 +161,10 @@ public class WipValidationService {
      * Get overall WIP status for a project
      */
     @Transactional(readOnly = true)
-    public Map<String, Object> getProjectWipStatus(String projectId) {
+    public ProjectWipStatusResponse getProjectWipStatus(String projectId) {
         List<KanbanColumn> columns = kanbanColumnRepository.findByProjectIdOrderByOrderNumAsc(projectId);
 
-        Map<String, Object> wipStatus = new HashMap<>();
-        List<Map<String, Object>> columnStatuses = new ArrayList<>();
+        List<ColumnWipStatusResponse> columnStatuses = new ArrayList<>();
         int totalWip = 0;
         int bottleneckCount = 0;
 
@@ -168,31 +172,29 @@ public class WipValidationService {
             int columnWip = getColumnWipCount(column.getId());
             totalWip += columnWip;
 
-            Map<String, Object> columnStatus = new HashMap<>();
-            columnStatus.put("columnId", column.getId());
-            columnStatus.put("columnName", column.getName());
-            columnStatus.put("wipCount", columnWip);
-            columnStatus.put("wipLimitSoft", column.getWipLimitSoft());
-            columnStatus.put("wipLimitHard", column.getWipLimitHard());
-            columnStatus.put("isBottleneck", column.getIsBottleneckColumn());
+            ColumnWipStatusResponse columnStatus = ColumnWipStatusResponse.builder()
+                    .columnId(column.getId())
+                    .columnName(column.getName())
+                    .currentWip(columnWip)
+                    .wipLimitSoft(column.getWipLimitSoft())
+                    .wipLimitHard(column.getWipLimitHard())
+                    .isBottleneck(column.getIsBottleneckColumn())
+                    .health(calculateColumnHealth(column, columnWip))
+                    .build();
 
-            // Calculate health status
-            String health = calculateColumnHealth(column, columnWip);
-            columnStatus.put("health", health);
-
-            if (column.getIsBottleneckColumn()) {
+            if (Boolean.TRUE.equals(column.getIsBottleneckColumn())) {
                 bottleneckCount++;
             }
 
             columnStatuses.add(columnStatus);
         }
 
-        wipStatus.put("projectId", projectId);
-        wipStatus.put("totalWip", totalWip);
-        wipStatus.put("columnStatuses", columnStatuses);
-        wipStatus.put("bottleneckCount", bottleneckCount);
-
-        return wipStatus;
+        return ProjectWipStatusResponse.builder()
+                .projectId(projectId)
+                .totalWip(totalWip)
+                .columnStatuses(columnStatuses)
+                .bottleneckCount(bottleneckCount)
+                .build();
     }
 
     /**
@@ -291,63 +293,67 @@ public class WipValidationService {
      * Get detailed WIP status for a specific column
      */
     @Transactional(readOnly = true)
-    public Map<String, Object> getColumnWipStatus(String columnId) {
+    public ColumnWipStatusResponse getColumnWipStatus(String columnId) {
         Optional<KanbanColumn> columnOpt = kanbanColumnRepository.findById(columnId);
         if (columnOpt.isEmpty()) {
-            return Map.of("error", "Column not found");
+            return ColumnWipStatusResponse.notFound(columnId);
         }
 
         KanbanColumn column = columnOpt.get();
         int currentWip = getColumnWipCount(columnId);
 
-        Map<String, Object> status = new HashMap<>();
-        status.put("columnId", column.getId());
-        status.put("columnName", column.getName());
-        status.put("currentWip", currentWip);
-        status.put("wipLimitSoft", column.getWipLimitSoft());
-        status.put("wipLimitHard", column.getWipLimitHard());
-        status.put("isBottleneck", column.getIsBottleneckColumn());
-        status.put("health", calculateColumnHealth(column, currentWip));
+        Integer hardLimitPercentage = null;
+        Integer softLimitPercentage = null;
 
-        // Calculate percentages
-        if (column.getWipLimitHard() != null) {
-            status.put("hardLimitPercentage", (currentWip * 100) / column.getWipLimitHard());
+        if (column.getWipLimitHard() != null && column.getWipLimitHard() > 0) {
+            hardLimitPercentage = (currentWip * 100) / column.getWipLimitHard();
         }
-        if (column.getWipLimitSoft() != null) {
-            status.put("softLimitPercentage", (currentWip * 100) / column.getWipLimitSoft());
+        if (column.getWipLimitSoft() != null && column.getWipLimitSoft() > 0) {
+            softLimitPercentage = (currentWip * 100) / column.getWipLimitSoft();
         }
 
-        return status;
+        return ColumnWipStatusResponse.builder()
+                .columnId(column.getId())
+                .columnName(column.getName())
+                .currentWip(currentWip)
+                .wipLimitSoft(column.getWipLimitSoft())
+                .wipLimitHard(column.getWipLimitHard())
+                .isBottleneck(column.getIsBottleneckColumn())
+                .health(calculateColumnHealth(column, currentWip))
+                .hardLimitPercentage(hardLimitPercentage)
+                .softLimitPercentage(softLimitPercentage)
+                .build();
     }
 
     /**
      * Get detailed WIP status for a specific sprint
      */
     @Transactional(readOnly = true)
-    public Map<String, Object> getSprintWipStatus(String sprintId) {
+    public SprintWipStatusResponse getSprintWipStatus(String sprintId) {
         Optional<Sprint> sprintOpt = sprintRepository.findById(sprintId);
         if (sprintOpt.isEmpty()) {
-            return Map.of("error", "Sprint not found");
+            return SprintWipStatusResponse.notFound(sprintId);
         }
 
         Sprint sprint = sprintOpt.get();
         int currentWip = getSprintWipCount(sprintId);
 
-        Map<String, Object> status = new HashMap<>();
-        status.put("sprintId", sprint.getId());
-        status.put("sprintName", sprint.getName());
-        status.put("currentWip", currentWip);
-        status.put("conwipLimit", sprint.getConwipLimit());
-        status.put("wipValidationEnabled", sprint.getEnableWipValidation());
+        Integer conwipPercentage = null;
+        String health = "UNKNOWN";
 
-        // Calculate percentages if limit is set
         if (sprint.getConwipLimit() != null && sprint.getConwipLimit() > 0) {
-            status.put("conwipPercentage", (currentWip * 100) / sprint.getConwipLimit());
-            status.put("health", currentWip >= sprint.getConwipLimit() ? "RED" : "GREEN");
-        } else {
-            status.put("health", "UNKNOWN");
+            conwipPercentage = (currentWip * 100) / sprint.getConwipLimit();
+            health = currentWip >= sprint.getConwipLimit() ? "RED" : "GREEN";
         }
 
-        return status;
+        return SprintWipStatusResponse.builder()
+                .sprintId(sprint.getId())
+                .sprintName(sprint.getName())
+                .currentWip(currentWip)
+                .conwipLimit(sprint.getConwipLimit())
+                .wipValidationEnabled(sprint.getEnableWipValidation())
+                .health(health)
+                .conwipPercentage(conwipPercentage)
+                .build();
     }
 }

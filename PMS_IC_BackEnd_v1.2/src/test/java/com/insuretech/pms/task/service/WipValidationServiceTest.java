@@ -1,5 +1,6 @@
 package com.insuretech.pms.task.service;
 
+import com.insuretech.pms.task.dto.ProjectWipStatusResponse;
 import com.insuretech.pms.task.dto.WipValidationResult;
 import com.insuretech.pms.task.entity.KanbanColumn;
 import com.insuretech.pms.task.entity.Sprint;
@@ -228,11 +229,12 @@ class WipValidationServiceTest {
         }
 
         // Get project status
-        var wipStatus = wipValidationService.getProjectWipStatus(projectId);
+        ProjectWipStatusResponse wipStatus = wipValidationService.getProjectWipStatus(projectId);
 
-        assertThat(wipStatus).containsKeys("projectId", "totalWip", "columnStatuses", "bottleneckCount");
-        assertThat(wipStatus.get("projectId")).isEqualTo(projectId);
-        assertThat((Integer) wipStatus.get("totalWip")).isGreaterThan(0);
+        assertThat(wipStatus).isNotNull();
+        assertThat(wipStatus.getProjectId()).isEqualTo(projectId);
+        assertThat(wipStatus.getTotalWip()).isGreaterThan(0);
+        assertThat(wipStatus.getColumnStatuses()).isNotNull();
     }
 
     @Test
@@ -264,8 +266,8 @@ class WipValidationServiceTest {
         }
 
         // Get project status
-        var wipStatus = wipValidationService.getProjectWipStatus(projectId);
+        ProjectWipStatusResponse wipStatus = wipValidationService.getProjectWipStatus(projectId);
 
-        assertThat((Integer) wipStatus.get("bottleneckCount")).isGreaterThan(0);
+        assertThat(wipStatus.getBottleneckCount()).isGreaterThan(0);
     }
 }

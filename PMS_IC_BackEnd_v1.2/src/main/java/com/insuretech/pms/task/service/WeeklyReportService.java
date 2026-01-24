@@ -1,5 +1,6 @@
 package com.insuretech.pms.task.service;
 
+import com.insuretech.pms.task.dto.TaskMetrics;
 import com.insuretech.pms.task.dto.WeeklyReportDto;
 import com.insuretech.pms.task.entity.Sprint;
 import com.insuretech.pms.task.entity.Task;
@@ -112,34 +113,17 @@ public class WeeklyReportService {
                 .filter(t -> true) // Filter by project in real implementation
                 .collect(Collectors.toList());
 
-        int total = projectTasks.size();
-        int completed = (int) projectTasks.stream()
-                .filter(t -> t.getStatus() == Task.TaskStatus.DONE)
-                .count();
-        int inProgress = (int) projectTasks.stream()
-                .filter(t -> t.getStatus() == Task.TaskStatus.IN_PROGRESS)
-                .count();
-        int todo = (int) projectTasks.stream()
-                .filter(t -> t.getStatus() == Task.TaskStatus.TODO)
-                .count();
-        int blocked = (int) projectTasks.stream()
-                .filter(t -> t.getStatus() == Task.TaskStatus.REVIEW)
-                .count();
-
-        report.setTotalTasks(total);
-        report.setCompletedTasks(completed);
-        report.setInProgressTasks(inProgress);
-        report.setTodoTasks(todo);
-        report.setBlockedTasks(blocked);
-        report.setCompletionRate(total > 0 ? (completed * 100.0) / total : 0.0);
+        // Use TaskMetrics to calculate and apply metrics (eliminates data clump)
+        TaskMetrics metrics = TaskMetrics.fromTasks(projectTasks);
+        metrics.applyTo(report);
 
         // Calculate velocity (simplified)
-        report.setVelocity((double) completed);
+        report.setVelocity((double) metrics.getCompleted());
 
         // Set default values for other metrics
-        report.setAverageWipCount(inProgress);
-        report.setPeakWipCount(inProgress);
-        report.setFlowEfficiency(total > 0 ? (completed * 100.0) / total : 0.0);
+        report.setAverageWipCount(metrics.getInProgress());
+        report.setPeakWipCount(metrics.getInProgress());
+        report.setFlowEfficiency(metrics.getCompletionRate());
     }
 
     /**
@@ -152,25 +136,13 @@ public class WeeklyReportService {
 
         List<Task> sprintTasks = taskRepository.findBySprintId(report.getSprintId());
 
-        int total = sprintTasks.size();
-        int completed = (int) sprintTasks.stream()
-                .filter(t -> t.getStatus() == Task.TaskStatus.DONE)
-                .count();
-        int inProgress = (int) sprintTasks.stream()
-                .filter(t -> t.getStatus() == Task.TaskStatus.IN_PROGRESS)
-                .count();
-        int todo = (int) sprintTasks.stream()
-                .filter(t -> t.getStatus() == Task.TaskStatus.TODO)
-                .count();
+        // Use TaskMetrics to calculate and apply metrics (eliminates duplicate logic)
+        TaskMetrics metrics = TaskMetrics.fromTasks(sprintTasks);
+        metrics.applyTo(report);
 
-        report.setTotalTasks(total);
-        report.setCompletedTasks(completed);
-        report.setInProgressTasks(inProgress);
-        report.setTodoTasks(todo);
-        report.setCompletionRate(total > 0 ? (completed * 100.0) / total : 0.0);
-        report.setVelocity((double) completed);
-        report.setAverageWipCount(inProgress);
-        report.setFlowEfficiency(total > 0 ? (completed * 100.0) / total : 0.0);
+        report.setVelocity((double) metrics.getCompleted());
+        report.setAverageWipCount(metrics.getInProgress());
+        report.setFlowEfficiency(metrics.getCompletionRate());
     }
 
     /**

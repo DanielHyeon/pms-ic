@@ -13,6 +13,10 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.insuretech.pms.task.dto.BottleneckAlertRequest;
+import com.insuretech.pms.task.dto.PersonalWipNotificationRequest;
+import com.insuretech.pms.task.dto.WipNotificationRequest;
+
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -51,10 +55,63 @@ public class WipEmailNotificationService {
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
+    // ==================== NEW DTO-BASED METHODS ====================
+
+    /**
+     * Send WIP limit notification using DTO
+     * Dispatches to appropriate notification method based on notification type
+     */
+    @Async
+    @Transactional(readOnly = true)
+    public void sendNotification(WipNotificationRequest request) {
+        switch (request.getNotificationType()) {
+            case SOFT_LIMIT_WARNING:
+                sendSoftLimitWarning(request.getProjectId(), request.getTargetId(),
+                        request.getTargetName(), request.getCurrentWip(),
+                        request.getWipLimit(), request.getRecipientId());
+                break;
+            case HARD_LIMIT_VIOLATION:
+                sendHardLimitViolation(request.getProjectId(), request.getTargetId(),
+                        request.getTargetName(), request.getCurrentWip(),
+                        request.getWipLimit(), request.getRecipientId());
+                break;
+            case CONWIP_VIOLATION:
+                sendSprintConwipViolation(request.getProjectId(), request.getTargetId(),
+                        request.getTargetName(), request.getCurrentWip(),
+                        request.getWipLimit(), request.getRecipientId());
+                break;
+        }
+    }
+
+    /**
+     * Send bottleneck alert using DTO
+     */
+    @Async
+    @Transactional(readOnly = true)
+    public void sendBottleneckAlert(BottleneckAlertRequest request) {
+        sendBottleneckAlert(request.getProjectId(), request.getColumnId(),
+                request.getColumnName(), request.getBlockingTasks(),
+                request.getAffectedTasks(), request.getProjectManagerId());
+    }
+
+    /**
+     * Send personal WIP violation using DTO
+     */
+    @Async
+    @Transactional(readOnly = true)
+    public void sendPersonalWipViolation(PersonalWipNotificationRequest request) {
+        sendPersonalWipViolation(request.getProjectId(), request.getAssigneeId(),
+                request.getAssigneeName(), request.getCurrentWip(), request.getMaxWip());
+    }
+
+    // ==================== DEPRECATED METHODS (for backward compatibility) ====================
+
     /**
      * Send soft limit warning email
      * Called when column WIP reaches soft limit (warning threshold)
+     * @deprecated Use {@link #sendNotification(WipNotificationRequest)} instead
      */
+    @Deprecated(since = "1.3", forRemoval = true)
     @Async
     @Transactional(readOnly = true)
     public void sendSoftLimitWarning(String projectId, String columnId, String columnName,
@@ -84,7 +141,9 @@ public class WipEmailNotificationService {
     /**
      * Send hard limit violation email
      * Called when column WIP exceeds hard limit (blocking threshold)
+     * @deprecated Use {@link #sendNotification(WipNotificationRequest)} instead
      */
+    @Deprecated(since = "1.3", forRemoval = true)
     @Async
     @Transactional(readOnly = true)
     public void sendHardLimitViolation(String projectId, String columnId, String columnName,
@@ -114,7 +173,9 @@ public class WipEmailNotificationService {
     /**
      * Send bottleneck detection alert
      * Called when workflow bottleneck is detected
+     * @deprecated Use {@link #sendBottleneckAlert(BottleneckAlertRequest)} instead
      */
+    @Deprecated(since = "1.3", forRemoval = true)
     @Async
     @Transactional(readOnly = true)
     public void sendBottleneckAlert(String projectId, String columnId, String columnName,
@@ -144,7 +205,9 @@ public class WipEmailNotificationService {
     /**
      * Send sprint CONWIP violation alert
      * Called when sprint constant WIP limit is exceeded
+     * @deprecated Use {@link #sendNotification(WipNotificationRequest)} instead
      */
+    @Deprecated(since = "1.3", forRemoval = true)
     @Async
     @Transactional(readOnly = true)
     public void sendSprintConwipViolation(String projectId, String sprintId, String sprintName,
@@ -174,7 +237,9 @@ public class WipEmailNotificationService {
     /**
      * Send personal WIP limit violation
      * Called when assignee exceeds personal WIP limit
+     * @deprecated Use {@link #sendPersonalWipViolation(PersonalWipNotificationRequest)} instead
      */
+    @Deprecated(since = "1.3", forRemoval = true)
     @Async
     @Transactional(readOnly = true)
     public void sendPersonalWipViolation(String projectId, String assigneeId, String assigneeName,

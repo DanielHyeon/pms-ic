@@ -2,18 +2,15 @@ import { useState } from 'react';
 import { ChevronDown, ChevronRight, Plus, Star, ArrowUp, ArrowDown, Users, Check, RotateCcw, Pencil, Trash2 } from 'lucide-react';
 import { UserRole } from '../App';
 import { useStories, useCreateStory, useUpdateStory, useUpdateStoryPriority } from '../../hooks/api/useStories';
-
-interface UserStory {
-  id: number;
-  title: string;
-  description: string;
-  priority: number;
-  storyPoints?: number;
-  status: 'BACKLOG' | 'SELECTED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
-  assignee?: string;
-  epic: string;
-  acceptanceCriteria: string[];
-}
+import { canEdit as checkCanEdit, canPrioritize as checkCanPrioritize } from '../../utils/rolePermissions';
+import {
+  UserStory,
+  StoryFormData,
+  createEmptyStoryForm,
+  storyToFormData,
+  validateStoryForm,
+  getPriorityColor,
+} from '../../utils/storyTypes';
 
 export default function BacklogManagement({ userRole }: { userRole: UserRole }) {
   const { data: stories = [], isLoading: isLoadingStories } = useStories();
@@ -29,40 +26,31 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
   const [showAddStoryModal, setShowAddStoryModal] = useState(false);
   const [showEditStoryModal, setShowEditStoryModal] = useState(false);
   const [editingStory, setEditingStory] = useState<UserStory | null>(null);
-  const [newStory, setNewStory] = useState({
-    title: '',
-    description: '',
-    epic: '',
-    acceptanceCriteria: [''],
-  });
-  const [editStoryForm, setEditStoryForm] = useState({
-    title: '',
-    description: '',
-    epic: '',
-    acceptanceCriteria: [''],
-  });
+  // Consolidated form state using extracted types
+  const [storyForm, setStoryForm] = useState<StoryFormData>(createEmptyStoryForm());
   const [selectedEpicFilter, setSelectedEpicFilter] = useState<string>('전체');
 
-  const canEdit = ['pm', 'developer', 'qa', 'pmo_head'].includes(userRole);
-  const canPrioritize = ['pm', 'pmo_head'].includes(userRole);
+  // Use centralized role permissions
+  const canEdit = checkCanEdit(userRole);
+  const canPrioritize = checkCanPrioritize(userRole);
 
   const handleAddStory = () => {
-    if (!newStory.title || !newStory.description || !newStory.epic) {
+    if (!validateStoryForm(storyForm)) {
       alert('필수 항목을 모두 입력해주세요.');
       return;
     }
 
     const storyData = {
-      title: newStory.title,
-      description: newStory.description,
-      epic: newStory.epic,
-      acceptanceCriteria: newStory.acceptanceCriteria.filter((c) => c.trim() !== ''),
+      title: storyForm.title,
+      description: storyForm.description,
+      epic: storyForm.epic,
+      acceptanceCriteria: storyForm.acceptanceCriteria.filter((c) => c.trim() !== ''),
     };
 
     createStoryMutation.mutate(storyData, {
       onSuccess: () => {
         setShowAddStoryModal(false);
-        setNewStory({ title: '', description: '', epic: '', acceptanceCriteria: [''] });
+        setStoryForm(createEmptyStoryForm());
       },
       onError: (error) => {
         console.error('Failed to create story:', error);
@@ -72,12 +60,6 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
   };
 
   const epics = Array.from(new Set(stories.map((s) => s.epic)));
-
-  const getPriorityColor = (priority: number) => {
-    if (priority <= 2) return 'text-red-600 bg-red-50';
-    if (priority <= 4) return 'text-amber-600 bg-amber-50';
-    return 'text-green-600 bg-green-50';
-  };
 
   const movePriority = (id: number, direction: 'up' | 'down') => {
     if (!canPrioritize) return;
@@ -96,17 +78,12 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
 
   const openEditModal = (story: UserStory) => {
     setEditingStory(story);
-    setEditStoryForm({
-      title: story.title,
-      description: story.description,
-      epic: story.epic,
-      acceptanceCriteria: story.acceptanceCriteria.length > 0 ? [...story.acceptanceCriteria] : [''],
-    });
+    setStoryForm(storyToFormData(story));
     setShowEditStoryModal(true);
   };
 
   const handleEditStory = () => {
-    if (!editingStory || !editStoryForm.title || !editStoryForm.description || !editStoryForm.epic) {
+    if (!editingStory || !validateStoryForm(storyForm)) {
       alert('필수 항목을 모두 입력해주세요.');
       return;
     }
@@ -115,16 +92,17 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
       {
         id: editingStory.id,
         data: {
-          title: editStoryForm.title,
-          description: editStoryForm.description,
-          epic: editStoryForm.epic,
-          acceptanceCriteria: editStoryForm.acceptanceCriteria.filter((c) => c.trim() !== ''),
+          title: storyForm.title,
+          description: storyForm.description,
+          epic: storyForm.epic,
+          acceptanceCriteria: storyForm.acceptanceCriteria.filter((c) => c.trim() !== ''),
         },
       },
       {
         onSuccess: () => {
           setShowEditStoryModal(false);
           setEditingStory(null);
+          setStoryForm(createEmptyStoryForm());
         },
         onError: (error) => {
           console.error('Failed to update story:', error);
@@ -144,6 +122,7 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
         onSuccess: () => {
           setShowEditStoryModal(false);
           setEditingStory(null);
+          setStoryForm(createEmptyStoryForm());
         },
       }
     );
@@ -381,7 +360,7 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
               <button
                 onClick={() => {
                   setShowAddStoryModal(false);
-                  setNewStory({ title: '', description: '', epic: '', acceptanceCriteria: [''] });
+                  setStoryForm(createEmptyStoryForm());
                 }}
                 className="text-gray-500 hover:text-gray-700"
               >
@@ -395,8 +374,8 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
                 </label>
                 <input
                   type="text"
-                  value={newStory.title}
-                  onChange={(e) => setNewStory({ ...newStory, title: e.target.value })}
+                  value={storyForm.title}
+                  onChange={(e) => setStoryForm({ ...storyForm, title: e.target.value })}
                   placeholder="사용자로서 ... 원한다"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
@@ -406,8 +385,8 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
                   설명 *
                 </label>
                 <textarea
-                  value={newStory.description}
-                  onChange={(e) => setNewStory({ ...newStory, description: e.target.value })}
+                  value={storyForm.description}
+                  onChange={(e) => setStoryForm({ ...storyForm, description: e.target.value })}
                   placeholder="스토리에 대한 간단한 설명"
                   rows={3}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -418,8 +397,8 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
                   에픽 *
                 </label>
                 <select
-                  value={newStory.epic}
-                  onChange={(e) => setNewStory({ ...newStory, epic: e.target.value })}
+                  value={storyForm.epic}
+                  onChange={(e) => setStoryForm({ ...storyForm, epic: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">에픽 선택</option>
@@ -430,12 +409,12 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
                   ))}
                   <option value="NEW">+ 새 에픽 추가</option>
                 </select>
-                {newStory.epic === 'NEW' && (
+                {storyForm.epic === 'NEW' && (
                   <input
                     type="text"
                     placeholder="새 에픽 이름 입력"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mt-2"
-                    onChange={(e) => setNewStory({ ...newStory, epic: e.target.value })}
+                    onChange={(e) => setStoryForm({ ...storyForm, epic: e.target.value })}
                   />
                 )}
               </div>
@@ -443,24 +422,24 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   완료 조건 (Acceptance Criteria)
                 </label>
-                {newStory.acceptanceCriteria.map((criteria, idx) => (
+                {storyForm.acceptanceCriteria.map((criteria, idx) => (
                   <div key={idx} className="flex gap-2 mb-2">
                     <input
                       type="text"
                       value={criteria}
                       onChange={(e) => {
-                        const updated = [...newStory.acceptanceCriteria];
+                        const updated = [...storyForm.acceptanceCriteria];
                         updated[idx] = e.target.value;
-                        setNewStory({ ...newStory, acceptanceCriteria: updated });
+                        setStoryForm({ ...storyForm, acceptanceCriteria: updated });
                       }}
                       placeholder={`완료 조건 ${idx + 1}`}
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
-                    {newStory.acceptanceCriteria.length > 1 && (
+                    {storyForm.acceptanceCriteria.length > 1 && (
                       <button
                         onClick={() => {
-                          const updated = newStory.acceptanceCriteria.filter((_, i) => i !== idx);
-                          setNewStory({ ...newStory, acceptanceCriteria: updated });
+                          const updated = storyForm.acceptanceCriteria.filter((_, i) => i !== idx);
+                          setStoryForm({ ...storyForm, acceptanceCriteria: updated });
                         }}
                         className="px-3 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200"
                       >
@@ -471,9 +450,9 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
                 ))}
                 <button
                   onClick={() =>
-                    setNewStory({
-                      ...newStory,
-                      acceptanceCriteria: [...newStory.acceptanceCriteria, ''],
+                    setStoryForm({
+                      ...storyForm,
+                      acceptanceCriteria: [...storyForm.acceptanceCriteria, ''],
                     })
                   }
                   className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
@@ -494,7 +473,7 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
               <button
                 onClick={() => {
                   setShowAddStoryModal(false);
-                  setNewStory({ title: '', description: '', epic: '', acceptanceCriteria: [''] });
+                  setStoryForm(createEmptyStoryForm());
                 }}
                 disabled={createStoryMutation.isPending}
                 className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -517,6 +496,7 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
                 onClick={() => {
                   setShowEditStoryModal(false);
                   setEditingStory(null);
+                  setStoryForm(createEmptyStoryForm());
                 }}
                 className="text-gray-500 hover:text-gray-700"
               >
@@ -530,8 +510,8 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
                 </label>
                 <input
                   type="text"
-                  value={editStoryForm.title}
-                  onChange={(e) => setEditStoryForm({ ...editStoryForm, title: e.target.value })}
+                  value={storyForm.title}
+                  onChange={(e) => setStoryForm({ ...storyForm, title: e.target.value })}
                   placeholder="사용자로서 ... 원한다"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
@@ -541,8 +521,8 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
                   설명 *
                 </label>
                 <textarea
-                  value={editStoryForm.description}
-                  onChange={(e) => setEditStoryForm({ ...editStoryForm, description: e.target.value })}
+                  value={storyForm.description}
+                  onChange={(e) => setStoryForm({ ...storyForm, description: e.target.value })}
                   placeholder="스토리에 대한 간단한 설명"
                   rows={3}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -553,8 +533,8 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
                   에픽 *
                 </label>
                 <select
-                  value={editStoryForm.epic}
-                  onChange={(e) => setEditStoryForm({ ...editStoryForm, epic: e.target.value })}
+                  value={storyForm.epic}
+                  onChange={(e) => setStoryForm({ ...storyForm, epic: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">에픽 선택</option>
@@ -569,25 +549,25 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   완료 조건 (Acceptance Criteria)
                 </label>
-                {editStoryForm.acceptanceCriteria.map((criteria, idx) => (
+                {storyForm.acceptanceCriteria.map((criteria, idx) => (
                   <div key={idx} className="flex gap-2 mb-2">
                     <input
                       type="text"
                       value={criteria}
                       onChange={(e) => {
-                        const updated = [...editStoryForm.acceptanceCriteria];
+                        const updated = [...storyForm.acceptanceCriteria];
                         updated[idx] = e.target.value;
-                        setEditStoryForm({ ...editStoryForm, acceptanceCriteria: updated });
+                        setStoryForm({ ...storyForm, acceptanceCriteria: updated });
                       }}
                       placeholder={`완료 조건 ${idx + 1}`}
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
-                    {editStoryForm.acceptanceCriteria.length > 1 && (
+                    {storyForm.acceptanceCriteria.length > 1 && (
                       <button
                         type="button"
                         onClick={() => {
-                          const updated = editStoryForm.acceptanceCriteria.filter((_, i) => i !== idx);
-                          setEditStoryForm({ ...editStoryForm, acceptanceCriteria: updated });
+                          const updated = storyForm.acceptanceCriteria.filter((_, i) => i !== idx);
+                          setStoryForm({ ...storyForm, acceptanceCriteria: updated });
                         }}
                         className="px-3 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200"
                       >
@@ -599,9 +579,9 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
                 <button
                   type="button"
                   onClick={() =>
-                    setEditStoryForm({
-                      ...editStoryForm,
-                      acceptanceCriteria: [...editStoryForm.acceptanceCriteria, ''],
+                    setStoryForm({
+                      ...storyForm,
+                      acceptanceCriteria: [...storyForm.acceptanceCriteria, ''],
                     })
                   }
                   className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
@@ -625,6 +605,7 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
                 onClick={() => {
                   setShowEditStoryModal(false);
                   setEditingStory(null);
+                  setStoryForm(createEmptyStoryForm());
                 }}
                 disabled={updateStoryMutation.isPending}
                 className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"

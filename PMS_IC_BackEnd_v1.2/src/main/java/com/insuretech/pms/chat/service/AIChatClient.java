@@ -1,5 +1,6 @@
 package com.insuretech.pms.chat.service;
 
+import com.insuretech.pms.chat.dto.AIChatContext;
 import com.insuretech.pms.chat.dto.ChatResponse;
 import com.insuretech.pms.chat.entity.ChatMessage;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,24 @@ public class AIChatClient {
 
     @Value("${ai.service.model:llama3}")
     private String aiModel;
+
+    /**
+     * Send chat message to AI service using consolidated context object.
+     * Preferred method that reduces parameter count.
+     *
+     * @param context AIChatContext containing all necessary parameters
+     * @return ChatResponse from AI service
+     */
+    public ChatResponse chat(AIChatContext context) {
+        return chat(
+                context.getUserId(),
+                context.getMessage(),
+                context.getRecentMessages(),
+                context.getProjectId(),
+                context.getUserRole(),
+                context.getUserAccessLevel()
+        );
+    }
 
     /**
      * Send chat message to AI service (legacy method for backward compatibility)

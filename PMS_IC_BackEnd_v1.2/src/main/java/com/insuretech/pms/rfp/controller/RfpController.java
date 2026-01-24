@@ -11,7 +11,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -68,14 +67,8 @@ public class RfpController {
             @PathVariable String projectId,
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "title", required = false) String title) {
-        try {
-            RfpDto rfp = rfpService.uploadRfpFile(projectId, file, title);
-            return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(rfp));
-        } catch (IOException e) {
-            log.error("Failed to upload RFP file", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ApiResponse.error("Failed to upload file: " + e.getMessage()));
-        }
+        RfpDto rfp = rfpService.uploadRfpFile(projectId, file, title);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(rfp));
     }
 
     @PostMapping("/{rfpId}/extract")

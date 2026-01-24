@@ -13,6 +13,7 @@ model_bp = Blueprint('model', __name__)
 ocr_bp = Blueprint('ocr', __name__)
 scrum_bp = Blueprint('scrum', __name__)
 monitoring_bp = Blueprint('monitoring', __name__)
+rag_admin_bp = Blueprint('rag_admin', __name__)
 
 
 def register_blueprints(app):
@@ -23,6 +24,7 @@ def register_blueprints(app):
     from . import ocr_routes
     from . import scrum_routes
     from . import monitoring_routes
+    from . import rag_admin_routes
 
     app.register_blueprint(chat_bp)
     app.register_blueprint(document_bp)
@@ -30,3 +32,4 @@ def register_blueprints(app):
     app.register_blueprint(ocr_bp)
     app.register_blueprint(scrum_bp)
     app.register_blueprint(monitoring_bp)
+    app.register_blueprint(rag_admin_bp)

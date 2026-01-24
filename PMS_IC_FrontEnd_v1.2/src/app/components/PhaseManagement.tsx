@@ -30,36 +30,21 @@ import {
   useUpdatePhaseKpi,
   useDeletePhaseKpi,
 } from '../../hooks/api/usePhases';
-
-interface Phase {
-  id: string;
-  name: string;
-  description: string;
-  status: 'completed' | 'inProgress' | 'pending';
-  progress: number;
-  startDate: string;
-  endDate: string;
-  deliverables: Deliverable[];
-  kpis: KPI[];
-}
-
-interface Deliverable {
-  id: string;
-  name: string;
-  status: 'approved' | 'review' | 'draft' | 'pending' | 'rejected';
-  uploadDate?: string;
-  approver?: string;
-  fileName?: string;
-  fileSize?: number;
-}
-
-interface KPI {
-  id: string;
-  name: string;
-  target: string;
-  current: string;
-  status: 'achieved' | 'onTrack' | 'atRisk';
-}
+import { getRolePermissions } from '../../utils/rolePermissions';
+import {
+  Phase,
+  Deliverable,
+  KPI,
+  PhaseStatus,
+  mapPhaseFromApi,
+  mapDeliverableFromApi,
+  mapKpiFromApi,
+  mapPhaseStatusToApi,
+  mapKpiStatusToApi,
+  normalizeResponse,
+  getPhaseStatusColor,
+  getPhaseStatusLabel,
+} from '../../utils/phaseMappers';
 
 const initialPhases: Phase[] = [
   {
@@ -183,7 +168,7 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
   const [phaseForm, setPhaseForm] = useState({
     name: '',
     description: '',
-    status: 'pending' as Phase['status'],
+    status: 'pending' as PhaseStatus,
     startDate: '',
     endDate: '',
     progress: 0,
@@ -207,140 +192,13 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
   const updateKpiMutation = useUpdatePhaseKpi();
   const deleteKpiMutation = useDeletePhaseKpi();
 
-  const canEdit = !['auditor', 'business_analyst'].includes(userRole);
-  const canApprove = ['sponsor', 'pmo_head', 'pm'].includes(userRole);
-  const canUpload = ['pm', 'developer', 'qa', 'pmo_head'].includes(userRole);
-  const canManageKpi = ['pm', 'pmo_head'].includes(userRole);
-  const canManagePhases = ['sponsor', 'pmo_head', 'pm'].includes(userRole);
+  // Use centralized role permissions
+  const permissions = getRolePermissions(userRole);
+  const { canEdit, canApprove, canUpload, canManageKpi, canManagePhases } = permissions;
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed':
-      case 'approved':
-      case 'achieved':
-        return 'text-green-600 bg-green-50 border-green-200';
-      case 'inProgress':
-      case 'review':
-      case 'onTrack':
-        return 'text-blue-600 bg-blue-50 border-blue-200';
-      case 'draft':
-      case 'atRisk':
-        return 'text-amber-600 bg-amber-50 border-amber-200';
-      case 'rejected':
-        return 'text-red-600 bg-red-50 border-red-200';
-      default:
-        return 'text-gray-600 bg-gray-50 border-gray-200';
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    const labels: Record<string, string> = {
-      completed: '완료',
-      inProgress: '진행중',
-      pending: '대기',
-      approved: '승인',
-      review: '검토중',
-      draft: '작성중',
-      rejected: '반려',
-      achieved: '달성',
-      onTrack: '정상',
-      atRisk: '위험',
-    };
-    return labels[status] || status;
-  };
-
-  const normalizeResponse = <T,>(response: any, fallback: T): T => {
-    const data = response?.data ?? response;
-    if (data === undefined || data === null) {
-      return fallback;
-    }
-    return data;
-  };
-
-  const formatDate = (value?: string) => {
-    if (!value) return undefined;
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return undefined;
-    return date.toISOString().split('T')[0];
-  };
-
-  const mapPhaseStatus = (status?: string): Phase['status'] => {
-    switch (status) {
-      case 'COMPLETED':
-        return 'completed';
-      case 'IN_PROGRESS':
-        return 'inProgress';
-      default:
-        return 'pending';
-    }
-  };
-
-  const mapDeliverableStatus = (status?: string): Deliverable['status'] => {
-    switch (status) {
-      case 'APPROVED':
-        return 'approved';
-      case 'IN_REVIEW':
-        return 'review';
-      case 'REJECTED':
-        return 'rejected';
-      case 'PENDING':
-        return 'pending';
-      default:
-        return 'draft';
-    }
-  };
-
-  const mapKpiStatus = (status?: string): KPI['status'] => {
-    switch (status) {
-      case 'ACHIEVED':
-        return 'achieved';
-      case 'AT_RISK':
-        return 'atRisk';
-      default:
-        return 'onTrack';
-    }
-  };
-
-  const mapKpiStatusToApi = (status: KPI['status']) => {
-    switch (status) {
-      case 'achieved':
-        return 'ACHIEVED';
-      case 'atRisk':
-        return 'AT_RISK';
-      default:
-        return 'ON_TRACK';
-    }
-  };
-
-  const mapDeliverableFromApi = (deliverable: any): Deliverable => ({
-    id: String(deliverable.id),
-    name: deliverable.name,
-    status: mapDeliverableStatus(deliverable.status),
-    uploadDate: formatDate(deliverable.uploadedAt),
-    approver: deliverable.approver,
-    fileName: deliverable.fileName,
-    fileSize: deliverable.fileSize,
-  });
-
-  const mapKpiFromApi = (kpi: any): KPI => ({
-    id: String(kpi.id),
-    name: kpi.name,
-    target: kpi.target,
-    current: kpi.current ?? '-',
-    status: mapKpiStatus(kpi.status),
-  });
-
-  const mapPhaseFromApi = (phase: any): Phase => ({
-    id: String(phase.id),
-    name: phase.name,
-    description: phase.description || '',
-    status: mapPhaseStatus(phase.status),
-    progress: phase.progress ?? 0,
-    startDate: phase.startDate || '',
-    endDate: phase.endDate || '',
-    deliverables: [],
-    kpis: [],
-  });
+  // Use extracted status utilities
+  const getStatusColor = getPhaseStatusColor;
+  const getStatusLabel = getPhaseStatusLabel;
 
   // Update selectedPhase when API data loads to use actual phase IDs
   useEffect(() => {
@@ -514,17 +372,6 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
 
     setShowKpiModal(false);
     setEditingKpi(null);
-  };
-
-  const mapPhaseStatusToApi = (status: Phase['status']): string => {
-    switch (status) {
-      case 'completed':
-        return 'COMPLETED';
-      case 'inProgress':
-        return 'IN_PROGRESS';
-      default:
-        return 'NOT_STARTED';
-    }
   };
 
   const handleSavePhase = async () => {

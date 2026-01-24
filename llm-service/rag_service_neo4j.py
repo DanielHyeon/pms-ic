@@ -410,8 +410,8 @@ class RAGServiceNeo4j:
                         CALL db.index.vector.queryNodes('chunk_embeddings', $top_k_fetch, $embedding)
                         YIELD node AS c, score
 
-                        // Access control filter: project + role level
-                        WHERE ($project_id IS NULL OR c.project_id = $project_id)
+                        // Access control filter: project + role level + global 'default' docs
+                        WHERE ($project_id IS NULL OR c.project_id = $project_id OR c.project_id = 'default')
                           AND c.access_level <= $user_access_level
 
                         // 순차 컨텍스트 확장
@@ -427,7 +427,7 @@ class RAGServiceNeo4j:
                         OPTIONAL MATCH (cat)<-[:BELONGS_TO]-(related:Document)
                         WHERE related <> d
                           AND related.access_level <= $user_access_level
-                          AND ($project_id IS NULL OR related.project_id = $project_id)
+                          AND ($project_id IS NULL OR related.project_id = $project_id OR related.project_id = 'default')
 
                         RETURN
                             c.chunk_id AS chunk_id,
@@ -462,8 +462,8 @@ class RAGServiceNeo4j:
                         CALL db.index.vector.queryNodes('chunk_embeddings', $top_k_fetch, $embedding)
                         YIELD node AS c, score
 
-                        // Access control filter
-                        WHERE ($project_id IS NULL OR c.project_id = $project_id)
+                        // Access control filter + global 'default' docs
+                        WHERE ($project_id IS NULL OR c.project_id = $project_id OR c.project_id = 'default')
                           AND c.access_level <= $user_access_level
 
                         MATCH (d:Document)-[:HAS_CHUNK]->(c)

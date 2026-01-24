@@ -1,6 +1,9 @@
 package com.insuretech.pms.task.controller;
 
 import com.insuretech.pms.common.dto.ApiResponse;
+import com.insuretech.pms.task.dto.ColumnWipStatusResponse;
+import com.insuretech.pms.task.dto.ProjectWipStatusResponse;
+import com.insuretech.pms.task.dto.SprintWipStatusResponse;
 import com.insuretech.pms.task.dto.WipValidationResult;
 import com.insuretech.pms.task.service.WipValidationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -9,8 +12,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.Map;
 
 @Tag(name = "WIP Validation", description = "WIP 제한 검증 API")
 @RestController
@@ -60,33 +61,33 @@ public class WipValidationController {
     @Operation(summary = "프로젝트 WIP 상태 조회",
                description = "프로젝트의 전체 WIP 상태를 조회합니다")
     @GetMapping("/status/project/{projectId}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getProjectWipStatus(
+    public ResponseEntity<ApiResponse<ProjectWipStatusResponse>> getProjectWipStatus(
             @Parameter(description = "프로젝트 ID")
             @PathVariable String projectId) {
 
-        Map<String, Object> wipStatus = wipValidationService.getProjectWipStatus(projectId);
+        ProjectWipStatusResponse wipStatus = wipValidationService.getProjectWipStatus(projectId);
         return ResponseEntity.ok(ApiResponse.success(wipStatus));
     }
 
     @Operation(summary = "칼럼 WIP 현황 조회",
                description = "칼럼의 상세 WIP 현황을 조회합니다")
     @GetMapping("/status/column/{columnId}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getColumnWipStatus(
+    public ResponseEntity<ApiResponse<ColumnWipStatusResponse>> getColumnWipStatus(
             @Parameter(description = "칼럼 ID")
             @PathVariable String columnId) {
 
-        Map<String, Object> columnStatus = wipValidationService.getColumnWipStatus(columnId);
+        ColumnWipStatusResponse columnStatus = wipValidationService.getColumnWipStatus(columnId);
         return ResponseEntity.ok(ApiResponse.success(columnStatus));
     }
 
     @Operation(summary = "스프린트 WIP 현황 조회",
                description = "스프린트의 상세 WIP 현황을 조회합니다")
     @GetMapping("/status/sprint/{sprintId}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getSprintWipStatus(
+    public ResponseEntity<ApiResponse<SprintWipStatusResponse>> getSprintWipStatus(
             @Parameter(description = "스프린트 ID")
             @PathVariable String sprintId) {
 
-        Map<String, Object> sprintStatus = wipValidationService.getSprintWipStatus(sprintId);
+        SprintWipStatusResponse sprintStatus = wipValidationService.getSprintWipStatus(sprintId);
         return ResponseEntity.ok(ApiResponse.success(sprintStatus));
     }
 }

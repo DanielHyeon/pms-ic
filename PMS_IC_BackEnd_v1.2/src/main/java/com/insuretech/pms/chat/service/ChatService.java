@@ -2,6 +2,7 @@ package com.insuretech.pms.chat.service;
 
 import com.insuretech.pms.auth.entity.User;
 import com.insuretech.pms.auth.service.AuthService;
+import com.insuretech.pms.chat.dto.AIChatContext;
 import com.insuretech.pms.chat.dto.ChatRequest;
 import com.insuretech.pms.chat.dto.ChatResponse;
 import com.insuretech.pms.chat.entity.ChatMessage;
@@ -45,14 +46,17 @@ public class ChatService {
         String userRole = resolveUserRole(user, request.getUserRole());
         Integer userAccessLevel = resolveAccessLevel(user, request.getUserAccessLevel());
 
-        ChatResponse aiResponse = callAIService(
-                userId,
-                request.getMessage(),
-                recentMessages,
-                projectId,
-                userRole,
-                userAccessLevel
-        );
+        // Build context object to reduce parameter count
+        AIChatContext aiContext = AIChatContext.builder()
+                .userId(userId)
+                .message(request.getMessage())
+                .recentMessages(recentMessages)
+                .projectId(projectId)
+                .userRole(userRole)
+                .userAccessLevel(userAccessLevel)
+                .build();
+
+        ChatResponse aiResponse = aiChatClient.chat(aiContext);
 
         ChatMessage assistantMessage = saveAssistantMessage(session, aiResponse.getReply());
         cacheMessages(session.getId(), userMessage, assistantMessage);
@@ -93,16 +97,6 @@ public class ChatService {
         return chatMessageRepository.save(userMessage);
     }
 
-    private ChatResponse callAIService(
-            String userId,
-            String message,
-            List<ChatMessage> recentMessages,
-            String projectId,
-            String userRole,
-            Integer userAccessLevel
-    ) {
-        return aiChatClient.chat(userId, message, recentMessages, projectId, userRole, userAccessLevel);
-    }
 
     /**
      * Resolve user role from User entity or request override

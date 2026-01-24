@@ -1586,6 +1586,76 @@ export class ApiService {
       { message: 'Report deleted' }
     );
   }
+
+  // ========== RAG Admin API ==========
+  async getRagDocuments() {
+    const response = await this.fetchWithFallback(
+      '/admin/rag/documents',
+      {},
+      { documents: [], total: 0 }
+    );
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async getRagStats() {
+    const response = await this.fetchWithFallback(
+      '/admin/rag/stats',
+      {},
+      { document_count: 0, chunk_count: 0, categories: {}, loading_status: {} }
+    );
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async getRagFiles() {
+    const response = await this.fetchWithFallback(
+      '/admin/rag/files',
+      {},
+      { files: [], total: 0, ragdata_dir: '' }
+    );
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async loadRagDocuments(files?: string[], clearExisting?: boolean) {
+    const response = await this.fetchWithFallback(
+      '/admin/rag/load',
+      {
+        method: 'POST',
+        body: JSON.stringify({ files, clearExisting }),
+      },
+      { message: 'Loading started' }
+    );
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async getRagLoadingStatus() {
+    const response = await this.fetchWithFallback(
+      '/admin/rag/load/status',
+      {},
+      { is_loading: false, progress: 0 }
+    );
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async deleteRagDocument(docId: string) {
+    const response = await this.fetchWithFallback(
+      `/admin/rag/documents/${encodeURIComponent(docId)}`,
+      { method: 'DELETE' },
+      { message: 'Document deleted' }
+    );
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async clearAllRagDocuments() {
+    const response = await this.fetchWithFallback(
+      '/admin/rag/documents',
+      {
+        method: 'DELETE',
+        body: JSON.stringify({ confirm: true }),
+      },
+      { message: 'All documents cleared', deleted_count: 0 }
+    );
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
 }
 
 export const apiService = new ApiService();

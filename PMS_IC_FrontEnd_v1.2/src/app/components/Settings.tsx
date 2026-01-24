@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { UserRole } from '../App';
-import { Cpu, AlertCircle, CheckCircle, Loader, RefreshCw, FileText, Zap, Scale } from 'lucide-react';
+import { Cpu, AlertCircle, CheckCircle, Loader, RefreshCw, FileText, Zap, Scale, Database, Trash2, Upload, FolderOpen } from 'lucide-react';
+import { apiService } from '../../services/api';
 
 interface SettingsProps {
   userRole: UserRole;
@@ -105,7 +106,19 @@ export default function Settings({ userRole }: SettingsProps) {
   const [isChangingLightweight, setIsChangingLightweight] = useState(false);
   const [isChangingMedium, setIsChangingMedium] = useState(false);
   const [isChangingOCR, setIsChangingOCR] = useState(false);
-  const [activeTab, setActiveTab] = useState<'llm' | 'ocr'>('llm');
+  const [activeTab, setActiveTab] = useState<'llm' | 'ocr' | 'rag'>('llm');
+
+  // RAG State
+  const [ragDocuments, setRagDocuments] = useState<any[]>([]);
+  const [ragFiles, setRagFiles] = useState<any[]>([]);
+  const [ragStats, setRagStats] = useState<any>(null);
+  const [ragLoading, setRagLoading] = useState(false);
+  const [ragLoadingStatus, setRagLoadingStatus] = useState<any>(null);
+  const [selectedRagFiles, setSelectedRagFiles] = useState<string[]>([]);
+  const [clearExisting, setClearExisting] = useState(false);
+  const [isLoadingRag, setIsLoadingRag] = useState(false);
+  const [deleteConfirmDocId, setDeleteConfirmDocId] = useState<string | null>(null);
+  const [clearAllConfirm, setClearAllConfirm] = useState(false);
 
   const isAdmin = userRole === 'admin';
   const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8083/api';
@@ -125,6 +138,108 @@ export default function Settings({ userRole }: SettingsProps) {
     fetchCurrentModels();
     fetchCurrentOCR();
   }, []);
+
+  // Fetch RAG data when RAG tab is active
+  useEffect(() => {
+    if (activeTab === 'rag') {
+      fetchRagData();
+    }
+  }, [activeTab]);
+
+  // Poll for loading status when RAG is loading
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+    if (ragLoadingStatus?.is_loading) {
+      interval = setInterval(fetchRagLoadingStatus, 2000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [ragLoadingStatus?.is_loading]);
+
+  const fetchRagData = async () => {
+    setRagLoading(true);
+    try {
+      const [docs, files, stats, status] = await Promise.all([
+        apiService.getRagDocuments(),
+        apiService.getRagFiles(),
+        apiService.getRagStats(),
+        apiService.getRagLoadingStatus(),
+      ]);
+      setRagDocuments(docs?.documents || []);
+      setRagFiles(files?.files || []);
+      setRagStats(stats);
+      setRagLoadingStatus(status);
+    } catch (error) {
+      console.error('Failed to fetch RAG data:', error);
+      setStatusMessage({ type: 'error', text: 'RAG 데이터 조회에 실패했습니다.' });
+    } finally {
+      setRagLoading(false);
+    }
+  };
+
+  const fetchRagLoadingStatus = async () => {
+    try {
+      const status = await apiService.getRagLoadingStatus();
+      setRagLoadingStatus(status);
+      if (!status?.is_loading && isLoadingRag) {
+        // Loading completed
+        setIsLoadingRag(false);
+        fetchRagData();
+        setStatusMessage({ type: 'success', text: 'RAG 문서 로딩이 완료되었습니다.' });
+      }
+    } catch (error) {
+      console.error('Failed to fetch RAG loading status:', error);
+    }
+  };
+
+  const handleLoadRagDocuments = async () => {
+    setIsLoadingRag(true);
+    setStatusMessage({ type: 'info', text: 'RAG 문서를 로딩 중입니다...' });
+    try {
+      const filesToLoad = selectedRagFiles.length > 0 ? selectedRagFiles : undefined;
+      await apiService.loadRagDocuments(filesToLoad, clearExisting);
+      setSelectedRagFiles([]);
+      // Start polling for status
+      setTimeout(fetchRagLoadingStatus, 1000);
+    } catch (error) {
+      console.error('Failed to load RAG documents:', error);
+      setStatusMessage({ type: 'error', text: 'RAG 문서 로딩에 실패했습니다.' });
+      setIsLoadingRag(false);
+    }
+  };
+
+  const handleDeleteRagDocument = async (docId: string) => {
+    try {
+      await apiService.deleteRagDocument(docId);
+      setStatusMessage({ type: 'success', text: `문서 '${docId}'가 삭제되었습니다.` });
+      setDeleteConfirmDocId(null);
+      fetchRagData();
+    } catch (error) {
+      console.error('Failed to delete RAG document:', error);
+      setStatusMessage({ type: 'error', text: '문서 삭제에 실패했습니다.' });
+    }
+  };
+
+  const handleClearAllRagDocuments = async () => {
+    try {
+      const result = await apiService.clearAllRagDocuments();
+      setStatusMessage({ type: 'success', text: `${result?.deleted_count || 0}개의 문서가 삭제되었습니다.` });
+      setClearAllConfirm(false);
+      fetchRagData();
+    } catch (error) {
+      console.error('Failed to clear RAG documents:', error);
+      setStatusMessage({ type: 'error', text: '전체 삭제에 실패했습니다.' });
+    }
+  };
+
+  const toggleFileSelection = (fileName: string) => {
+    setSelectedRagFiles(prev =>
+      prev.includes(fileName)
+        ? prev.filter(f => f !== fileName)
+        : [...prev, fileName]
+    );
+  };
 
   const fetchCurrentModels = async () => {
     try {
@@ -354,6 +469,17 @@ export default function Settings({ userRole }: SettingsProps) {
           >
             <FileText size={18} />
             OCR 엔진
+          </button>
+          <button
+            onClick={() => setActiveTab('rag')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+              activeTab === 'rag'
+                ? 'bg-purple-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <Database size={18} />
+            RAG 지식베이스
           </button>
         </div>
 
@@ -675,6 +801,260 @@ export default function Settings({ userRole }: SettingsProps) {
                     <button
                       onClick={fetchCurrentOCR}
                       disabled={isChangingOCR}
+                      className="px-6 py-2.5 border-2 border-gray-300 text-gray-700 rounded-lg font-medium hover:border-gray-400 hover:bg-gray-50 transition-all"
+                    >
+                      새로고침
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* RAG Knowledge Base Settings Tab */}
+        {activeTab === 'rag' && (
+          <div className="bg-white rounded-lg shadow-md border border-gray-200">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
+                  <Database className="text-indigo-600" size={20} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">RAG 지식베이스 관리</h2>
+                  <p className="text-sm text-gray-600">AI 어시스턴트가 사용하는 지식 문서를 관리합니다</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6">
+              {ragLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader className="animate-spin text-gray-400" size={32} />
+                </div>
+              ) : (
+                <>
+                  {/* Stats Section */}
+                  <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
+                      <div className="text-sm font-medium text-indigo-900">총 문서 수</div>
+                      <p className="text-2xl font-bold text-indigo-700">{ragStats?.document_count || 0}</p>
+                    </div>
+                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="text-sm font-medium text-green-900">총 청크 수</div>
+                      <p className="text-2xl font-bold text-green-700">{ragStats?.chunk_count || 0}</p>
+                    </div>
+                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="text-sm font-medium text-blue-900">사용 가능한 파일</div>
+                      <p className="text-2xl font-bold text-blue-700">{ragFiles.length}</p>
+                    </div>
+                  </div>
+
+                  {/* Loading Status */}
+                  {ragLoadingStatus?.is_loading && (
+                    <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <div className="flex items-center gap-3 mb-2">
+                        <Loader className="animate-spin text-yellow-600" size={20} />
+                        <span className="font-medium text-yellow-900">문서 로딩 중...</span>
+                      </div>
+                      <div className="w-full bg-yellow-200 rounded-full h-2">
+                        <div
+                          className="bg-yellow-600 h-2 rounded-full transition-all"
+                          style={{ width: `${ragLoadingStatus.progress || 0}%` }}
+                        />
+                      </div>
+                      <div className="mt-2 text-sm text-yellow-700">
+                        {ragLoadingStatus.current_file && (
+                          <span>현재 파일: {ragLoadingStatus.current_file}</span>
+                        )}
+                        <span className="ml-4">진행률: {ragLoadingStatus.progress || 0}%</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Available Files Section */}
+                  <div className="mb-6 p-4 border border-gray-200 rounded-lg">
+                    <div className="flex items-center gap-2 mb-3">
+                      <FolderOpen className="text-blue-600" size={18} />
+                      <h3 className="font-semibold text-gray-900">사용 가능한 PDF 파일</h3>
+                      <span className="text-xs text-gray-500">(ragdata 디렉토리)</span>
+                    </div>
+                    {ragFiles.length === 0 ? (
+                      <p className="text-gray-500 text-sm py-4">사용 가능한 PDF 파일이 없습니다.</p>
+                    ) : (
+                      <div className="space-y-2 max-h-60 overflow-y-auto">
+                        {ragFiles.map((file: any) => (
+                          <div
+                            key={file.name}
+                            onClick={() => toggleFileSelection(file.name)}
+                            className={`p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                              selectedRagFiles.includes(file.name)
+                                ? 'border-blue-500 bg-blue-50'
+                                : 'border-gray-200 hover:border-gray-300 bg-white'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedRagFiles.includes(file.name)}
+                                  onChange={() => toggleFileSelection(file.name)}
+                                  aria-label={`Select ${file.name}`}
+                                  className="w-4 h-4 text-blue-600 rounded"
+                                />
+                                <FileText size={16} className="text-gray-500" />
+                                <span className="font-medium text-gray-900">{file.name}</span>
+                              </div>
+                              <span className="text-xs text-gray-500">{file.size_mb} MB</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Load Options */}
+                    <div className="mt-4 flex items-center gap-4">
+                      <label className="flex items-center gap-2 text-sm text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={clearExisting}
+                          onChange={(e) => setClearExisting(e.target.checked)}
+                          className="w-4 h-4 text-red-600 rounded"
+                        />
+                        <span>기존 문서 삭제 후 로딩</span>
+                      </label>
+                    </div>
+
+                    {/* Load Button */}
+                    <div className="mt-4 flex gap-3">
+                      <button
+                        onClick={handleLoadRagDocuments}
+                        disabled={isLoadingRag || ragLoadingStatus?.is_loading || ragFiles.length === 0}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                          isLoadingRag || ragLoadingStatus?.is_loading || ragFiles.length === 0
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            : 'bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg'
+                        }`}
+                      >
+                        <Upload size={16} />
+                        <span>
+                          {selectedRagFiles.length > 0
+                            ? `선택한 ${selectedRagFiles.length}개 파일 로딩`
+                            : '전체 파일 로딩'}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Loaded Documents Section */}
+                  <div className="p-4 border border-gray-200 rounded-lg">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Database className="text-indigo-600" size={18} />
+                        <h3 className="font-semibold text-gray-900">로딩된 문서 목록</h3>
+                        <span className="text-xs text-gray-500">({ragDocuments.length}개)</span>
+                      </div>
+                      {ragDocuments.length > 0 && (
+                        <button
+                          onClick={() => setClearAllConfirm(true)}
+                          className="flex items-center gap-1 px-3 py-1 text-xs text-red-600 hover:bg-red-50 rounded transition-all"
+                        >
+                          <Trash2 size={14} />
+                          전체 삭제
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Clear All Confirmation */}
+                    {clearAllConfirm && (
+                      <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                        <p className="text-sm text-red-700 mb-3">
+                          정말로 모든 RAG 문서를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+                        </p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleClearAllRagDocuments}
+                            className="px-3 py-1.5 bg-red-600 text-white text-sm rounded hover:bg-red-700"
+                          >
+                            확인
+                          </button>
+                          <button
+                            onClick={() => setClearAllConfirm(false)}
+                            className="px-3 py-1.5 bg-gray-200 text-gray-700 text-sm rounded hover:bg-gray-300"
+                          >
+                            취소
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {ragDocuments.length === 0 ? (
+                      <div className="text-center py-8">
+                        <Database className="mx-auto text-gray-300" size={48} />
+                        <p className="text-gray-500 mt-2">로딩된 문서가 없습니다.</p>
+                        <p className="text-gray-400 text-sm">위에서 PDF 파일을 선택하여 로딩하세요.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-80 overflow-y-auto">
+                        {ragDocuments.map((doc: any) => (
+                          <div
+                            key={doc.doc_id}
+                            className="p-3 border border-gray-200 rounded-lg bg-white hover:bg-gray-50 transition-all"
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <FileText size={16} className="text-indigo-500 flex-shrink-0" />
+                                  <span className="font-medium text-gray-900 truncate">{doc.title || doc.doc_id}</span>
+                                </div>
+                                <div className="mt-1 flex items-center gap-3 text-xs text-gray-500">
+                                  {doc.file_name && <span>{doc.file_name}</span>}
+                                  <span className="px-1.5 py-0.5 bg-gray-100 rounded">{doc.chunk_count} 청크</span>
+                                  {doc.category && (
+                                    <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded">
+                                      {doc.category}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex-shrink-0 ml-2">
+                                {deleteConfirmDocId === doc.doc_id ? (
+                                  <div className="flex gap-1">
+                                    <button
+                                      onClick={() => handleDeleteRagDocument(doc.doc_id)}
+                                      className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                                    >
+                                      확인
+                                    </button>
+                                    <button
+                                      onClick={() => setDeleteConfirmDocId(null)}
+                                      className="px-2 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                                    >
+                                      취소
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => setDeleteConfirmDocId(doc.doc_id)}
+                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"
+                                    title="삭제"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Refresh Button */}
+                  <div className="mt-4">
+                    <button
+                      onClick={fetchRagData}
+                      disabled={ragLoading}
                       className="px-6 py-2.5 border-2 border-gray-300 text-gray-700 rounded-lg font-medium hover:border-gray-400 hover:bg-gray-50 transition-all"
                     >
                       새로고침

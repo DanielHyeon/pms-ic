@@ -1,5 +1,6 @@
 package com.insuretech.pms.task.controller;
 
+import com.insuretech.pms.task.dto.ProjectWipStatusResponse;
 import com.insuretech.pms.task.dto.WipUpdateMessage;
 import com.insuretech.pms.task.service.WipValidationService;
 import lombok.RequiredArgsConstructor;
@@ -47,7 +48,7 @@ public class WipWebSocketController {
 
         try {
             // Get current project WIP status
-            Map<String, Object> wipStatus = wipValidationService.getProjectWipStatus(projectId);
+            ProjectWipStatusResponse wipStatus = wipValidationService.getProjectWipStatus(projectId);
 
             // Create update message
             WipUpdateMessage updateMessage = WipUpdateMessage.builder()

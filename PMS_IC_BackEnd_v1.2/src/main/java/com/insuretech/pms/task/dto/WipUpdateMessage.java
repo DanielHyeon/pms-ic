@@ -7,7 +7,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
-import java.util.Map;
 
 /**
  * WebSocket message for real-time WIP updates
@@ -50,7 +49,7 @@ public class WipUpdateMessage implements Serializable {
      * - ERROR: {error: error message}
      */
     @JsonProperty("data")
-    private Map<String, Object> data;
+    private Object data;
 
     /**
      * Server timestamp when message was created (milliseconds)

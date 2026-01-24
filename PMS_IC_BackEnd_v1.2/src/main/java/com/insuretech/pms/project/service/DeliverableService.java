@@ -4,6 +4,7 @@ import com.insuretech.pms.common.exception.CustomException;
 import com.insuretech.pms.common.service.FileStorageService;
 import com.insuretech.pms.common.service.FileStorageService.StorageResult;
 import com.insuretech.pms.project.dto.DeliverableDto;
+import com.insuretech.pms.project.dto.DeliverableUploadRequest;
 import com.insuretech.pms.project.entity.Deliverable;
 import com.insuretech.pms.project.entity.Phase;
 import com.insuretech.pms.project.entity.ProjectMember;
@@ -48,8 +49,45 @@ public class DeliverableService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Upload a deliverable with consolidated request parameters.
+     *
+     * @param phaseId The phase ID
+     * @param file The file to upload
+     * @param request Upload request containing name, description, type, etc.
+     * @return The uploaded deliverable DTO
+     */
+    @Transactional
+    public DeliverableDto uploadDeliverable(String phaseId, MultipartFile file, DeliverableUploadRequest request) {
+        return uploadDeliverableInternal(
+                phaseId,
+                request.getDeliverableId(),
+                file,
+                request.getName(),
+                request.getDescription(),
+                request.getType(),
+                request.getUploadedBy()
+        );
+    }
+
+    /**
+     * @deprecated Use {@link #uploadDeliverable(String, MultipartFile, DeliverableUploadRequest)} instead
+     */
+    @Deprecated
     @Transactional
     public DeliverableDto uploadDeliverable(
+            String phaseId,
+            String deliverableId,
+            MultipartFile file,
+            String name,
+            String description,
+            String type,
+            String uploadedBy
+    ) {
+        return uploadDeliverableInternal(phaseId, deliverableId, file, name, description, type, uploadedBy);
+    }
+
+    private DeliverableDto uploadDeliverableInternal(
             String phaseId,
             String deliverableId,
             MultipartFile file,

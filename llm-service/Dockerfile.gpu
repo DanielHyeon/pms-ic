@@ -36,13 +36,11 @@ ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib/x86_64-linux-gnu
 
 # Application code
 COPY app.py .
-COPY chat_workflow.py .
+COPY chat_workflow_v2.py .
 COPY document_parser.py .
 COPY pdf_ocr_pipeline.py .
 COPY rag_service_neo4j.py .
 COPY load_ragdata_pdfs_neo4j.py .
-COPY test_query_refinement.py .
-COPY test_query_refinement_simple.py .
 COPY service_state.py .
 COPY response_monitoring.py .
 COPY response_validator.py .
@@ -50,6 +48,12 @@ COPY scrum_workflow_service.py .
 COPY openmetadata_integration.py .
 COPY requirement_extractor.py .
 COPY timeout_retry_handler.py .
+
+# Copy services directory
+COPY services/ ./services/
+
+# Copy routes directory
+COPY routes/ ./routes/
 
 # Model directories
 RUN mkdir -p /app/models /models /data /output

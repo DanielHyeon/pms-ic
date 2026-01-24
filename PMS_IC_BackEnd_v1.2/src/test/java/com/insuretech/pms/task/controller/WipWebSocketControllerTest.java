@@ -1,5 +1,6 @@
 package com.insuretech.pms.task.controller;
 
+import com.insuretech.pms.task.dto.ProjectWipStatusResponse;
 import com.insuretech.pms.task.dto.WipUpdateMessage;
 import com.insuretech.pms.task.service.WipValidationService;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,11 +34,12 @@ class WipWebSocketControllerTest {
     @BeforeEach
     void setUp() {
         // Mock WIP validation service responses
-        Map<String, Object> mockWipStatus = new HashMap<>();
-        mockWipStatus.put("projectId", "project-1");
-        mockWipStatus.put("totalWip", 25);
-        mockWipStatus.put("columnStatuses", java.util.List.of());
-        mockWipStatus.put("bottleneckCount", 0);
+        ProjectWipStatusResponse mockWipStatus = ProjectWipStatusResponse.builder()
+                .projectId("project-1")
+                .totalWip(25)
+                .columnStatuses(java.util.List.of())
+                .bottleneckCount(0)
+                .build();
 
         when(wipValidationService.getProjectWipStatus(anyString()))
                 .thenReturn(mockWipStatus);

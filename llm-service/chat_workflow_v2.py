@@ -592,7 +592,7 @@ class TwoTrackWorkflow:
                     is_short_question = len(message) < 30
 
                     if is_simple_question and is_short_question:
-                        max_tokens = min(base_max_tokens, 1000)
+                        max_tokens = min(base_max_tokens, 512)
                         logger.info(f"  → Track A: reduced max_tokens={max_tokens} for simple question")
                     else:
                         max_tokens = base_max_tokens
@@ -819,17 +819,17 @@ class TwoTrackWorkflow:
         model_path: Optional[str]
     ) -> str:
         """Build prompt for L1 (fast) response"""
-        system_prompt = """당신은 PMS(프로젝트 관리 시스템) 전문 어시스턴트입니다.
+        message_lower = message.lower()
 
-답변 규칙:
-1. 제공된 컨텍스트를 충분히 활용하여 **구체적이고 상세하게** 답변하세요.
-2. 질문 유형에 맞게 답변 형식을 조절하세요:
-   - 개념/용어 질문("~이란", "~가 뭐야"): 정의와 핵심 특징 위주로 설명
-   - 현황/상태 질문("~상황은", "~목록"): 현재 데이터 기반으로 요약
-   - 방법/절차 질문("~어떻게", "~방법"): 단계별로 구조화하여 설명
-3. 필요시 bullet point나 번호 목록을 사용하여 가독성을 높이세요.
-4. 추측하지 말고, 컨텍스트에 없는 내용은 "확인이 필요합니다"라고 답변하세요.
-5. 너무 짧게 답변하지 마세요. 최소 3-5문장 이상으로 충실히 답변하세요."""
+        # Ultra-short prompt for simple definition questions
+        is_definition = any(kw in message_lower for kw in ["뭐야", "뭔가요", "무엇", "이란", "란"])
+        is_short = len(message) < 30
+
+        if is_definition and is_short:
+            system_prompt = "당신은 프로젝트 관리 전문가입니다. 컨텍스트를 활용해 정의와 핵심 특징을 3-5문장으로 설명하세요."
+        else:
+            system_prompt = """당신은 PMS 전문 어시스턴트입니다.
+규칙: 컨텍스트 활용, 추측 금지, 3-5문장으로 핵심 위주 답변."""
 
         return self._build_prompt(message, context, retrieved_docs, system_prompt, model_path)
 
@@ -926,13 +926,20 @@ class TwoTrackWorkflow:
             # Default ChatML format (LFM2, Llama, etc.)
             prompt_parts.append(f"<|im_start|>system\n{system_prompt}<|im_end|>")
 
-            for msg in context[-5:]:
+            # Limit context for simple questions
+            message_lower = message.lower()
+            is_simple = len(message) < 30 and any(kw in message_lower for kw in ["뭐야", "무엇", "이란"])
+
+            for msg in context[-3:] if is_simple else context[-5:]:
                 role = msg.get("role", "user")
                 prompt_parts.append(f"<|im_start|>{role}\n{msg.get('content', '')}<|im_end|>")
 
             if docs:
-                context_text = "\n".join(doc[:500] for doc in docs[:5])
-                prompt_parts.append(f"<|im_start|>user\n참고 정보:\n{context_text}\n\n질문: {message}<|im_end|>")
+                # Reduce context for simple definition questions
+                doc_limit = 3 if is_simple else 5
+                char_limit = 400 if is_simple else 500
+                context_text = "\n".join(doc[:char_limit] for doc in docs[:doc_limit])
+                prompt_parts.append(f"<|im_start|>user\n참고:\n{context_text}\n\n질문: {message}<|im_end|>")
             else:
                 prompt_parts.append(f"<|im_start|>user\n{message}<|im_end|>")
 

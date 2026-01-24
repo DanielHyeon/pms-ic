@@ -87,12 +87,20 @@ class ModelService:
             n_threads = int(os.getenv("LLM_N_THREADS", "6"))
             n_gpu_layers = int(os.getenv("LLM_N_GPU_LAYERS", "0"))
 
+            # Performance optimizations
+            flash_attn = os.getenv("LLM_FLASH_ATTN", "true").lower() == "true"
+            n_batch = int(os.getenv("LLM_N_BATCH", "512"))
+
+            logger.info(f"  n_ctx={n_ctx}, n_gpu_layers={n_gpu_layers}, flash_attn={flash_attn}, n_batch={n_batch}")
+
             self.state.llm = Llama(
                 model_path=model_path,
                 n_ctx=n_ctx,
                 n_threads=n_threads,
                 verbose=True,
-                n_gpu_layers=n_gpu_layers
+                n_gpu_layers=n_gpu_layers,
+                flash_attn=flash_attn,
+                n_batch=n_batch,
             )
             self.state.current_model_path = model_path
             logger.info(f"Model loaded successfully: {model_path}")

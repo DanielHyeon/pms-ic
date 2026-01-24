@@ -34,15 +34,20 @@ RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel \
 # 런타임에서는 실제 CUDA 드라이버 라이브러리를 우선 사용
 ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib/x86_64-linux-gnu
 
-# 애플리케이션 코드 복사 (실제 존재하는 파일만)
+# Copy application code
 COPY app.py .
-COPY chat_workflow.py .
+COPY chat_workflow_v2.py .
 COPY document_parser.py .
 COPY pdf_ocr_pipeline.py .
 COPY rag_service_neo4j.py .
 COPY load_ragdata_pdfs_neo4j.py .
-COPY test_query_refinement.py .
-COPY test_query_refinement_simple.py .
+COPY service_state.py .
+
+# Copy services directory
+COPY services/ ./services/
+
+# Copy routes directory
+COPY routes/ ./routes/
 
 # 모델 디렉토리 생성 (볼륨 마운트로 모델 제공)
 RUN mkdir -p /app/models /models /data /output

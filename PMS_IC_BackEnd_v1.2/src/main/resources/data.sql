@@ -39,17 +39,17 @@ ON CONFLICT (id) DO NOTHING;
 -- ============================================
 -- 2. PROJECTS (project.projects)
 -- ============================================
-INSERT INTO project.projects (id, name, description, status, start_date, end_date, budget, progress, created_at, updated_at, created_by)
+INSERT INTO project.projects (id, name, description, status, start_date, end_date, budget, progress, is_default, created_at, updated_at, created_by)
 VALUES
     -- Project 1: AI 보험심사 처리 시스템
     ('proj-001', 'AI 보험심사 처리 시스템',
      'AI 기반 보험 청구 처리 시스템 개발. 자동 문서 분석, 사기 탐지, 지능형 라우팅 기능 포함. 청구 처리 시간 60% 단축 및 정확도 40% 향상 목표.',
-     'IN_PROGRESS', '2026-01-15', '2026-06-30', 500000000.00, 25, NOW(), NOW(), 'user-pm-001'),
+     'IN_PROGRESS', '2026-01-15', '2026-06-30', 500000000.00, 25, true, NOW(), NOW(), 'user-pm-001'),
 
     -- Project 2: 모바일 보험 플랫폼
     ('proj-002', '모바일 보험 플랫폼',
      '보험 서비스를 위한 종합 모바일 플랫폼 구축. 보험증권 관리, 청구 제출, 실시간 상태 조회, 고객지원 통합 기능 포함. 목표: 출시 1년 내 10만 활성 사용자 확보.',
-     'PLANNING', '2026-02-01', '2026-08-31', 350000000.00, 5, NOW(), NOW(), 'user-pm-002')
+     'PLANNING', '2026-02-01', '2026-08-31', 350000000.00, 5, false, NOW(), NOW(), 'user-pm-002')
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description;
 
 -- ============================================
