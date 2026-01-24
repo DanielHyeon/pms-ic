@@ -282,15 +282,39 @@ curl http://localhost:80/health
 
 ## 📚 문서
 
-자세한 문서는 다음을 참조하세요:
+### LLM & AI 서비스
 
-- [실행 가이드](실행가이드.md) - 상세 설치 및 실행 방법
-- [빠른 시작 가이드](빠른_시작_가이드.md) - 5분 안에 시작하기
-- [LLM 연동 가이드](LLM_연동_가이드.md) - AI 서비스 설정
-- [RAG 시스템 가이드](RAG_시스템_가이드.md) - RAG 구성 및 최적화
-- [Neo4j GraphRAG 가이드](NEO4J_GRAPHRAG_GUIDE.md) - GraphRAG 아키텍처
-- [LangGraph 구현 가이드](LangGraph_구현_가이드.md) - 워크플로우 커스터마이징
-- [Docker 가이드](README_DOCKER.md) - Docker 배포 가이드
+- [LLM 가이드](docs/LLM_GUIDE.md) - LLM 서비스 설정 및 GPU/CPU 모드 구성
+- [LLM 아키텍처](docs/LLM_ARCHITECTURE.md) - 시스템 아키텍처 및 데이터 흐름
+- [Gemma3 안정성 개선](docs/GEMMA3_STABILITY_IMPROVEMENTS.md) - 응답 검증 및 재시도 로직
+
+### 프로젝트 설계
+
+- [RFP 관리 설계서](docs/RFP_관리_기능_설계서.md) - RFP 기능 설계
+- [RFP 구현 계획 v2.0](docs/구현계획_RFP관리_v2.0.md) - RFP 구현 상세 계획
+- [프로젝트 관리 구현 계획](docs/프로젝트관리_구현계획.md) - 권한 체계 및 파트 관리
+- [프로젝트 권한 설계](docs/Project-Scoped-Authorization-Design.md) - 프로젝트별 권한 체계
+
+### 데이터 거버넌스
+
+- [OpenMetadata 로드맵](docs/OpenMetadata_도입_로드맵.md) - 메타데이터 관리 전략
+- [스프린트 DoD 체크리스트](docs/스프린트_DoD_메타데이터_체크리스트.md) - 완료 정의 체크리스트
+
+### 개발 규칙
+
+- [코딩 규칙](docs/coding-rules.md) - 코드 품질 규칙
+- [코드 검사 프로토콜](docs/code-inspection.md) - 자동화된 코드 검사 규칙
+- [추가 요구사항](docs/ADDITIONAL_REQUIREMENTS.md) - 추가 기능 요구사항
+
+### 최적화
+
+- [PMS 최적화 방안](docs/PMS%20최적화%20방안.md) - L0/L1/L2 아키텍처 최적화
+
+### 컴포넌트별 문서
+
+- [백엔드 실행 가이드](PMS_IC_BackEnd_v1.2/BACKEND_RUN_GUIDE.md) - 백엔드 실행 방법
+- [프론트엔드 README](PMS_IC_FrontEnd_v1.2/README.md) - 프론트엔드 개발 가이드
+- [LLM 서비스 README](llm-service/README.md) - LLM 서비스 API 문서
 
 ## 🔧 트러블슈팅
 
