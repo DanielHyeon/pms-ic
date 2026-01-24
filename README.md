@@ -190,11 +190,12 @@ docker-compose up -d
 ### 5. RAG 데이터 인덱싱
 
 ```bash
-# ragdata 디렉토리에 PDF 파일 추가
-cp your-documents.pdf ragdata/
+# llm-service/ragdata 디렉토리에 PDF 파일 추가
+mkdir -p llm-service/ragdata
+cp your-documents.pdf llm-service/ragdata/
 
 # Neo4j에 인덱싱
-docker exec pms-llm-service python3 /app/load_ragdata_pdfs_neo4j.py --ragdata-dir /app/ragdata
+docker exec pms-llm-service python3 /app/load_ragdata_pdfs_neo4j.py
 ```
 
 ### 6. 서비스 접속
@@ -326,7 +327,7 @@ MATCH (d:Document) RETURN count(d);
 MATCH (c:Chunk) RETURN count(c);
 
 # 데이터가 없으면 재인덱싱
-docker exec pms-llm-service python3 /app/load_ragdata_pdfs_neo4j.py --ragdata-dir /app/ragdata
+docker exec pms-llm-service python3 /app/load_ragdata_pdfs_neo4j.py
 ```
 
 ### LLM 서비스가 느림
