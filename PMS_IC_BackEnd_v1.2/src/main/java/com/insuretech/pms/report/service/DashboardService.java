@@ -2,6 +2,7 @@ package com.insuretech.pms.report.service;
 
 import com.insuretech.pms.project.entity.Project;
 import com.insuretech.pms.project.repository.ProjectRepository;
+import com.insuretech.pms.report.dto.ActivityDto;
 import com.insuretech.pms.report.dto.DashboardStats;
 import com.insuretech.pms.task.repository.TaskRepository;
 import lombok.RequiredArgsConstructor;
@@ -9,6 +10,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,5 +56,19 @@ public class DashboardService {
                 .avgProgress(avgProgress)
                 .projectsByStatus(projectsByStatus)
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    public List<ActivityDto> getRecentActivities() {
+        // TODO: Implement actual activity tracking from audit log or event store
+        // For now, return placeholder activities
+        List<ActivityDto> activities = new ArrayList<>();
+        activities.add(ActivityDto.builder()
+                .user("System")
+                .action("Dashboard API activated")
+                .time("Just now")
+                .type("info")
+                .build());
+        return activities;
     }
 }

@@ -1251,7 +1251,7 @@ export class ApiService {
 
   // ========== RFP Auto-Classification API ==========
   async classifyRfpRequirements(projectId: string, rfpId: string) {
-    const response = await this.fetchWithFallback(`/projects/${projectId}/rfp/${rfpId}/classify`, {
+    const response = await this.fetchWithFallback(`/projects/${projectId}/rfps/${rfpId}/classify`, {
       method: 'POST',
     }, {
       data: {
@@ -1530,7 +1530,7 @@ export class ApiService {
   // ========== Weekly Report API ==========
   async generateProjectWeeklyReport(projectId: string, weekStartDate: string, userId: string) {
     const response = await this.fetchWithFallback(
-      `/reports/project/${projectId}?weekStartDate=${weekStartDate}&userId=${userId}`,
+      `/weekly-reports/project/${projectId}?weekStartDate=${weekStartDate}&userId=${userId}`,
       { method: 'POST' },
       { id: `report-${Date.now()}`, projectId, weekStartDate }
     );
@@ -1539,7 +1539,7 @@ export class ApiService {
 
   async generateSprintWeeklyReport(sprintId: string, weekStartDate: string, userId: string) {
     const response = await this.fetchWithFallback(
-      `/reports/sprint/${sprintId}?weekStartDate=${weekStartDate}&userId=${userId}`,
+      `/weekly-reports/sprint/${sprintId}?weekStartDate=${weekStartDate}&userId=${userId}`,
       { method: 'POST' },
       { id: `report-${Date.now()}`, sprintId, weekStartDate }
     );
@@ -1548,7 +1548,7 @@ export class ApiService {
 
   async getProjectWeeklyReports(projectId: string) {
     const response = await this.fetchWithFallback(
-      `/reports/project/${projectId}`,
+      `/weekly-reports/project/${projectId}`,
       {},
       { data: [] }
     );
@@ -1557,7 +1557,7 @@ export class ApiService {
 
   async getSprintWeeklyReports(sprintId: string) {
     const response = await this.fetchWithFallback(
-      `/reports/sprint/${sprintId}`,
+      `/weekly-reports/sprint/${sprintId}`,
       {},
       { data: [] }
     );
@@ -1566,7 +1566,7 @@ export class ApiService {
 
   async getWeeklyReport(reportId: string) {
     const response = await this.fetchWithFallback(
-      `/reports/${reportId}`,
+      `/weekly-reports/${reportId}`,
       {},
       { id: reportId }
     );
@@ -1575,7 +1575,7 @@ export class ApiService {
 
   async deleteWeeklyReport(reportId: string) {
     return this.fetchWithFallback(
-      `/reports/${reportId}`,
+      `/weekly-reports/${reportId}`,
       { method: 'DELETE' },
       { message: 'Report deleted' }
     );

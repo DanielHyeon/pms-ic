@@ -1,6 +1,7 @@
 package com.insuretech.pms.task.service;
 
 import com.insuretech.pms.common.exception.CustomException;
+import com.insuretech.pms.task.dto.KanbanColumnResponse;
 import com.insuretech.pms.task.dto.TaskRequest;
 import com.insuretech.pms.task.dto.TaskResponse;
 import com.insuretech.pms.task.entity.KanbanColumn;
@@ -129,6 +130,81 @@ public class TaskService {
         return String.join(",", tags);
     }
 
+    @Transactional
+    public TaskResponse updateTask(String taskId, TaskRequest request) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> CustomException.notFound("Task not found: " + taskId));
+
+        if (request.getTitle() != null) {
+            task.setTitle(request.getTitle());
+        }
+        if (request.getDescription() != null) {
+            task.setDescription(request.getDescription());
+        }
+        if (request.getAssigneeId() != null) {
+            task.setAssigneeId(request.getAssigneeId());
+        }
+        if (request.getPriority() != null) {
+            task.setPriority(parsePriority(request.getPriority()));
+        }
+        if (request.getStatus() != null) {
+            task.setStatus(parseStatus(request.getStatus()));
+        }
+        if (request.getDueDate() != null) {
+            task.setDueDate(request.getDueDate());
+        }
+        if (request.getTags() != null) {
+            task.setTags(joinTags(request.getTags()));
+        }
+        if (request.getColumnId() != null) {
+            KanbanColumn column = kanbanColumnRepository.findById(request.getColumnId())
+                    .orElseThrow(() -> CustomException.notFound("Kanban column not found: " + request.getColumnId()));
+            task.setColumn(column);
+        }
+
+        Task savedTask = taskRepository.save(task);
+        return toResponse(savedTask);
+    }
+
+    @Transactional
+    public void deleteTask(String taskId) {
+        if (!taskRepository.existsById(taskId)) {
+            throw CustomException.notFound("Task not found: " + taskId);
+        }
+        taskRepository.deleteById(taskId);
+    }
+
+    @Transactional
+    public TaskResponse moveTask(String taskId, String toColumnId) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> CustomException.notFound("Task not found: " + taskId));
+
+        KanbanColumn column = kanbanColumnRepository.findById(toColumnId)
+                .orElseThrow(() -> CustomException.notFound("Kanban column not found: " + toColumnId));
+
+        task.setColumn(column);
+        Task savedTask = taskRepository.save(task);
+        return toResponse(savedTask);
+    }
+
+    @Transactional(readOnly = true)
+    public List<KanbanColumnResponse> getAllColumns() {
+        List<KanbanColumn> columns = kanbanColumnRepository.findAll();
+        return columns.stream()
+                .map(this::toColumnResponse)
+                .collect(Collectors.toList());
+    }
+
+    private KanbanColumnResponse toColumnResponse(KanbanColumn column) {
+        return KanbanColumnResponse.builder()
+                .id(column.getId())
+                .name(column.getName())
+                .orderNum(column.getOrderNum())
+                .wipLimit(column.getWipLimit())
+                .color(column.getColor())
+                .build();
+    }
+
     /**
      * Update task status and publish TaskStatusChangedEvent
      * Event will be picked up by TaskProgressCalculator to update requirement progress
@@ -137,7 +213,7 @@ public class TaskService {
     public TaskResponse updateTaskStatus(String taskId, String newStatus, String requirementId, String changedBy) {
         Optional<Task> taskOpt = taskRepository.findById(taskId);
         if (taskOpt.isEmpty()) {
-            throw CustomException.notFound("작업을 찾을 수 없습니다: " + taskId);
+            throw CustomException.notFound("Task not found: " + taskId);
         }
 
         Task task = taskOpt.get();

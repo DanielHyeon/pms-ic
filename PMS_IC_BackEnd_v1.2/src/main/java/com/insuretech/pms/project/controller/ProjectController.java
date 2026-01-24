@@ -62,4 +62,11 @@ public class ProjectController {
         projectService.deleteProject(id);
         return ResponseEntity.ok(ApiResponse.success("프로젝트가 삭제되었습니다", null));
     }
+
+    @Operation(summary = "기본 프로젝트 설정")
+    @PostMapping("/{id}/set-default")
+    public ResponseEntity<ApiResponse<ProjectDto>> setDefaultProject(@PathVariable String id) {
+        ProjectDto project = projectService.setDefaultProject(id);
+        return ResponseEntity.ok(ApiResponse.success("기본 프로젝트가 설정되었습니다", project));
+    }
 }

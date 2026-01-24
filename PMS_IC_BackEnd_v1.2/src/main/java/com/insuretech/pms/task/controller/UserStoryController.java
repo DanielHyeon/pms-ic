@@ -15,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/stories")
@@ -42,6 +43,23 @@ public class UserStoryController {
             stories = userStoryService.getAllStories(projectId);
         }
 
+        return ResponseEntity.ok(stories);
+    }
+
+    @GetMapping("/epics")
+    @Operation(summary = "에픽 목록 조회", description = "프로젝트의 모든 에픽을 조회합니다")
+    public ResponseEntity<List<String>> getEpics(@RequestParam String projectId) {
+        List<String> epics = userStoryService.getEpics(projectId);
+        return ResponseEntity.ok(epics);
+    }
+
+    @PutMapping("/{storyId}/priority")
+    @Operation(summary = "스토리 우선순위 변경", description = "스토리의 우선순위를 위/아래로 변경합니다")
+    public ResponseEntity<List<UserStoryResponse>> updateStoryPriority(
+            @PathVariable String storyId,
+            @RequestBody Map<String, String> request) {
+        String direction = request.get("direction");
+        List<UserStoryResponse> stories = userStoryService.updateStoryPriority(storyId, direction);
         return ResponseEntity.ok(stories);
     }
 

@@ -108,4 +108,12 @@ public class RfpController {
         List<RfpDto> rfps = rfpService.searchRfps(projectId, keyword);
         return ResponseEntity.ok(ApiResponse.success(rfps));
     }
+
+    @PostMapping("/{rfpId}/classify")
+    public ResponseEntity<ApiResponse<ClassifyRfpResponse>> classifyRequirements(
+            @PathVariable String projectId,
+            @PathVariable String rfpId) {
+        ClassifyRfpResponse result = rfpService.classifyRequirements(projectId, rfpId);
+        return ResponseEntity.ok(ApiResponse.success(result));
+    }
 }

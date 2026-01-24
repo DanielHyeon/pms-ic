@@ -84,4 +84,25 @@ public class ProjectService {
         projectRepository.deleteById(id);
         log.info("Project deleted: {}", id);
     }
+
+    @CacheEvict(value = "projects", allEntries = true)
+    @Transactional
+    public ProjectDto setDefaultProject(String id) {
+        Project project = projectRepository.findById(id)
+                .orElseThrow(() -> CustomException.notFound("프로젝트를 찾을 수 없습니다: " + id));
+
+        // Clear default flag from all other projects
+        projectRepository.findAll().forEach(p -> {
+            if (p.isDefault()) {
+                p.setDefault(false);
+                projectRepository.save(p);
+            }
+        });
+
+        // Set this project as default
+        project.setDefault(true);
+        Project updated = projectRepository.save(project);
+        log.info("Project set as default: {}", updated.getId());
+        return ProjectDto.from(updated);
+    }
 }

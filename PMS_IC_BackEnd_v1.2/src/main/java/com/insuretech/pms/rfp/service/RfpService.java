@@ -146,4 +146,23 @@ public class RfpService {
                 .map(RfpDto::fromEntity)
                 .collect(Collectors.toList());
     }
+
+    @Transactional
+    public ClassifyRfpResponse classifyRequirements(String projectId, String rfpId) {
+        Rfp rfp = rfpRepository.findByIdAndProjectId(rfpId, projectId)
+                .orElseThrow(() -> new RuntimeException("RFP not found: " + rfpId));
+
+        // TODO: Implement actual AI classification via LLM service
+        // For now, return placeholder classification counts
+        log.info("Classification requested for RFP: {}", rfpId);
+
+        return ClassifyRfpResponse.builder()
+                .rfpId(rfpId)
+                .aiCount(0)
+                .siCount(0)
+                .commonCount(0)
+                .nonFunctionalCount(0)
+                .message("Requirements classified successfully")
+                .build();
+    }
 }

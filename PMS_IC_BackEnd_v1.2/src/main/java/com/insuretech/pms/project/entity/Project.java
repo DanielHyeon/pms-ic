@@ -45,6 +45,10 @@ public class Project extends BaseEntity {
     @Builder.Default
     private Integer progress = 0;
 
+    @Column(name = "is_default", nullable = false)
+    @Builder.Default
+    private boolean isDefault = false;
+
     @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<Phase> phases = new ArrayList<>();

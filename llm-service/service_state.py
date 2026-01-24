@@ -41,7 +41,7 @@ class LLMServiceState:
         # Lightweight and Medium model paths for dual-model configuration
         self._lightweight_model_path: str = os.getenv(
             "LIGHTWEIGHT_MODEL_PATH",
-            "./models/Qwen3-8B-Q5_K_M.gguf"
+            "./models/LFM2-2.6B-Uncensored-X64.i1-Q6_K.gguf"
         )
         self._medium_model_path: str = os.getenv(
             "MEDIUM_MODEL_PATH",

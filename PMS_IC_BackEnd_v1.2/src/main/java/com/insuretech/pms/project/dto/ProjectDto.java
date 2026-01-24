@@ -24,6 +24,7 @@ public class ProjectDto {
     private LocalDate endDate;
     private BigDecimal budget;
     private Integer progress;
+    private boolean isDefault;
     private List<PhaseDto> phases;
 
     public static ProjectDto from(Project project) {
@@ -36,6 +37,7 @@ public class ProjectDto {
                 .endDate(project.getEndDate())
                 .budget(project.getBudget())
                 .progress(project.getProgress())
+                .isDefault(project.isDefault())
                 .phases(project.getPhases() != null ?
                         project.getPhases().stream()
                                 .map(PhaseDto::from)

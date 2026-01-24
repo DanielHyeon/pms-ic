@@ -1,6 +1,7 @@
 package com.insuretech.pms.report.controller;
 
 import com.insuretech.pms.common.dto.ApiResponse;
+import com.insuretech.pms.report.dto.ActivityDto;
 import com.insuretech.pms.report.dto.DashboardStats;
 import com.insuretech.pms.report.service.DashboardService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -10,6 +11,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @Tag(name = "Dashboard", description = "대시보드 API")
 @RestController
@@ -24,5 +27,12 @@ public class DashboardController {
     public ResponseEntity<ApiResponse<DashboardStats>> getStats() {
         DashboardStats stats = dashboardService.getStats();
         return ResponseEntity.ok(ApiResponse.success(stats));
+    }
+
+    @Operation(summary = "최근 활동 조회")
+    @GetMapping("/activities")
+    public ResponseEntity<ApiResponse<List<ActivityDto>>> getActivities() {
+        List<ActivityDto> activities = dashboardService.getRecentActivities();
+        return ResponseEntity.ok(ApiResponse.success(activities));
     }
 }

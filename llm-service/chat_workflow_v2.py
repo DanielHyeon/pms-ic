@@ -15,6 +15,9 @@ import re
 import os
 import time
 
+from policy_engine import get_policy_engine, PolicyAction
+from context_snapshot import get_snapshot_manager, ContextSnapshot
+
 logger = logging.getLogger(__name__)
 
 
@@ -263,40 +266,50 @@ class TwoTrackWorkflow:
         return state
 
     def _policy_check_node(self, state: TwoTrackState) -> TwoTrackState:
-        """Node: L0 Policy enforcement (placeholder for now)"""
+        """Node: L0 Policy enforcement using PolicyEngine"""
         start_time = time.time()
 
-        # TODO: Implement full policy engine
-        # For now, basic checks only
+        message = state["message"]
+        user_id = state.get("user_id")
+        project_id = state.get("project_id")
+        user_role = state.get("user_role")
+
+        # Use the full PolicyEngine for comprehensive checks
+        policy_engine = get_policy_engine()
+        result = policy_engine.check_request(
+            message=message,
+            user_id=user_id,
+            project_id=project_id,
+        )
 
         policy_result = {
-            "passed": True,
+            "passed": result.passed,
+            "action": result.action.value,
             "checks": {
-                "scope_valid": True,
-                "pii_clean": True,
-                "rules_ok": True
+                check_name: {
+                    "action": check_result.action.value,
+                    "warnings": check_result.warnings,
+                }
+                for check_name, check_result in result.checks.items()
             },
-            "blocked_reason": None
+            "blocked_reason": result.blocked_reason,
+            "warnings": result.warnings,
         }
 
-        # Basic PII check (phone numbers, emails)
-        message = state["message"]
-        pii_patterns = [
-            r'\d{3}[-.]?\d{4}[-.]?\d{4}',  # Phone
-            r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',  # Email
-        ]
-
-        for pattern in pii_patterns:
-            if re.search(pattern, message):
-                logger.warning(f"PII detected in message")
-                # Don't block, but flag it
-                policy_result["checks"]["pii_clean"] = False
+        # If PII was masked, update the message
+        if result.modified_message:
+            state["message"] = result.modified_message
+            state["current_query"] = result.modified_message
+            logger.info("PII masked in message")
 
         state["policy_result"] = policy_result
-        state["policy_passed"] = policy_result["passed"]
+        state["policy_passed"] = result.passed
         state["metrics"]["policy_time_ms"] = (time.time() - start_time) * 1000
 
-        logger.info(f"Policy check: {'PASSED' if policy_result['passed'] else 'BLOCKED'}")
+        if result.warnings:
+            logger.warning(f"Policy warnings: {result.warnings}")
+
+        logger.info(f"Policy check: {'PASSED' if result.passed else 'BLOCKED'} (action={result.action.value})")
 
         return state
 
@@ -438,32 +451,61 @@ class TwoTrackWorkflow:
         start_time = time.time()
 
         retrieved_docs = state.get("retrieved_docs", [])
+        project_id = state.get("project_id")
+        user_id = state.get("user_id")
 
-        # TODO: Integrate with real snapshot service
-        # For now, create basic context compilation
+        # Use SnapshotManager for Now/Next/Why context
+        snapshot_manager = get_snapshot_manager()
 
-        now_snapshot = {
-            "description": "Current sprint state",
-            "data": []  # Would be filled from PostgreSQL/Neo4j
-        }
+        try:
+            # Generate context snapshot (uses cache if available)
+            snapshot = snapshot_manager.generate_snapshot(
+                project_id=project_id,
+                user_id=user_id,
+            )
 
-        next_snapshot = {
-            "description": "Upcoming milestones",
-            "data": []
-        }
+            now_snapshot = {
+                "description": "Current sprint state",
+                "data": snapshot.now.to_text() if snapshot.now else "",
+                "active_sprint": snapshot.now.active_sprint,
+                "wip_count": snapshot.now.wip_count,
+                "wip_limit": snapshot.now.wip_limit,
+                "completion_rate": snapshot.now.sprint_completion_rate,
+            }
 
-        why_snapshot = {
-            "description": "Recent decisions and changes",
-            "data": []
-        }
+            next_snapshot = {
+                "description": "Upcoming milestones",
+                "data": snapshot.next.to_text() if snapshot.next else "",
+                "milestones": snapshot.next.upcoming_milestones,
+                "pending_reviews": snapshot.next.pending_reviews,
+            }
 
-        # Compile context from RAG docs
-        context_parts = []
+            why_snapshot = {
+                "description": "Recent decisions and changes",
+                "data": snapshot.why.to_text() if snapshot.why else "",
+                "recent_changes": snapshot.why.recent_changes,
+                "recent_decisions": snapshot.why.recent_decisions,
+            }
 
+            # Build compiled context with snapshot data
+            context_parts = []
+
+            # Add Now/Next/Why snapshot text
+            snapshot_text = snapshot.to_text()
+            if snapshot_text.strip():
+                context_parts.append(snapshot_text)
+
+        except Exception as e:
+            logger.warning(f"Failed to generate snapshot: {e}")
+            now_snapshot = {"description": "Current sprint state", "data": []}
+            next_snapshot = {"description": "Upcoming milestones", "data": []}
+            why_snapshot = {"description": "Recent decisions and changes", "data": []}
+            context_parts = []
+
+        # Add RAG docs
         if retrieved_docs:
-            context_parts.append("=== Reference Documents ===")
+            context_parts.append("\n=== Reference Documents ===")
             for i, doc in enumerate(retrieved_docs[:5], 1):
-                # Limit each doc to 500 chars for context
                 doc_preview = doc[:500] if len(doc) > 500 else doc
                 context_parts.append(f"[Doc {i}] {doc_preview}")
 
@@ -475,7 +517,7 @@ class TwoTrackWorkflow:
         state["why_snapshot"] = why_snapshot
         state["metrics"]["compile_time_ms"] = (time.time() - start_time) * 1000
 
-        logger.info(f"Compiled context: {len(compiled_context)} chars")
+        logger.info(f"Compiled context: {len(compiled_context)} chars (snapshot + {len(retrieved_docs)} docs)")
 
         return state
 
@@ -593,33 +635,90 @@ class TwoTrackWorkflow:
 
         response = state.get("response", "")
         retrieved_docs = state.get("retrieved_docs", [])
+        message = state.get("message", "")
 
         verification = {
             "passed": True,
-            "issues": []
+            "issues": [],
+            "evidence_score": 0.0,
+            "grounded_terms": [],
         }
 
-        # Check response length
+        # 1. Check response length
         if len(response) < 50:
             verification["issues"].append("Response too short")
 
-        # Check for evidence (Track B should have references)
-        # TODO: Implement proper evidence checking
+        # 2. Evidence checking - verify response is grounded in retrieved docs
+        if retrieved_docs:
+            # Extract key terms from response
+            response_terms = set(self._extract_keywords(response))
+            doc_terms = set()
+            for doc in retrieved_docs:
+                doc_terms.update(self._extract_keywords(doc))
 
-        # Check for hallucination patterns
+            # Calculate grounding score
+            if response_terms:
+                grounded = response_terms & doc_terms
+                verification["grounded_terms"] = list(grounded)[:10]
+                verification["evidence_score"] = len(grounded) / len(response_terms)
+
+                if verification["evidence_score"] < 0.2:
+                    verification["issues"].append(
+                        f"Low evidence grounding ({verification['evidence_score']:.0%})"
+                    )
+        else:
+            # No docs but Track B expects grounded response
+            verification["issues"].append("No reference documents for grounding")
+
+        # 3. Check for hallucination patterns
         hallucination_patterns = [
-            r"제가 생각하기에",
-            r"아마도",
-            r"추측컨대",
-            r"확실하지 않지만",
+            (r"제가 생각하기에", "personal opinion"),
+            (r"아마도", "uncertainty marker"),
+            (r"추측컨대", "speculation"),
+            (r"확실하지 않지만", "uncertainty marker"),
+            (r"일반적으로 알려진", "vague reference"),
+            (r"보통은", "generalization"),
         ]
-        for pattern in hallucination_patterns:
+        for pattern, pattern_type in hallucination_patterns:
             if re.search(pattern, response):
-                verification["issues"].append(f"Potential hallucination: {pattern}")
+                verification["issues"].append(f"Potential hallucination ({pattern_type})")
+
+        # 4. Check for fabricated statistics/numbers not in source
+        number_pattern = r'\b\d{2,}%|\b\d+\.\d+%'
+        response_numbers = set(re.findall(number_pattern, response))
+        if response_numbers:
+            doc_numbers = set()
+            for doc in retrieved_docs:
+                doc_numbers.update(re.findall(number_pattern, doc))
+
+            fabricated = response_numbers - doc_numbers
+            if fabricated:
+                verification["issues"].append(
+                    f"Potentially fabricated statistics: {list(fabricated)[:3]}"
+                )
+
+        # 5. Apply PolicyEngine response check
+        try:
+            policy_engine = get_policy_engine()
+            policy_result = policy_engine.check_response(response)
+            if policy_result.warnings:
+                verification["issues"].extend(
+                    [f"Policy: {w}" for w in policy_result.warnings]
+                )
+            if policy_result.modified_message:
+                state["response"] = policy_result.modified_message
+                verification["issues"].append("Response modified by policy engine")
+        except Exception as e:
+            logger.warning(f"Policy response check failed: {e}")
+
+        # Determine pass/fail
+        critical_issues = [i for i in verification["issues"] if "hallucination" in i.lower() or "fabricated" in i.lower()]
+        verification["passed"] = len(critical_issues) == 0
 
         if verification["issues"]:
-            verification["passed"] = False
             logger.warning(f"Verification issues: {verification['issues']}")
+        else:
+            logger.info(f"Verification passed (evidence_score={verification['evidence_score']:.0%})")
 
         state["debug_info"]["verification"] = verification
         state["metrics"]["verify_time_ms"] = (time.time() - start_time) * 1000

@@ -51,6 +51,57 @@ public class UserStoryService {
                 .collect(Collectors.toList());
     }
 
+    public List<String> getEpics(String projectId) {
+        List<UserStory> stories = userStoryRepository.findByProjectIdOrderByPriorityOrderAsc(projectId);
+        return stories.stream()
+                .map(UserStory::getEpic)
+                .filter(epic -> epic != null && !epic.isBlank())
+                .distinct()
+                .collect(Collectors.toList());
+    }
+
+    public List<UserStoryResponse> updateStoryPriority(String storyId, String direction) {
+        UserStory story = userStoryRepository.findById(storyId)
+                .orElseThrow(() -> new RuntimeException("User story not found: " + storyId));
+
+        List<UserStory> stories = userStoryRepository.findByProjectIdAndStatusOrderByPriorityOrderAsc(
+                story.getProjectId(), story.getStatus());
+
+        int currentIndex = -1;
+        for (int i = 0; i < stories.size(); i++) {
+            if (stories.get(i).getId().equals(storyId)) {
+                currentIndex = i;
+                break;
+            }
+        }
+
+        if (currentIndex == -1) {
+            return stories.stream().map(this::toResponse).collect(Collectors.toList());
+        }
+
+        int targetIndex = "up".equalsIgnoreCase(direction) ? currentIndex - 1 : currentIndex + 1;
+
+        if (targetIndex < 0 || targetIndex >= stories.size()) {
+            return stories.stream().map(this::toResponse).collect(Collectors.toList());
+        }
+
+        // Swap priority orders
+        UserStory targetStory = stories.get(targetIndex);
+        Integer tempOrder = story.getPriorityOrder();
+        story.setPriorityOrder(targetStory.getPriorityOrder());
+        targetStory.setPriorityOrder(tempOrder);
+
+        userStoryRepository.save(story);
+        userStoryRepository.save(targetStory);
+
+        // Return updated list
+        return userStoryRepository.findByProjectIdAndStatusOrderByPriorityOrderAsc(
+                story.getProjectId(), story.getStatus())
+                .stream()
+                .map(this::toResponse)
+                .collect(Collectors.toList());
+    }
+
     public UserStoryResponse createStory(CreateUserStoryRequest request) {
         Integer maxPriority = userStoryRepository.findMaxPriorityOrderByProjectIdAndStatus(
                 request.getProjectId(), UserStory.StoryStatus.BACKLOG);

@@ -209,24 +209,54 @@ def chat():
 
 
 def get_two_track_workflow():
-    """Get or initialize Two-Track Workflow v2 (lazy loading)"""
+    """Get or initialize Two-Track Workflow v2 (lazy loading)
+
+    Uses separate models for L1 (fast/lightweight) and L2 (quality/medium):
+    - L1: lightweight_model_path (e.g., LFM2-2.6B) for Track A fast responses
+    - L2: medium_model_path (e.g., Gemma-3-12B) for Track B quality responses
+    """
     global _two_track_workflow
     if _two_track_workflow is None:
         try:
-            model, rag, _ = load_model()
-            if model is None:
-                raise RuntimeError("Model not loaded")
+            # Load primary model (L2 - quality model)
+            model_l2, rag, _ = load_model()
+            if model_l2 is None:
+                raise RuntimeError("L2 model not loaded")
 
-            # For now, use same model for both L1 and L2
-            # TODO: Load separate L1 (LFM2) model when available
+            # Try to load L1 (lightweight) model if different from L2
+            model_l1 = model_l2
+            l1_path = state.lightweight_model_path
+            l2_path = state.medium_model_path or state.current_model_path
+
+            if l1_path and l1_path != l2_path and os.path.exists(l1_path):
+                try:
+                    logger.info(f"Loading L1 (lightweight) model: {l1_path}")
+                    n_ctx = int(os.getenv("LLM_N_CTX", "4096"))
+                    n_threads = int(os.getenv("LLM_N_THREADS", "6"))
+                    model_l1 = Llama(
+                        model_path=l1_path,
+                        n_ctx=n_ctx,
+                        n_threads=n_threads,
+                        verbose=False,
+                        n_gpu_layers=0,  # L1 on CPU for parallel execution
+                    )
+                    logger.info(f"L1 model loaded: {l1_path}")
+                except Exception as l1_error:
+                    logger.warning(f"Failed to load L1 model, using L2 for both: {l1_error}")
+                    model_l1 = model_l2
+                    l1_path = l2_path
+            else:
+                l1_path = l2_path
+                logger.info("Using same model for L1 and L2")
+
             _two_track_workflow = TwoTrackWorkflow(
-                llm_l1=model,
-                llm_l2=model,
+                llm_l1=model_l1,
+                llm_l2=model_l2,
                 rag_service=rag,
-                model_path_l1=state.current_model_path,
-                model_path_l2=state.current_model_path,
+                model_path_l1=l1_path,
+                model_path_l2=l2_path,
             )
-            logger.info("Two-Track Workflow v2 initialized")
+            logger.info(f"Two-Track Workflow v2 initialized (L1={os.path.basename(l1_path)}, L2={os.path.basename(l2_path)})")
         except Exception as e:
             logger.error(f"Failed to initialize Two-Track Workflow: {e}")
             raise
@@ -1092,6 +1122,12 @@ def change_lightweight_model():
         old_path = state.lightweight_model_path
         state.lightweight_model_path = model_path
 
+        # Reset Two-Track workflow to force re-initialization with new model
+        global _two_track_workflow
+        if _two_track_workflow is not None:
+            logger.info("Resetting Two-Track workflow for lightweight model change")
+            _two_track_workflow = None
+
         logger.info(f"Lightweight model changed: {old_path} -> {model_path}")
 
         return jsonify({
@@ -1100,6 +1136,7 @@ def change_lightweight_model():
             "previousModel": old_path,
             "category": "lightweight",
             "message": f"Lightweight model changed to {os.path.basename(model_path)}",
+            "note": "Two-Track workflow will reload on next request",
             "timestamp": datetime.now().isoformat()
         })
 
@@ -1168,6 +1205,12 @@ def change_medium_model():
         old_path = state.medium_model_path
         state.medium_model_path = model_path
 
+        # Reset Two-Track workflow to force re-initialization with new model
+        global _two_track_workflow
+        if _two_track_workflow is not None:
+            logger.info("Resetting Two-Track workflow for medium model change")
+            _two_track_workflow = None
+
         logger.info(f"Medium model changed: {old_path} -> {model_path}")
 
         return jsonify({
@@ -1176,6 +1219,7 @@ def change_medium_model():
             "previousModel": old_path,
             "category": "medium",
             "message": f"Medium model changed to {os.path.basename(model_path)}",
+            "note": "Two-Track workflow will reload on next request",
             "timestamp": datetime.now().isoformat()
         })
 
@@ -1225,6 +1269,7 @@ OCR_ENGINE_INFO = {
 }
 
 
+@app.route("/api/ocr", methods=["GET"])
 @app.route("/api/ocr/current", methods=["GET"])
 def get_current_ocr_engine():
     """현재 OCR 엔진 설정 조회"""
@@ -1243,6 +1288,7 @@ def get_current_ocr_engine():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/ocr", methods=["PUT"])
 @app.route("/api/ocr/change", methods=["PUT"])
 def change_ocr_engine():
     """OCR 엔진 변경 API"""
