@@ -1767,7 +1767,7 @@ collector.export_to_json("/var/log/pms_metrics.json")
 |--------|--------|------|------|
 | postgres | postgres:15-alpine | 5433 | 관계형 데이터베이스 |
 | redis | redis:7-alpine | 6379 | 캐시/세션/Streams |
-| neo4j | neo4j:5.20-community | 7474, 7687 | 그래프/벡터 DB |
+| neo4j | neo4j:5.26.0-community | 7474, 7687 | 그래프/벡터 DB |
 | backend | Spring Boot | 8083 | API 서버 |
 | frontend | Vite Dev Server | 5173 | 웹 UI |
 | llm-service | Flask + llama-cpp | 8000 | AI 서비스 |
@@ -1809,13 +1809,21 @@ docker-compose down -v
 
 ### 15.4 볼륨 구성
 
-| 볼륨 | 용도 |
-|------|------|
-| postgres_data | PostgreSQL 데이터 |
-| redis_data | Redis 데이터 |
-| neo4j_data | Neo4j 데이터 |
-| neo4j_logs | Neo4j 로그 |
-| backend_cache | Maven 캐시 |
+모든 데이터는 로컬 `./data/` 디렉토리에 저장됩니다.
+
+| 로컬 경로 | 컨테이너 경로 | 용도 |
+|-----------|---------------|------|
+| ./data/postgres | /var/lib/postgresql/data | PostgreSQL 데이터 |
+| ./data/redis | /data | Redis 데이터 |
+| ./data/neo4j/data | /data | Neo4j 데이터 |
+| ./data/neo4j/logs | /logs | Neo4j 로그 |
+| ./data/neo4j/import | /var/lib/neo4j/import | Neo4j 임포트 |
+| ./data/neo4j/plugins | /plugins | Neo4j 플러그인 |
+| ./data/qdrant | /qdrant/storage | Qdrant 벡터 DB |
+| ./data/pgadmin | /var/lib/pgadmin | PgAdmin 설정 |
+| ./data/openmetadata/data | /opt/openmetadata/data | OpenMetadata 데이터 |
+| ./data/openmetadata/elasticsearch | /usr/share/elasticsearch/data | Elasticsearch 인덱스 |
+| backend_cache (Docker volume) | /root/.m2 | Maven 캐시 |
 
 ---
 

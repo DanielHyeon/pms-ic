@@ -100,7 +100,7 @@ services:
     networks:
       - pms-network
     volumes:
-      - openmetadata_data:/opt/openmetadata/data
+      - ./data/openmetadata/data:/opt/openmetadata/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8585/api/v1/system/version"]
       interval: 30s
@@ -126,7 +126,7 @@ services:
       - xpack.security.enabled=false
       - cluster.name=openmetadata-cluster
     volumes:
-      - openmetadata_es_data:/usr/share/elasticsearch/data
+      - ./data/openmetadata/elasticsearch:/usr/share/elasticsearch/data
     networks:
       - pms-network
     healthcheck:
@@ -210,11 +210,3 @@ services:
       - pms-network
     restart: unless-stopped
 
-# ============================================
-# Volumes
-# ============================================
-volumes:
-  openmetadata_data:
-    driver: local
-  openmetadata_es_data:
-    driver: local

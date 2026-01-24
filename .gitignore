@@ -194,6 +194,7 @@ target/
 build/
 
 # DB 데이터 디렉토리 제외
+data/
 db_data/
 mysql_data/
 postgres_data/

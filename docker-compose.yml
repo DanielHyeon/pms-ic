@@ -14,7 +14,7 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./data/postgres:/var/lib/postgresql/data
       - ./docker/postgres/init:/docker-entrypoint-initdb.d
     networks:
       - pms-network
@@ -34,7 +34,7 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - redis_data:/data
+      - ./data/redis:/data
     networks:
       - pms-network
     command: redis-server --appendonly yes
@@ -190,7 +190,7 @@ services:
       - "6333:6333"  # REST API
       - "6334:6334"  # gRPC API
     volumes:
-      - qdrant_data:/qdrant/storage
+      - ./data/qdrant:/qdrant/storage
     environment:
       - QDRANT__SERVICE__GRPC_PORT=6334
     networks:
@@ -207,16 +207,16 @@ services:
   # ============================================
 
   neo4j:
-    image: neo4j:5.20-community
+    image: neo4j:5.26.0-community
     container_name: pms-neo4j
     ports:
       - "7474:7474"  # Browser UI
       - "7687:7687"  # Bolt protocol
     volumes:
-      - neo4j_data:/data
-      - neo4j_logs:/logs
-      - neo4j_import:/var/lib/neo4j/import
-      - neo4j_plugins:/plugins
+      - ./data/neo4j/data:/data
+      - ./data/neo4j/logs:/logs
+      - ./data/neo4j/import:/var/lib/neo4j/import
+      - ./data/neo4j/plugins:/plugins
     networks:
       - pms-network
     environment:
@@ -252,7 +252,7 @@ services:
     ports:
       - "5050:80"
     volumes:
-      - pgadmin_data:/var/lib/pgadmin
+      - ./data/pgadmin:/var/lib/pgadmin
     networks:
       - pms-network
     depends_on:
@@ -317,21 +317,5 @@ networks:
 # ============================================
 
 volumes:
-  postgres_data:
-    driver: local
-  redis_data:
-    driver: local
-  pgadmin_data:
-    driver: local
   backend_cache:
-    driver: local
-  qdrant_data:
-    driver: local
-  neo4j_data:
-    driver: local
-  neo4j_logs:
-    driver: local
-  neo4j_import:
-    driver: local
-  neo4j_plugins:
     driver: local
