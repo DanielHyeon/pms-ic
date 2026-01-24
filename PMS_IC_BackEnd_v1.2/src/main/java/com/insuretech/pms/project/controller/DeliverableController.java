@@ -52,6 +52,24 @@ public class DeliverableController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("산출물이 업로드되었습니다", dto));
     }
 
+    @Operation(summary = "산출물 메타데이터 수정")
+    @PreAuthorize("hasAnyRole('PMO_HEAD', 'PM', 'DEVELOPER', 'QA')")
+    @PutMapping("/{deliverableId}")
+    public ResponseEntity<ApiResponse<DeliverableDto>> updateDeliverable(
+            @PathVariable String phaseId,
+            @PathVariable String deliverableId,
+            @RequestBody java.util.Map<String, String> request
+    ) {
+        DeliverableDto dto = deliverableService.updateDeliverable(
+                phaseId,
+                deliverableId,
+                request.get("name"),
+                request.get("description"),
+                request.get("status")
+        );
+        return ResponseEntity.ok(ApiResponse.success("산출물이 수정되었습니다", dto));
+    }
+
     @Operation(summary = "산출물 파일 업로드/갱신")
     @PreAuthorize("hasAnyRole('PMO_HEAD', 'PM', 'DEVELOPER', 'QA')")
     @PostMapping("/{deliverableId}/upload")

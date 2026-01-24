@@ -130,6 +130,31 @@ public class DeliverableService {
     }
 
     @Transactional
+    public DeliverableDto updateDeliverable(String phaseId, String deliverableId, String name, String description, String status) {
+        ensurePhaseExists(phaseId);
+        Deliverable deliverable = deliverableRepository.findById(deliverableId)
+                .orElseThrow(() -> CustomException.notFound("Deliverable not found: " + deliverableId));
+
+        if (!deliverable.getPhase().getId().equals(phaseId)) {
+            throw CustomException.badRequest("Phase ID does not match deliverable.");
+        }
+
+        if (name != null && !name.isBlank()) {
+            deliverable.setName(name);
+        }
+        if (description != null) {
+            deliverable.setDescription(description);
+        }
+        if (status != null && !status.isBlank()) {
+            deliverable.setStatus(Deliverable.DeliverableStatus.valueOf(status));
+        }
+
+        Deliverable saved = deliverableRepository.save(deliverable);
+        log.info("Deliverable updated: {} (phase={})", saved.getId(), phaseId);
+        return DeliverableDto.from(saved);
+    }
+
+    @Transactional
     public DeliverableDto approveDeliverable(String deliverableId, boolean approved, String approver) {
         Deliverable deliverable = deliverableRepository.findById(deliverableId)
                 .orElseThrow(() -> CustomException.notFound("Deliverable not found: " + deliverableId));

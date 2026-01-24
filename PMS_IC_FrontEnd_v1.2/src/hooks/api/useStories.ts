@@ -203,3 +203,18 @@ export function useUpdateStoryPriority() {
     },
   });
 }
+
+export function useDeleteStory() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => apiService.deleteStory(id),
+    onSuccess: (_, id) => {
+      queryClient.setQueryData<UserStory[]>(storyKeys.lists(), (old = []) => {
+        const updated = old.filter((s) => String(s.id) !== id);
+        localStorage.setItem('backlog_stories', JSON.stringify(updated));
+        return updated;
+      });
+    },
+  });
+}

@@ -61,6 +61,9 @@ public class Task extends BaseEntity {
     @Column(name = "user_story_id", length = 50)
     private String userStoryId;
 
+    @Column(name = "requirement_id", length = 50)
+    private String requirementId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "track_type", length = 20)
     @Builder.Default

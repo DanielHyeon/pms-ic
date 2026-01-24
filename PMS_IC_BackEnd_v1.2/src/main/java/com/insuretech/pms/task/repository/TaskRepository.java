@@ -17,4 +17,7 @@ public interface TaskRepository extends JpaRepository<Task, String> {
 
     // Lineage: find tasks by project via KanbanColumn relationship
     List<Task> findByColumn_ProjectId(String projectId);
+
+    // Progress: find tasks linked to a requirement
+    List<Task> findByRequirementId(String requirementId);
 }

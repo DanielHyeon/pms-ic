@@ -495,8 +495,8 @@ export class ApiService {
     return this.fetchWithFallback(`/stories?${params}`, {}, []);
   }
 
-  async getEpics() {
-    return this.fetchWithFallback('/stories/epics', {}, ['OCR 엔진', 'AI 모델', '인프라', '데이터 관리']);
+  async getEpics(projectId: string) {
+    return this.fetchWithFallback(`/stories/epics?projectId=${projectId}`, {}, ['OCR 엔진', 'AI 모델', '인프라', '데이터 관리']);
   }
 
   async createStory(story: any) {
@@ -518,6 +518,12 @@ export class ApiService {
       method: 'PUT',
       body: JSON.stringify({ direction }),
     }, []);
+  }
+
+  async deleteStory(storyId: string) {
+    return this.fetchWithFallback(`/stories/${storyId}`, {
+      method: 'DELETE',
+    }, { message: 'Story deleted' });
   }
 
   async getPermissions() {
