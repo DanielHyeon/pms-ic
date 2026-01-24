@@ -64,7 +64,6 @@ services:
       NEO4J_USER: ${NEO4J_USER:-neo4j}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD:-pmspassword123}
       AI_SERVICE_URL: ${AI_SERVICE_URL:-http://llm-service:8000}
-      AI_SERVICE_MOCK_URL: http://mockserver:1080
       AI_SERVICE_MODEL: ${AI_SERVICE_MODEL:-google.gemma-3-12b-pt.Q5_K_M.gguf}
       JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
     ports:
@@ -239,79 +238,6 @@ services:
       start_period: 40s
 
   # ============================================
-  # Graph Vector Database (Helix-DB - DEPRECATED)
-  # ============================================
-
-  helix-db:
-    profiles:
-      - deprecated
-    build:
-      context: ./helix-db
-      dockerfile: Dockerfile
-    container_name: pms-helix-db
-    volumes:
-      - helix_data:/workspace/data
-      - ./helix-db/schema:/workspace/schema
-      - ./helix-db/start.sh:/workspace/start.sh:ro
-      - /var/run/docker.sock:/var/run/docker.sock
-    networks:
-      - pms-network
-    environment:
-      - HELIX_ENV=development
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    healthcheck:
-      test: ["CMD", "bash", "-c", "curl -f http://host.docker.internal:6969/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  # ChromaDB (deprecated, keeping for migration)
-  # chromadb:
-  #   image: chromadb/chroma:latest
-  #   container_name: pms-chromadb
-  #   ports:
-  #     - "8001:8000"
-  #   volumes:
-  #     - chromadb_data:/data
-  #   environment:
-  #     - IS_PERSISTENT=TRUE
-  #     - ANONYMIZED_TELEMETRY=FALSE
-  #   networks:
-  #     - pms-network
-
-  # ============================================
-  # AI Service (Mock - Fallback용)
-  # ============================================
-
-  ai-service:
-    image: mockserver/mockserver:latest
-    container_name: pms-ai-service-mock
-    ports:
-      - "1080:1080"
-    environment:
-      MOCKSERVER_INITIALIZATION_JSON_PATH: /config/ai-mock.json
-    volumes:
-      - ./docker/mockserver/ai-mock.json:/config/ai-mock.json
-    networks:
-      - pms-network
-
-  # ============================================
-  # Local LLM Service (Ollama - Optional)
-  # ============================================
-
-  # ollama:
-  #   image: ollama/ollama:latest
-  #   container_name: pms-ollama
-  #   ports:
-  #     - "11434:11434"
-  #   volumes:
-  #     - ollama_data:/root/.ollama
-  #   networks:
-  #     - pms-network
-
-  # ============================================
   # Development Tools
   # ============================================
 
@@ -399,8 +325,6 @@ volumes:
     driver: local
   backend_cache:
     driver: local
-  ollama_data:
-    driver: local
   qdrant_data:
     driver: local
   neo4j_data:
@@ -411,11 +335,3 @@ volumes:
     driver: local
   neo4j_plugins:
     driver: local
-  helix_data:
-    driver: local
-  chromadb_data:
-    driver: local
-  # prometheus_data:
-  #   driver: local
-  # grafana_data:
-  #   driver: local

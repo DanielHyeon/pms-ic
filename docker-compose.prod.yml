@@ -3,8 +3,6 @@
 # 사용: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up
 # With OpenMetadata: docker-compose -f docker-compose.yml -f docker-compose.openmetadata.yml -f docker-compose.prod.yml up
 
-version: '3.8'
-
 services:
   postgres:
     environment:
