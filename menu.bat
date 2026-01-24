@@ -62,9 +62,9 @@ echo 브라우저에서 서비스 열기
 echo ====================================
 echo.
 echo 1. Frontend (http://localhost:5173)
-echo 2. Backend API (http://localhost:8080)
+echo 2. Backend API (http://localhost:8083)
 echo 3. PgAdmin (http://localhost:5050)
-echo 4. Redis Commander (http://localhost:8082)
+echo 4. Neo4j Browser (http://localhost:7474)
 echo 5. 모두 열기
 echo 0. 메인 메뉴로
 echo.
@@ -74,13 +74,13 @@ choice /c 123450 /n /m "선택하세요 (0-5): "
 if errorlevel 6 goto menu
 if errorlevel 5 (
     start http://localhost:5173
-    start http://localhost:8080
+    start http://localhost:8083
     start http://localhost:5050
-    start http://localhost:8082
+    start http://localhost:7474
     goto menu
 )
 if errorlevel 4 (
-    start http://localhost:8082
+    start http://localhost:7474
     goto menu
 )
 if errorlevel 3 (
@@ -88,7 +88,7 @@ if errorlevel 3 (
     goto menu
 )
 if errorlevel 2 (
-    start http://localhost:8080
+    start http://localhost:8083
     goto menu
 )
 if errorlevel 1 (

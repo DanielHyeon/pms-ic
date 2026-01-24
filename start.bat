@@ -55,9 +55,9 @@ if %errorlevel% equ 0 (
     echo.
     echo 📌 접속 URL:
     echo    Frontend:      http://localhost:5173
-    echo    Backend API:   http://localhost:8080
+    echo    Backend API:   http://localhost:8083
     echo    PgAdmin:       http://localhost:5050 (admin@pms.com / admin)
-    echo    Redis GUI:     http://localhost:8082
+    echo    Neo4j Browser: http://localhost:7474
     echo.
     echo 📋 유용한 명령어:
     echo    로그 확인:     docker-compose logs -f

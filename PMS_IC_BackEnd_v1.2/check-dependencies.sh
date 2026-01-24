@@ -46,12 +46,12 @@ else
     echo "   시작: docker-compose up -d llm-service"
 fi
 
-# ChromaDB 확인 (선택사항)
-if docker ps | grep -q pms-chromadb; then
-    echo "✅ ChromaDB: 실행 중 (포트 8001)"
+# Neo4j 확인
+if docker ps | grep -q pms-neo4j; then
+    echo "✅ Neo4j: 실행 중 (포트 7687)"
 else
-    echo "⚠️  ChromaDB: 실행 중이 아님 (선택사항)"
-    echo "   시작: docker-compose up -d chromadb"
+    echo "⚠️  Neo4j: 실행 중이 아님 (선택사항)"
+    echo "   시작: docker-compose up -d neo4j"
 fi
 
 echo ""

@@ -226,7 +226,7 @@ Examples:
   # View logs
   ./llm-setup.sh logs
 
-For detailed setup instructions, see: LLM_SETUP_GUIDE.md
+For detailed setup instructions, see: docs/LLM_GUIDE.md
 
 ${YELLOW}GPU Mode Requirements:${NC}
   - NVIDIA Driver 535+

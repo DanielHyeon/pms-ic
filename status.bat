@@ -18,9 +18,9 @@ echo ====================================
 echo.
 
 echo [Backend API]
-curl -f http://localhost:8080/actuator/health >nul 2>&1
+curl -f http://localhost:8083/actuator/health >nul 2>&1
 if %errorlevel% equ 0 (
-    echo ✓ Backend: 정상 작동 중 (http://localhost:8080)
+    echo ✓ Backend: 정상 작동 중 (http://localhost:8083)
 ) else (
     echo ✗ Backend: 응답 없음
 )
@@ -36,7 +36,7 @@ if %errorlevel% equ 0 (
 echo [PostgreSQL]
 docker-compose exec -T postgres pg_isready -U pms_user >nul 2>&1
 if %errorlevel% equ 0 (
-    echo ✓ PostgreSQL: 정상 작동 중 (http://localhost:5432)
+    echo ✓ PostgreSQL: 정상 작동 중 (localhost:5433)
 ) else (
     echo ✗ PostgreSQL: 응답 없음
 )
@@ -44,9 +44,17 @@ if %errorlevel% equ 0 (
 echo [Redis]
 docker-compose exec -T redis redis-cli ping >nul 2>&1
 if %errorlevel% equ 0 (
-    echo ✓ Redis: 정상 작동 중 (http://localhost:6379)
+    echo ✓ Redis: 정상 작동 중 (localhost:6379)
 ) else (
     echo ✗ Redis: 응답 없음
+)
+
+echo [LLM Service]
+curl -f http://localhost:8000/health >nul 2>&1
+if %errorlevel% equ 0 (
+    echo ✓ LLM Service: 정상 작동 중 (http://localhost:8000)
+) else (
+    echo ✗ LLM Service: 응답 없음
 )
 
 echo.
