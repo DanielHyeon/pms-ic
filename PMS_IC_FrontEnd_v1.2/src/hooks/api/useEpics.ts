@@ -11,7 +11,7 @@ import {
 const initialEpics: Epic[] = [
   {
     id: 'epic-1',
-    projectId: 'project-1',
+    projectId: 'proj-001',
     phaseId: 'phase-2',
     name: 'AI 기반 자동 심사 시스템 구축',
     description: '보험금 청구 자동 심사를 위한 AI 엔진 개발',
@@ -27,7 +27,7 @@ const initialEpics: Epic[] = [
   },
   {
     id: 'epic-2',
-    projectId: 'project-1',
+    projectId: 'proj-001',
     phaseId: 'phase-2',
     name: 'OCR 문서 인식 엔진',
     description: '진단서, 영수증 등 의료 문서 자동 인식',
@@ -43,7 +43,7 @@ const initialEpics: Epic[] = [
   },
   {
     id: 'epic-3',
-    projectId: 'project-1',
+    projectId: 'proj-001',
     phaseId: 'phase-3',
     name: '데이터 파이프라인 구축',
     description: '학습 데이터 수집, 정제, 라벨링 자동화',

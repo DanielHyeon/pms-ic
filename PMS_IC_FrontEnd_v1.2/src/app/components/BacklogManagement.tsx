@@ -32,7 +32,7 @@ interface BacklogManagementProps {
   projectId?: string;
 }
 
-export default function BacklogManagement({ userRole, projectId = 'project-1' }: BacklogManagementProps) {
+export default function BacklogManagement({ userRole, projectId = 'proj-001' }: BacklogManagementProps) {
   const { data: stories = [], isLoading: isLoadingStories } = useStories();
   const { data: activeSprint } = useActiveSprint(projectId);
   const createStoryMutation = useCreateStory();

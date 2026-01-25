@@ -75,7 +75,14 @@ export class ApiService {
         this.useMockData = false;
       }
 
-      return await response.json();
+      const json = await response.json();
+
+      // Extract data from ApiResponse wrapper if present
+      if (json && typeof json === 'object' && 'data' in json && 'success' in json) {
+        return json.data as T;
+      }
+
+      return json;
     } catch (error) {
       // 네트워크 에러인 경우에만 경고, 그 외는 조용히 처리
       if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
@@ -111,7 +118,7 @@ export class ApiService {
       department: 'PMO',
     };
 
-    const response = await this.fetchWithFallback(
+    return this.fetchWithFallback(
       '/auth/login',
       {
         method: 'POST',
@@ -125,13 +132,6 @@ export class ApiService {
         },
       }
     );
-
-    // 백엔드 응답에서 data 필드 추출
-    if (response && typeof response === 'object' && 'data' in response) {
-      return (response as any).data;
-    }
-
-    return response as any;
   }
 
   async getDashboardStats() {

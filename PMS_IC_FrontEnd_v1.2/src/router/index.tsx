@@ -20,19 +20,23 @@ const EducationManagement = lazy(() => import('../app/components/EducationManage
 const Settings = lazy(() => import('../app/components/Settings'));
 const LoginScreen = lazy(() => import('../app/components/LoginScreen'));
 
-// New placeholder pages for features under development
-const WbsManagement = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.WbsManagementPage })));
-const TraceabilityMatrix = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.TraceabilityPage })));
-const TestingManagement = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.TestingManagementPage })));
-const IssueManagement = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.IssueManagementPage })));
-const DeliverableManagement = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.DeliverableManagementPage })));
-const MeetingManagement = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.MeetingManagementPage })));
-const Announcements = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.AnnouncementsPage })));
+// Implemented pages
+const WbsManagement = lazy(() => import('../app/components/WbsManagement'));
+const TraceabilityManagement = lazy(() => import('../app/components/TraceabilityManagement'));
+const IssuesPage = lazy(() => import('../app/components/IssuesPage'));
+const DeliverablesPage = lazy(() => import('../app/components/DeliverablesPage'));
+const MeetingsPage = lazy(() => import('../app/components/MeetingsPage'));
+
+// Implemented pages (continued)
+const TestingManagement = lazy(() => import('../app/components/TestingPage'));
+const StatisticsPage = lazy(() => import('../app/components/StatisticsPage'));
+const UserManagementPage = lazy(() => import('../app/components/UserManagementPage'));
+const AuditLogsPage = lazy(() => import('../app/components/AuditLogsPage'));
+const AnnouncementsPage = lazy(() => import('../app/components/AnnouncementsPage'));
+
+// Placeholder pages for features under development
 const AiAssistant = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.AiAssistantPage })));
 const ReportManagement = lazy(() => import('../app/components/ReportManagement'));
-const Statistics = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.StatisticsPage })));
-const UserManagement = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.UserManagementPage })));
-const AuditLogs = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.AuditLogsPage })));
 
 // Wrapper component to inject userRole from store
 function withUserRole<P extends { userRole: UserRole }>(
@@ -60,6 +64,16 @@ const CommonManagementWithRole = withUserRole(CommonManagement);
 const EducationManagementWithRole = withUserRole(EducationManagement);
 const SettingsWithRole = withUserRole(Settings);
 const ReportManagementWithRole = withUserRole(ReportManagement);
+const WbsManagementWithRole = withUserRole(WbsManagement);
+const TraceabilityManagementWithRole = withUserRole(TraceabilityManagement);
+const IssuesPageWithRole = withUserRole(IssuesPage);
+const DeliverablesPageWithRole = withUserRole(DeliverablesPage);
+const MeetingsPageWithRole = withUserRole(MeetingsPage);
+const TestingPageWithRole = withUserRole(TestingManagement);
+const StatisticsPageWithRole = withUserRole(StatisticsPage);
+const UserManagementPageWithRole = withUserRole(UserManagementPage);
+const AuditLogsPageWithRole = withUserRole(AuditLogsPage);
+const AnnouncementsPageWithRole = withUserRole(AnnouncementsPage);
 
 function Loading() {
   return (
@@ -150,7 +164,7 @@ export const router = createBrowserRouter([
         path: 'traceability',
         element: (
           <SuspenseWrapper>
-            <TraceabilityMatrix />
+            <TraceabilityManagementWithRole />
           </SuspenseWrapper>
         ),
       },
@@ -168,7 +182,7 @@ export const router = createBrowserRouter([
         path: 'wbs',
         element: (
           <SuspenseWrapper>
-            <WbsManagement />
+            <WbsManagementWithRole />
           </SuspenseWrapper>
         ),
       },
@@ -194,7 +208,7 @@ export const router = createBrowserRouter([
         path: 'testing',
         element: (
           <SuspenseWrapper>
-            <TestingManagement />
+            <TestingPageWithRole />
           </SuspenseWrapper>
         ),
       },
@@ -202,7 +216,7 @@ export const router = createBrowserRouter([
         path: 'issues',
         element: (
           <SuspenseWrapper>
-            <IssueManagement />
+            <IssuesPageWithRole />
           </SuspenseWrapper>
         ),
       },
@@ -210,7 +224,7 @@ export const router = createBrowserRouter([
         path: 'deliverables',
         element: (
           <SuspenseWrapper>
-            <DeliverableManagement />
+            <DeliverablesPageWithRole />
           </SuspenseWrapper>
         ),
       },
@@ -220,7 +234,7 @@ export const router = createBrowserRouter([
         path: 'meetings',
         element: (
           <SuspenseWrapper>
-            <MeetingManagement />
+            <MeetingsPageWithRole />
           </SuspenseWrapper>
         ),
       },
@@ -228,7 +242,7 @@ export const router = createBrowserRouter([
         path: 'announcements',
         element: (
           <SuspenseWrapper>
-            <Announcements />
+            <AnnouncementsPageWithRole />
           </SuspenseWrapper>
         ),
       },
@@ -272,7 +286,7 @@ export const router = createBrowserRouter([
         path: 'statistics',
         element: (
           <SuspenseWrapper>
-            <Statistics />
+            <StatisticsPageWithRole />
           </SuspenseWrapper>
         ),
       },
@@ -282,7 +296,7 @@ export const router = createBrowserRouter([
         path: 'user-management',
         element: (
           <SuspenseWrapper>
-            <UserManagement />
+            <UserManagementPageWithRole />
           </SuspenseWrapper>
         ),
       },
@@ -298,7 +312,7 @@ export const router = createBrowserRouter([
         path: 'audit-logs',
         element: (
           <SuspenseWrapper>
-            <AuditLogs />
+            <AuditLogsPageWithRole />
           </SuspenseWrapper>
         ),
       },

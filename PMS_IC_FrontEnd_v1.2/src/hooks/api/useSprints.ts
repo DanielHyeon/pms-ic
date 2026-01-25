@@ -5,7 +5,7 @@ import { Sprint, SprintFormData, SprintWithItems, UserStory } from '../../types/
 const initialSprints: Sprint[] = [
   {
     id: 'sprint-1',
-    projectId: 'project-1',
+    projectId: 'proj-001',
     name: 'Sprint 1',
     goal: 'OCR 기본 기능 구현',
     startDate: '2026-01-06',
@@ -18,7 +18,7 @@ const initialSprints: Sprint[] = [
   },
   {
     id: 'sprint-2',
-    projectId: 'project-1',
+    projectId: 'proj-001',
     name: 'Sprint 2',
     goal: 'OCR 정확도 개선 및 문서 분류',
     startDate: '2026-01-20',
@@ -31,7 +31,7 @@ const initialSprints: Sprint[] = [
   },
   {
     id: 'sprint-3',
-    projectId: 'project-1',
+    projectId: 'proj-001',
     name: 'Sprint 3',
     goal: 'AI 판단 엔진 기초 구현',
     startDate: '2026-02-03',
