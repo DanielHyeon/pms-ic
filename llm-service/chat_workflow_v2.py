@@ -14,9 +14,16 @@ import logging
 import re
 import os
 import time
+import uuid
 
 from policy_engine import get_policy_engine, PolicyAction
 from context_snapshot import get_snapshot_manager, ContextSnapshot
+
+# Phase 1: Gates & Foundation imports
+from authority_classifier import get_authority_classifier, AuthorityLevel, AuthorityResult
+from failure_taxonomy import get_failure_handler, FailureCode, classify_error
+from evidence_service import get_evidence_service, EvidenceItem
+from schemas.ai_response import AIResponse, Evidence, ResponseStatus, create_error_response
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +53,7 @@ class TwoTrackState(TypedDict):
 
     # RAG
     retrieved_docs: List[str]
+    rag_results: List[dict]  # Raw RAG results with metadata (Phase 1)
     rag_quality_score: float
 
     # Query refinement (Track A)
@@ -62,6 +70,23 @@ class TwoTrackState(TypedDict):
     response: str
     confidence: float
     intent: str
+
+    # Phase 1: Authority Gate
+    authority_level: str  # suggest | decide | execute | commit
+    requires_approval: bool
+    approval_type: Optional[str]
+
+    # Phase 1: Evidence
+    evidence: List[dict]
+    has_sufficient_evidence: bool
+
+    # Phase 1: Failure handling
+    failure: Optional[dict]
+    recovery: Optional[dict]
+
+    # Phase 1: Response metadata
+    trace_id: str
+    response_id: str
 
     # Monitoring
     metrics: dict
@@ -184,16 +209,18 @@ class TwoTrackWorkflow:
         logger.info(f"  L2 model: {model_path_l2}")
 
     def _build_graph(self) -> StateGraph:
-        """Build two-track workflow graph"""
+        """Build two-track workflow graph with Phase 1 gates"""
         workflow = StateGraph(TwoTrackState)
 
         # Add nodes
         workflow.add_node("classify_track", self._classify_track_node)
         workflow.add_node("policy_check", self._policy_check_node)
         workflow.add_node("rag_search", self._rag_search_node)
+        workflow.add_node("extract_evidence", self._extract_evidence_node)  # Phase 1
         workflow.add_node("verify_rag_quality", self._verify_rag_quality_node)
         workflow.add_node("refine_query", self._refine_query_node)
         workflow.add_node("compile_context", self._compile_context_node)
+        workflow.add_node("classify_authority", self._classify_authority_node)  # Phase 1
         workflow.add_node("generate_response_l1", self._generate_response_l1_node)
         workflow.add_node("generate_response_l2", self._generate_response_l2_node)
         workflow.add_node("verify_response", self._verify_response_node)
@@ -215,8 +242,11 @@ class TwoTrackWorkflow:
             }
         )
 
-        # rag_search -> verify_rag_quality
-        workflow.add_edge("rag_search", "verify_rag_quality")
+        # rag_search -> extract_evidence (Phase 1)
+        workflow.add_edge("rag_search", "extract_evidence")
+
+        # extract_evidence -> verify_rag_quality
+        workflow.add_edge("extract_evidence", "verify_rag_quality")
 
         # verify_rag_quality -> conditional routing
         workflow.add_conditional_edges(
@@ -224,7 +254,7 @@ class TwoTrackWorkflow:
             self._route_after_rag_quality,
             {
                 "refine": "refine_query",  # Quality low -> refine
-                "track_a": "generate_response_l1",  # Track A -> L1
+                "track_a": "classify_authority",  # Track A -> authority check
                 "track_b": "compile_context"  # Track B -> compile
             }
         )
@@ -232,8 +262,19 @@ class TwoTrackWorkflow:
         # refine_query -> rag_search (loop)
         workflow.add_edge("refine_query", "rag_search")
 
-        # compile_context -> generate_response_l2
-        workflow.add_edge("compile_context", "generate_response_l2")
+        # compile_context -> classify_authority (Phase 1: check authority before generation)
+        workflow.add_edge("compile_context", "classify_authority")
+
+        # classify_authority -> conditional routing based on authority
+        workflow.add_conditional_edges(
+            "classify_authority",
+            self._route_after_authority,
+            {
+                "track_a": "generate_response_l1",
+                "track_b": "generate_response_l2",
+                "blocked": "monitor",  # Authority denied
+            }
+        )
 
         # generate_response_l1 -> monitor (Track A ends)
         workflow.add_edge("generate_response_l1", "monitor")
@@ -324,6 +365,91 @@ class TwoTrackWorkflow:
             return "blocked"
         return "continue"
 
+    def _extract_evidence_node(self, state: TwoTrackState) -> TwoTrackState:
+        """Node: Extract evidence from RAG results (Phase 1)"""
+        start_time = time.time()
+
+        rag_results = state.get("rag_results", [])
+
+        # Use evidence service to extract evidence
+        evidence_service = get_evidence_service()
+        evidence_result = evidence_service.extract_from_rag(
+            rag_results,
+            query=state.get("current_query", state["message"])
+        )
+
+        # Convert to dict format for state
+        evidence_list = evidence_service.to_dict_list(evidence_result.items)
+
+        state["evidence"] = evidence_list
+        state["has_sufficient_evidence"] = evidence_result.has_sufficient_evidence
+        state["debug_info"]["evidence_count"] = len(evidence_list)
+        state["debug_info"]["evidence_score"] = evidence_result.total_score
+        state["metrics"]["evidence_time_ms"] = (time.time() - start_time) * 1000
+
+        logger.info(
+            f"Evidence extracted: {len(evidence_list)} items "
+            f"(sufficient={evidence_result.has_sufficient_evidence}, "
+            f"score={evidence_result.total_score:.2f})"
+        )
+
+        return state
+
+    def _classify_authority_node(self, state: TwoTrackState) -> TwoTrackState:
+        """Node: Classify authority level for the response (Phase 1)"""
+        start_time = time.time()
+
+        intent = state.get("intent", "general_question")
+        user_role = state.get("user_role", "member")
+        confidence = state.get("confidence", 0.5)
+        has_evidence = state.get("has_sufficient_evidence", False)
+
+        # Use authority classifier
+        classifier = get_authority_classifier()
+        result = classifier.classify(
+            intent=intent,
+            user_role=user_role,
+            confidence=confidence,
+            has_evidence=has_evidence,
+        )
+
+        state["authority_level"] = result.level.value
+        state["requires_approval"] = result.requires_approval
+        state["approval_type"] = result.approval_type
+
+        state["debug_info"]["authority"] = {
+            "level": result.level.value,
+            "requires_approval": result.requires_approval,
+            "approval_type": result.approval_type,
+            "reason": result.reason,
+            "downgrade_reason": result.downgrade_reason,
+        }
+        state["metrics"]["authority_time_ms"] = (time.time() - start_time) * 1000
+
+        logger.info(
+            f"Authority classified: {result.level.value} "
+            f"(approval={result.requires_approval}, type={result.approval_type})"
+        )
+
+        # If authority check resulted in downgrade, log it
+        if result.downgrade_reason:
+            logger.warning(f"Authority downgraded: {result.downgrade_reason}")
+
+        return state
+
+    def _route_after_authority(self, state: TwoTrackState) -> Literal["track_a", "track_b", "blocked"]:
+        """Route after authority classification (Phase 1)"""
+        track = state.get("track", "track_a")
+        authority_level = state.get("authority_level", "suggest")
+
+        # If COMMIT level but not approved, block for now
+        # (In full implementation, this would trigger approval flow)
+        if authority_level == "commit" and state.get("requires_approval", False):
+            # For now, we'll still generate but mark as pending approval
+            logger.info("COMMIT action requires approval, continuing with response generation")
+
+        return track
+
     def _rag_search_node(self, state: TwoTrackState) -> TwoTrackState:
         """Node: RAG search with access control filtering"""
         start_time = time.time()
@@ -373,12 +499,24 @@ class TwoTrackWorkflow:
                 ]
 
                 retrieved_docs = [doc['content'] for doc in filtered]
+                # Phase 1: Store raw results for evidence extraction
+                state["rag_results"] = filtered
                 logger.info(f"RAG found {len(retrieved_docs)} docs (filtered from {len(results)}, threshold={MIN_RELEVANCE_SCORE}, method={merge_method})")
 
             except Exception as e:
                 logger.error(f"RAG search failed: {e}")
+                # Phase 1: Handle RAG failure
+                failure_handler = get_failure_handler()
+                failure_result = failure_handler.handle_failure(
+                    FailureCode.TECH_RAG_ERROR,
+                    state.get("trace_id", "unknown"),
+                    {"error": str(e)}
+                )
+                state["failure"] = failure_result.get("failure")
+                state["recovery"] = failure_result.get("recovery")
 
         state["retrieved_docs"] = retrieved_docs
+        state["rag_results"] = state.get("rag_results", [])
         state["debug_info"]["rag_docs_count"] = len(retrieved_docs)
         state["debug_info"]["access_control"] = {
             "project_id": project_id,
@@ -736,7 +874,7 @@ class TwoTrackWorkflow:
         return state
 
     def _monitor_node(self, state: TwoTrackState) -> TwoTrackState:
-        """Node: Collect and log metrics"""
+        """Node: Collect and log metrics including Phase 1 data"""
         metrics = state.get("metrics", {})
 
         # Calculate total time
@@ -750,18 +888,37 @@ class TwoTrackWorkflow:
         track = state.get("track", "track_a")
         metrics["track"] = track
 
+        # Phase 1: Add authority and evidence metrics
+        metrics["authority_level"] = state.get("authority_level", "suggest")
+        metrics["requires_approval"] = state.get("requires_approval", False)
+        metrics["evidence_count"] = len(state.get("evidence", []))
+        metrics["has_sufficient_evidence"] = state.get("has_sufficient_evidence", False)
+        metrics["has_failure"] = state.get("failure") is not None
+
         # Log metrics
-        logger.info(f"=== Workflow Metrics ({track.upper()}) ===")
+        trace_id = state.get("trace_id", "unknown")
+        logger.info(f"=== Workflow Metrics ({track.upper()}, trace={trace_id}) ===")
         logger.info(f"  Total time: {total_time:.1f}ms")
         for key, value in metrics.items():
             if key.endswith("_time_ms") and key != "total_time_ms":
                 logger.info(f"  {key}: {value:.1f}ms")
+
+        # Phase 1: Log authority and evidence
+        logger.info(f"  Authority: {metrics['authority_level']} (approval={metrics['requires_approval']})")
+        logger.info(f"  Evidence: {metrics['evidence_count']} items (sufficient={metrics['has_sufficient_evidence']})")
 
         # Check latency targets
         if track == "track_a" and total_time > 500:
             logger.warning(f"Track A latency exceeded target (500ms): {total_time:.1f}ms")
         elif track == "track_b" and total_time > 90000:
             logger.warning(f"Track B latency exceeded target (90s): {total_time:.1f}ms")
+
+        # Phase 1: Log failure if present
+        if state.get("failure"):
+            failure = state["failure"]
+            logger.warning(
+                f"  Failure: {failure.get('code', 'unknown')} - {failure.get('message', '')}"
+            )
 
         state["metrics"] = metrics
 
@@ -1019,7 +1176,7 @@ class TwoTrackWorkflow:
         user_access_level: int = 6,
     ) -> dict:
         """
-        Run the two-track workflow with access control.
+        Run the two-track workflow with access control and Phase 1 gates.
 
         Args:
             message: User message
@@ -1031,8 +1188,12 @@ class TwoTrackWorkflow:
             user_access_level: Explicit access level (1-6, higher = more access)
 
         Returns:
-            dict with reply, confidence, intent, track, metrics
+            dict with reply, confidence, intent, track, authority, evidence, metrics
         """
+        # Generate unique IDs for tracing
+        trace_id = str(uuid.uuid4())[:8]
+        response_id = str(uuid.uuid4())
+
         initial_state: TwoTrackState = {
             "message": message,
             "context": context or [],
@@ -1044,6 +1205,7 @@ class TwoTrackWorkflow:
             "policy_result": {},
             "policy_passed": True,
             "retrieved_docs": retrieved_docs or [],
+            "rag_results": [],  # Phase 1: Raw RAG results
             "rag_quality_score": 0.0,
             "current_query": message,
             "retry_count": 0,
@@ -1054,27 +1216,130 @@ class TwoTrackWorkflow:
             "response": "",
             "confidence": 0.0,
             "intent": "",
+            # Phase 1: Authority Gate
+            "authority_level": "suggest",
+            "requires_approval": False,
+            "approval_type": None,
+            # Phase 1: Evidence
+            "evidence": [],
+            "has_sufficient_evidence": False,
+            # Phase 1: Failure handling
+            "failure": None,
+            "recovery": None,
+            # Phase 1: Tracing
+            "trace_id": trace_id,
+            "response_id": response_id,
+            # Monitoring
             "metrics": {},
             "debug_info": {},
         }
 
-        logger.info(f"Starting two-track workflow: {message[:50]}...")
+        logger.info(f"Starting two-track workflow (trace={trace_id}): {message[:50]}...")
 
         # Run graph
         final_state = self.graph.invoke(initial_state)
 
         logger.info(
-            f"Workflow complete: track={final_state.get('track')}, "
+            f"Workflow complete (trace={trace_id}): track={final_state.get('track')}, "
             f"intent={final_state.get('intent')}, "
-            f"confidence={final_state.get('confidence')}"
+            f"confidence={final_state.get('confidence')}, "
+            f"authority={final_state.get('authority_level')}"
         )
 
-        return {
+        # Build response with Phase 1 data
+        response = {
             "reply": final_state.get("response", "음, 답변을 만들지 못했어요 🤔 다시 질문해주실래요?"),
             "confidence": final_state.get("confidence", 0.0),
             "intent": final_state.get("intent"),
             "track": final_state.get("track"),
             "rag_docs_count": len(final_state.get("retrieved_docs", [])),
+            # Phase 1: Authority Gate
+            "authority": {
+                "level": final_state.get("authority_level", "suggest"),
+                "requires_approval": final_state.get("requires_approval", False),
+                "approval_type": final_state.get("approval_type"),
+            },
+            # Phase 1: Evidence
+            "evidence": final_state.get("evidence", []),
+            "has_sufficient_evidence": final_state.get("has_sufficient_evidence", False),
+            # Phase 1: Failure handling
+            "failure": final_state.get("failure"),
+            "recovery": final_state.get("recovery"),
+            # Tracing
+            "trace_id": trace_id,
+            "response_id": response_id,
+            # Metrics
             "metrics": final_state.get("metrics", {}),
             "debug_info": final_state.get("debug_info", {}),
         }
+
+        return response
+
+    def run_with_ai_response(
+        self,
+        message: str,
+        context: List[dict] = None,
+        retrieved_docs: List[str] = None,
+        user_id: Optional[str] = None,
+        project_id: Optional[str] = None,
+        user_role: Optional[str] = None,
+        user_access_level: int = 6,
+    ) -> AIResponse:
+        """
+        Run workflow and return full AIResponse object (Phase 1).
+
+        This method is useful for integrations that need the full
+        standardized response schema with all Phase 1 fields.
+        """
+        result = self.run(
+            message=message,
+            context=context,
+            retrieved_docs=retrieved_docs,
+            user_id=user_id,
+            project_id=project_id,
+            user_role=user_role,
+            user_access_level=user_access_level,
+        )
+
+        # Convert evidence to Evidence objects
+        evidence_items = [
+            Evidence(
+                source_type=e.get("source_type", "document"),
+                source_id=e.get("source_id", ""),
+                source_title=e.get("title", "Unknown"),
+                relevance_score=e.get("relevance_score", 0),
+                excerpt=e.get("excerpt"),
+                url=e.get("url"),
+            )
+            for e in result.get("evidence", [])
+        ]
+
+        # Determine status
+        if result.get("failure"):
+            status = ResponseStatus.FAILED
+        elif result.get("authority", {}).get("requires_approval"):
+            status = ResponseStatus.PENDING_APPROVAL
+        else:
+            status = ResponseStatus.SUCCESS
+
+        # Build AIResponse
+        ai_response = AIResponse(
+            response_id=result.get("response_id", ""),
+            content=result.get("reply", ""),
+            intent=result.get("intent", ""),
+            authority_level=result.get("authority", {}).get("level", "suggest"),
+            requires_approval=result.get("authority", {}).get("requires_approval", False),
+            approval_type=result.get("authority", {}).get("approval_type"),
+            confidence=result.get("confidence", 0.0),
+            evidence=evidence_items,
+            has_sufficient_evidence=result.get("has_sufficient_evidence", False),
+            status=status,
+            failure=result.get("failure"),
+            recovery=result.get("recovery"),
+            trace_id=result.get("trace_id", ""),
+            processing_time_ms=int(result.get("metrics", {}).get("total_time_ms", 0)),
+            model_used=self.model_path_l2 if result.get("track") == "track_b" else self.model_path_l1,
+            track=result.get("track", ""),
+        )
+
+        return ai_response

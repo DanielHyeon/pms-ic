@@ -440,9 +440,73 @@ docker run --rm --gpus all nvidia/cuda:12.3.0-base nvidia-smi
 sudo nvidia-ctk runtime configure
 ```
 
+---
+
+## Quick Start Operations
+
+### Setup Commands
+
+```bash
+./llm-setup.sh help      # Show help
+./llm-setup.sh cpu       # Setup CPU mode
+./llm-setup.sh gpu       # Setup GPU mode
+./llm-setup.sh status    # Show status
+./llm-setup.sh logs      # View logs
+./llm-setup.sh restart   # Restart service
+./llm-setup.sh stop      # Stop service
+```
+
+### Performance Comparison
+
+| Feature | CPU Mode | GPU Mode (RTX 4090) |
+|---------|----------|---------------------|
+| Inference Speed | 80-200ms/token | 5-15ms/token |
+| Memory | 8-16GB RAM | 6-8GB VRAM |
+| Throughput | 0.5-2 req/sec | 10-50 req/sec |
+| Best For | Development & Testing | Production |
+
+### Docker Compose Usage
+
+```bash
+# CPU Mode (default)
+docker-compose --profile llm up -d
+
+# GPU Mode
+docker-compose -f docker-compose.yml -f docker-compose.gpu.yml --profile llm up -d
+
+# View Logs
+docker logs -f pms-llm-service
+```
+
+### GPU Prerequisites
+
+1. NVIDIA Driver 535+ (`nvidia-smi`)
+2. Docker 24.0+
+3. NVIDIA Container Toolkit:
+   ```bash
+   sudo apt-get install nvidia-docker2
+   sudo nvidia-ctk runtime configure --runtime=docker
+   sudo systemctl restart docker
+   ```
+
+### Configuration Examples
+
+| Setup | Key Variables |
+|-------|---------------|
+| Small CPU (4GB) | `LLM_N_THREADS=2`, `LLM_N_CTX=1024` |
+| Medium CPU (16GB) | `LLM_N_THREADS=8`, `LLM_N_CTX=2048` |
+| RTX 4090 | `LLM_N_GPU_LAYERS=80`, `LLM_N_CTX=4096` |
+| RTX 3080 | `LLM_N_GPU_LAYERS=50`, `LLM_N_CTX=2048` |
+
+---
+
 ## References
 
 - [RRF Paper](https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf): Cormack et al., 2009
 - [llama-cpp-python](https://github.com/abetlen/llama-cpp-python)
 - [Neo4j Vector Search](https://neo4j.com/docs/cypher-manual/current/indexes-for-vector-search/)
 - [Sentence Transformers](https://www.sbert.net/)
+
+---
+
+*Last Updated: 2026-01-26*

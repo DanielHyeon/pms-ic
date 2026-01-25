@@ -1,7 +1,7 @@
 # PMS Insurance Claims - 시스템 아키텍처 문서
 
-> **버전**: 2.3
-> **최종 업데이트**: 2026-01-19
+> **버전**: 2.4
+> **최종 업데이트**: 2026-01-26
 > **작성자**: PMS Insurance Claims Team
 
 ---
@@ -639,24 +639,64 @@ Lineage UI는 **React Flow**와 **Dagre** 라이브러리를 사용하여 데이
 ```
 llm-service/
 ├── app.py                       # Flask 메인 애플리케이션
-├── chat_workflow.py             # LangGraph 워크플로우 (v1 - fallback)
-├── chat_workflow_v2.py          # Two-Track LangGraph 워크플로우 (v2)
+├── chat_workflow_v2.py          # Two-Track LangGraph 워크플로우
 ├── rag_service_neo4j.py         # Neo4j GraphRAG 서비스
 ├── hybrid_rag.py                # Hybrid RAG (Document + Graph)
 ├── policy_engine.py             # L0 Policy Engine
 ├── model_gateway.py             # L1/L2 Model Gateway
 ├── context_snapshot.py          # Now/Next/Why Snapshots
-├── pms_monitoring.py            # PMS-specific Metrics
 ├── pg_neo4j_sync.py             # PostgreSQL → Neo4j Sync
-├── document_parser.py           # MinerU 문서 파서
-├── pdf_ocr_pipeline.py          # PDF OCR 파이프라인
-├── load_ragdata_pdfs_neo4j.py   # RAG 데이터 로더
-├── run_sync.py                  # Manual sync script
+│
+├── # Phase 1: Gates & Foundation
+├── authority_classifier.py      # Decision Authority Gate (SUGGEST/DECIDE/EXECUTE/COMMIT)
+├── evidence_service.py          # Evidence extraction and linking
+├── failure_taxonomy.py          # Failure classification (16 codes)
+├── schemas/
+│   └── ai_response.py           # Standard AI response schema
+│
+├── # Phase 2: Workflow & Skills
+├── workflows/                   # LangGraph workflow templates
+│   ├── common_state.py          # CommonWorkflowState
+│   ├── common_nodes.py          # 9 standard node types
+│   ├── g1_weekly_report.py      # Weekly report workflow
+│   ├── g2_sprint_planning.py    # Sprint planning workflow
+│   ├── g3_traceability.py       # Traceability check workflow
+│   ├── g4_risk_radar.py         # Risk radar workflow
+│   └── g5_knowledge_qa.py       # Knowledge Q&A workflow
+├── skills/                      # Reusable skill library
+│   ├── registry.py              # Skill registry
+│   ├── retrieve_skills.py       # Docs, Graph, Metrics retrieval
+│   ├── analyze_skills.py        # Risk, Dependency, Sentiment
+│   ├── generate_skills.py       # Summary, Report generation
+│   └── validate_skills.py       # Evidence, Policy validation
+├── observability/               # Tracing & Metrics
+│   ├── tracing.py               # OpenTelemetry-compatible tracing
+│   └── metrics.py               # Prometheus-compatible metrics
+│
+├── # Phase 3: Productization
+├── agents/                      # Role-based subagent pool
+│   ├── orchestrator_agent.py    # Request routing
+│   ├── planner_agent.py         # Sprint planning
+│   ├── scrum_master_agent.py    # Sprint execution
+│   ├── reporter_agent.py        # Report generation
+│   ├── knowledge_curator_agent.py # Document curation
+│   └── risk_quality_agent.py    # Risk & traceability (T1-T6)
+├── mcp/                         # Model Context Protocol
+│   ├── gateway.py               # Rate limiting, access control
+│   ├── registry.py              # Tool registration
+│   └── tools/                   # Database & LLM tools
+├── value_metrics/               # Business value measurement
+│   └── collector.py             # Efficiency, Quality, Adoption, Cost
+├── lifecycle/                   # Resource lifecycle management
+│   └── manager.py               # Versioning, state machine
+│
 ├── config/
 │   └── constants.py             # Configuration constants
 ├── requirements.txt
 └── Dockerfile
 ```
+
+> 📄 **AI 아키텍처 상세**: [ai-architecture/README.md](./ai-architecture/README.md) 참조
 
 ### 5.2 LangGraph 워크플로우
 
