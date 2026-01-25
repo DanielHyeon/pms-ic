@@ -16,6 +16,15 @@ export * from './useDashboard';
 // Story/Backlog hooks
 export * from './useStories';
 
+// Epic hooks (4-Level Backlog Hierarchy)
+export * from './useEpics';
+
+// Feature hooks (4-Level Backlog Hierarchy)
+export * from './useFeatures';
+
+// Sprint hooks
+export * from './useSprints';
+
 // RFP hooks
 export * from './useRfps';
 
@@ -45,3 +54,12 @@ export * from './useChat';
 
 // Auth hooks
 export * from './useAuth';
+
+// WBS hooks (Phase-based WBS management)
+export * from './useWbs';
+
+// Template hooks (Phase & WBS templates)
+export * from './useTemplates';
+
+// WBS-Backlog Integration hooks (Phase-Epic, WbsGroup-Feature, WbsItem-Story)
+export * from './useWbsBacklogIntegration';

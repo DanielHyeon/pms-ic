@@ -59,6 +59,18 @@ public class UserStory extends BaseEntity {
     @Column(name = "priority_order")
     private Integer priorityOrder;
 
+    /**
+     * Feature ID for Feature-Story integration
+     */
+    @Column(name = "feature_id", length = 36)
+    private String featureId;
+
+    /**
+     * WBS Item ID for WbsItem-Story integration
+     */
+    @Column(name = "wbs_item_id", length = 36)
+    private String wbsItemId;
+
     @ElementCollection
     @CollectionTable(name = "user_story_requirement_links", schema = "task",
             joinColumns = @JoinColumn(name = "user_story_id"))

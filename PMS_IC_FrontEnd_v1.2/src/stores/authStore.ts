@@ -63,23 +63,8 @@ export const useAuthStore = create<AuthState>()(
   )
 );
 
-// Role-based menu access configuration
-export const menuAccessByRole: Record<UserRole, string[]> = {
-  sponsor: ['dashboard', 'rfp', 'requirements', 'lineage', 'phases', 'roles', 'common', 'education', 'settings'],
-  pmo_head: ['dashboard', 'projects', 'parts', 'rfp', 'requirements', 'lineage', 'phases', 'kanban', 'backlog', 'roles', 'common', 'education', 'settings'],
-  pm: ['dashboard', 'projects', 'parts', 'rfp', 'requirements', 'lineage', 'phases', 'kanban', 'backlog', 'common', 'education', 'settings'],
-  developer: ['dashboard', 'requirements', 'lineage', 'kanban', 'backlog', 'education', 'settings'],
-  qa: ['dashboard', 'requirements', 'lineage', 'kanban', 'backlog', 'education', 'settings'],
-  business_analyst: ['dashboard', 'rfp', 'requirements', 'lineage', 'phases', 'backlog', 'education', 'settings'],
-  auditor: ['dashboard', 'requirements', 'lineage', 'phases', 'roles', 'settings'],
-  admin: ['dashboard', 'projects', 'parts', 'rfp', 'requirements', 'lineage', 'phases', 'kanban', 'backlog', 'roles', 'common', 'education', 'settings'],
-};
-
-// Helper to check if user can access a specific menu
-export function canAccessMenu(role: UserRole | undefined, menuId: string): boolean {
-  if (!role) return false;
-  return menuAccessByRole[role]?.includes(menuId) ?? false;
-}
+// Re-export menu access from menuConfig for backward compatibility
+export { menuAccessByRole, canAccessMenu } from '../config/menuConfig';
 
 // Helper to check if user can use AI assistant
 export function canUseAI(role: UserRole | undefined): boolean {

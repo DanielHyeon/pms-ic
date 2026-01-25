@@ -1,48 +1,18 @@
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { ChevronDown, ChevronRight, LucideIcon } from 'lucide-react';
+import { UserRole } from '../../stores/authStore';
 import {
-  LayoutDashboard,
-  GitBranch,
-  Kanban,
-  ListTodo,
-  Users,
-  Settings as SettingsIcon,
-  GraduationCap,
-  FolderOpen,
-  Briefcase,
-  Network,
-  FileText,
-  ClipboardList,
-  History,
-  LucideIcon,
-} from 'lucide-react';
-import { UserRole, menuAccessByRole } from '../../stores/authStore';
-
-interface MenuItem {
-  id: string;
-  path: string;
-  label: string;
-  icon: LucideIcon;
-}
+  menuConfig,
+  getFilteredMenuConfig,
+  MenuItem,
+  MenuGroup,
+  MenuConfig,
+} from '../../config/menuConfig';
 
 interface SidebarProps {
   userRole: UserRole;
 }
-
-const allMenuItems: MenuItem[] = [
-  { id: 'dashboard', path: '/', label: '통합 대시보드', icon: LayoutDashboard },
-  { id: 'projects', path: '/projects', label: '프로젝트 관리', icon: Briefcase },
-  { id: 'parts', path: '/parts', label: '파트 관리', icon: Network },
-  { id: 'rfp', path: '/rfp', label: 'RFP 관리', icon: FileText },
-  { id: 'requirements', path: '/requirements', label: '요구사항 관리', icon: ClipboardList },
-  { id: 'lineage', path: '/lineage', label: 'Lineage & History', icon: History },
-  { id: 'phases', path: '/phases', label: '단계별 관리', icon: GitBranch },
-  { id: 'kanban', path: '/kanban', label: '칸반 보드', icon: Kanban },
-  { id: 'backlog', path: '/backlog', label: '백로그 관리', icon: ListTodo },
-  { id: 'roles', path: '/roles', label: '권한 관리', icon: Users },
-  { id: 'common', path: '/common', label: '공통 관리', icon: FolderOpen },
-  { id: 'education', path: '/education', label: '교육 관리', icon: GraduationCap },
-  { id: 'settings', path: '/settings', label: '설정', icon: SettingsIcon },
-];
 
 const roleColors: Record<UserRole, string> = {
   sponsor: 'from-purple-500 to-purple-700',
@@ -55,54 +25,231 @@ const roleColors: Record<UserRole, string> = {
   admin: 'from-red-500 to-red-700',
 };
 
+const roleLabels: Record<UserRole, string> = {
+  sponsor: 'Sponsor',
+  pmo_head: 'PMO Head',
+  pm: 'Project Manager',
+  developer: 'Developer',
+  qa: 'QA Engineer',
+  business_analyst: 'Business Analyst',
+  auditor: 'Auditor',
+  admin: 'Administrator',
+};
+
+// Menu item component
+function MenuItemButton({
+  item,
+  isActive,
+  onClick,
+  indent = false,
+}: {
+  item: MenuItem;
+  isActive: boolean;
+  onClick: () => void;
+  indent?: boolean;
+}) {
+  const Icon = item.icon;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all text-sm ${
+        indent ? 'pl-10' : ''
+      } ${
+        isActive
+          ? 'bg-white/20 text-white shadow-lg backdrop-blur-sm'
+          : 'text-white/70 hover:bg-white/10 hover:text-white'
+      }`}
+      title={item.description}
+    >
+      <Icon size={18} />
+      <span className="truncate">{item.label}</span>
+    </button>
+  );
+}
+
+// Collapsible menu group component
+function MenuGroupSection({
+  group,
+  expandedGroups,
+  onToggle,
+  onNavigate,
+  currentPath,
+}: {
+  group: MenuGroup;
+  expandedGroups: Set<string>;
+  onToggle: (groupId: string) => void;
+  onNavigate: (path: string) => void;
+  currentPath: string;
+}) {
+  const isExpanded = expandedGroups.has(group.id);
+  const Icon = group.icon;
+
+  // Check if any item in the group is active
+  const hasActiveItem = group.items.some((item) => {
+    if (item.path === '/') return currentPath === '/';
+    return currentPath.startsWith(item.path);
+  });
+
+  return (
+    <div className="mb-1">
+      {/* Group header */}
+      <button
+        type="button"
+        onClick={() => onToggle(group.id)}
+        className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg transition-all ${
+          hasActiveItem
+            ? 'bg-white/15 text-white'
+            : 'text-white/80 hover:bg-white/10 hover:text-white'
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <Icon size={18} />
+          <span className="text-sm font-medium">{group.label}</span>
+        </div>
+        {isExpanded ? (
+          <ChevronDown size={16} className="text-white/60" />
+        ) : (
+          <ChevronRight size={16} className="text-white/60" />
+        )}
+      </button>
+
+      {/* Group items (collapsible) */}
+      <div
+        className={`overflow-hidden transition-all duration-200 ease-in-out ${
+          isExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+        }`}
+      >
+        <div className="mt-1 space-y-0.5">
+          {group.items.map((item) => {
+            const isActive =
+              item.path === '/'
+                ? currentPath === '/'
+                : currentPath.startsWith(item.path);
+
+            return (
+              <MenuItemButton
+                key={item.id}
+                item={item}
+                isActive={isActive}
+                onClick={() => onNavigate(item.path)}
+                indent
+              />
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Sidebar({ userRole }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Filter menu items based on user role
-  const accessibleMenuIds = menuAccessByRole[userRole] || [];
-  const menuItems = allMenuItems.filter((item) => accessibleMenuIds.includes(item.id));
+  // Get filtered menu config based on user role
+  const filteredMenu = getFilteredMenuConfig(userRole);
 
-  const isActive = (item: MenuItem) => {
-    if (item.path === '/') {
-      return location.pathname === '/';
-    }
-    return location.pathname.startsWith(item.path);
+  // Initialize expanded groups from defaultExpanded settings
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
+    const initial = new Set<string>();
+    menuConfig.groups.forEach((group) => {
+      if (group.defaultExpanded) {
+        initial.add(group.id);
+      }
+    });
+    return initial;
+  });
+
+  // Auto-expand group containing current path
+  useEffect(() => {
+    filteredMenu.groups.forEach((group) => {
+      const hasActiveItem = group.items.some((item) => {
+        if (item.path === '/') return location.pathname === '/';
+        return location.pathname.startsWith(item.path);
+      });
+      if (hasActiveItem) {
+        setExpandedGroups((prev) => new Set([...prev, group.id]));
+      }
+    });
+  }, [location.pathname]);
+
+  const toggleGroup = (groupId: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+      }
+      return next;
+    });
+  };
+
+  const handleNavigate = (path: string) => {
+    navigate(path);
   };
 
   return (
-    <aside className={`w-64 bg-gradient-to-b ${roleColors[userRole]} text-white flex flex-col`}>
-      <div className="p-6 border-b border-white/20">
-        <h1 className="font-semibold text-xl">InsureTech AI-PMS</h1>
+    <aside
+      className={`w-64 bg-gradient-to-b ${roleColors[userRole]} text-white flex flex-col`}
+    >
+      {/* Header */}
+      <div className="p-5 border-b border-white/20">
+        <h1 className="font-semibold text-lg">InsureTech AI-PMS</h1>
         <p className="text-xs text-white/70 mt-1">Project Management System</p>
       </div>
 
-      <nav className="flex-1 p-4 space-y-1">
-        {menuItems.map((item) => {
-          const Icon = item.icon;
-          const active = isActive(item);
+      {/* User role badge */}
+      <div className="px-4 py-2 border-b border-white/10">
+        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-white/20 text-white">
+          {roleLabels[userRole]}
+        </span>
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+        {/* Standalone items (Dashboard) */}
+        {filteredMenu.standalone.map((item) => {
+          const isActive =
+            item.path === '/'
+              ? location.pathname === '/'
+              : location.pathname.startsWith(item.path);
 
           return (
-            <button
+            <MenuItemButton
               key={item.id}
-              onClick={() => navigate(item.path)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-                active
-                  ? 'bg-white/20 text-white shadow-lg backdrop-blur-sm'
-                  : 'text-white/70 hover:bg-white/10 hover:text-white'
-              }`}
-            >
-              <Icon size={20} />
-              <span>{item.label}</span>
-            </button>
+              item={item}
+              isActive={isActive}
+              onClick={() => handleNavigate(item.path)}
+            />
           );
         })}
+
+        {/* Divider after standalone items */}
+        {filteredMenu.standalone.length > 0 && filteredMenu.groups.length > 0 && (
+          <div className="my-2 border-t border-white/10" />
+        )}
+
+        {/* Menu groups */}
+        {filteredMenu.groups.map((group) => (
+          <MenuGroupSection
+            key={group.id}
+            group={group}
+            expandedGroups={expandedGroups}
+            onToggle={toggleGroup}
+            onNavigate={handleNavigate}
+            currentPath={location.pathname}
+          />
+        ))}
       </nav>
 
+      {/* Footer */}
       <div className="p-4 border-t border-white/20">
-        <div className="text-xs text-white/70">
-          <p>Version 2.0</p>
-          <p className="mt-1">React 19 + Router v7</p>
+        <div className="text-xs text-white/60">
+          <p>Version 2.1</p>
+          <p className="mt-0.5">React 19 + Router v7</p>
         </div>
       </div>
     </aside>

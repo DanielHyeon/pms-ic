@@ -297,6 +297,116 @@ system_prompt = "...5-7문장으로 간결하게 설명하세요."
 - Fulltext 인덱스 존재 확인: `SHOW INDEXES`
 - Vector 인덱스 확인: `chunk_vector_index`
 
+## PostgreSQL-Neo4j Sync Service
+
+LLM 서비스는 PostgreSQL 데이터를 Neo4j로 동기화하여 관계 쿼리 및 GraphRAG를 지원합니다.
+
+### 동기화 아키텍처
+
+```
+┌─────────────────┐     ┌─────────────────────┐     ┌─────────────────┐
+│   PostgreSQL    │────▶│   pg_neo4j_sync.py   │────▶│     Neo4j       │
+│   (Source)      │     │   (Sync Service)     │     │    (Graph DB)   │
+└─────────────────┘     └─────────────────────┘     └─────────────────┘
+```
+
+### 동기화 Entity 목록
+
+| Entity | PostgreSQL Table | Neo4j Node | 설명 |
+|--------|-----------------|------------|------|
+| Project | `project.projects` | `:Project` | 프로젝트 |
+| Sprint | `task.sprints` | `:Sprint` | 스프린트 |
+| Task | `task.tasks` | `:Task` | 태스크 |
+| UserStory | `task.user_stories` | `:UserStory` | 유저 스토리 |
+| Phase | `project.phases` | `:Phase` | Waterfall 단계 |
+| Deliverable | `project.deliverables` | `:Deliverable` | 산출물 |
+| Issue | `project.issues` | `:Issue` | 이슈 |
+| User | `auth.users` | `:User` | 사용자 |
+| **Epic** | `project.epics` | `:Epic` | 에픽 (v1.2) |
+| **Feature** | `project.features` | `:Feature` | 기능 (v1.2) |
+| **WbsGroup** | `project.wbs_groups` | `:WbsGroup` | WBS 그룹 (v1.2) |
+| **WbsItem** | `project.wbs_items` | `:WbsItem` | WBS 항목 (v1.2) |
+
+### 동기화 Relationship 목록
+
+| Relationship | 시작 노드 | 종료 노드 | 설명 |
+|--------------|----------|----------|------|
+| `HAS_SPRINT` | Project | Sprint | 프로젝트 → 스프린트 |
+| `HAS_TASK` | Sprint | Task | 스프린트 → 태스크 |
+| `HAS_STORY` | Sprint/Project | UserStory | → 유저스토리 |
+| `HAS_PHASE` | Project | Phase | 프로젝트 → 단계 |
+| `HAS_DELIVERABLE` | Phase | Deliverable | 단계 → 산출물 |
+| `HAS_EPIC` | Project | Epic | 프로젝트 → 에픽 (v1.2) |
+| `HAS_FEATURE` | Epic | Feature | 에픽 → 기능 (v1.2) |
+| `HAS_WBS_GROUP` | Phase | WbsGroup | 단계 → WBS 그룹 (v1.2) |
+| `HAS_WBS_ITEM` | WbsGroup | WbsItem | WBS 그룹 → 항목 (v1.2) |
+| `BELONGS_TO_PHASE` | Epic | Phase | 에픽 ↔ 단계 연결 (v1.2) |
+| `LINKED_TO_WBS_GROUP` | Feature | WbsGroup | 기능 ↔ WBS 그룹 연결 (v1.2) |
+| `LINKED_TO` | Epic | WbsGroup | 에픽 ↔ WBS 그룹 연결 (v1.2) |
+| `DEPENDS_ON` | Task | Task | 태스크 의존성 |
+| `BLOCKED_BY` | Task | Task | 태스크 블로킹 |
+| `ASSIGNED_TO` | Task | User | 담당자 할당 |
+
+### 사용법
+
+```python
+from pg_neo4j_sync import get_sync_service
+
+# 싱글톤 서비스 인스턴스 획득
+sync_service = get_sync_service()
+
+# 스키마 초기화 (제약조건 & 인덱스 생성)
+sync_service.initialize()
+
+# 전체 동기화
+result = sync_service.full_sync()
+print(f"Synced {result.total_duration_ms}ms")
+
+# 증분 동기화 (마지막 동기화 이후 변경분만)
+result = sync_service.incremental_sync()
+
+# 동기화 상태 확인
+status = sync_service.get_sync_status()
+print(status)
+```
+
+### 환경 변수 (Sync Service)
+
+| 변수 | 설명 | 기본값 |
+|------|------|--------|
+| `PG_HOST` | PostgreSQL 호스트 | `postgres` |
+| `PG_PORT` | PostgreSQL 포트 | `5432` |
+| `PG_DATABASE` | 데이터베이스명 | `pms_db` |
+| `PG_USER` | PostgreSQL 사용자 | `pms_user` |
+| `PG_PASSWORD` | PostgreSQL 비밀번호 | `pms_password` |
+| `NEO4J_URI` | Neo4j URI | `bolt://neo4j:7687` |
+| `NEO4J_USER` | Neo4j 사용자 | `neo4j` |
+| `NEO4J_PASSWORD` | Neo4j 비밀번호 | (필수) |
+
+### Neo4j 쿼리 예시
+
+```cypher
+-- 프로젝트의 WBS 계층 구조 조회
+MATCH (p:Project {name: 'PMS Project'})
+      -[:HAS_PHASE]->(ph:Phase)
+      -[:HAS_WBS_GROUP]->(wg:WbsGroup)
+      -[:HAS_WBS_ITEM]->(wi:WbsItem)
+RETURN p.name, ph.name, wg.name, wi.name
+
+-- Epic-Phase-WBS 통합 연결 조회
+MATCH (e:Epic)-[:BELONGS_TO_PHASE]->(ph:Phase)
+MATCH (f:Feature)-[:LINKED_TO_WBS_GROUP]->(wg:WbsGroup)
+WHERE e.id = f.epic_id
+RETURN e.name as Epic, ph.name as Phase, f.name as Feature, wg.name as WbsGroup
+
+-- 특정 Phase의 모든 연결된 백로그 항목 조회
+MATCH (ph:Phase {id: 1})
+OPTIONAL MATCH (ph)<-[:BELONGS_TO_PHASE]-(e:Epic)
+OPTIONAL MATCH (ph)-[:HAS_WBS_GROUP]->(wg:WbsGroup)
+OPTIONAL MATCH (wg)<-[:LINKED_TO_WBS_GROUP]-(f:Feature)
+RETURN ph, e, wg, f
+```
+
 ## 참고 자료
 
 - [RRF 논문](https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf): Cormack et al., 2009

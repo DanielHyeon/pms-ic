@@ -20,6 +20,20 @@ const EducationManagement = lazy(() => import('../app/components/EducationManage
 const Settings = lazy(() => import('../app/components/Settings'));
 const LoginScreen = lazy(() => import('../app/components/LoginScreen'));
 
+// New placeholder pages for features under development
+const WbsManagement = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.WbsManagementPage })));
+const TraceabilityMatrix = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.TraceabilityPage })));
+const TestingManagement = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.TestingManagementPage })));
+const IssueManagement = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.IssueManagementPage })));
+const DeliverableManagement = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.DeliverableManagementPage })));
+const MeetingManagement = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.MeetingManagementPage })));
+const Announcements = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.AnnouncementsPage })));
+const AiAssistant = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.AiAssistantPage })));
+const Reports = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.ReportsPage })));
+const Statistics = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.StatisticsPage })));
+const UserManagement = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.UserManagementPage })));
+const AuditLogs = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.AuditLogsPage })));
+
 // Wrapper component to inject userRole from store
 function withUserRole<P extends { userRole: UserRole }>(
   Component: ComponentType<P>
@@ -51,7 +65,7 @@ function Loading() {
     <div className="flex items-center justify-center h-full min-h-[400px]">
       <div className="flex flex-col items-center gap-3">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
-        <span className="text-sm text-gray-500">Loading...</span>
+        <span className="text-sm text-gray-500">로딩 중...</span>
       </div>
     </div>
   );
@@ -78,6 +92,7 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ),
     children: [
+      // Dashboard (standalone)
       {
         index: true,
         element: (
@@ -86,6 +101,8 @@ export const router = createBrowserRouter([
           </SuspenseWrapper>
         ),
       },
+
+      // Project Setup Zone
       {
         path: 'projects',
         element: (
@@ -103,6 +120,16 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: 'roles',
+        element: (
+          <SuspenseWrapper>
+            <RoleManagementWithRole />
+          </SuspenseWrapper>
+        ),
+      },
+
+      // Requirements Management Zone
+      {
         path: 'rfp',
         element: (
           <SuspenseWrapper>
@@ -119,13 +146,15 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: 'lineage',
+        path: 'traceability',
         element: (
           <SuspenseWrapper>
-            <LineageManagementWithRole />
+            <TraceabilityMatrix />
           </SuspenseWrapper>
         ),
       },
+
+      // Execution Management Zone
       {
         path: 'phases',
         element: (
@@ -135,10 +164,10 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: 'kanban',
+        path: 'wbs',
         element: (
           <SuspenseWrapper>
-            <KanbanBoardWithRole />
+            <WbsManagement />
           </SuspenseWrapper>
         ),
       },
@@ -151,10 +180,108 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: 'roles',
+        path: 'kanban',
         element: (
           <SuspenseWrapper>
-            <RoleManagementWithRole />
+            <KanbanBoardWithRole />
+          </SuspenseWrapper>
+        ),
+      },
+
+      // Quality Management Zone
+      {
+        path: 'testing',
+        element: (
+          <SuspenseWrapper>
+            <TestingManagement />
+          </SuspenseWrapper>
+        ),
+      },
+      {
+        path: 'issues',
+        element: (
+          <SuspenseWrapper>
+            <IssueManagement />
+          </SuspenseWrapper>
+        ),
+      },
+      {
+        path: 'deliverables',
+        element: (
+          <SuspenseWrapper>
+            <DeliverableManagement />
+          </SuspenseWrapper>
+        ),
+      },
+
+      // Collaboration Zone
+      {
+        path: 'meetings',
+        element: (
+          <SuspenseWrapper>
+            <MeetingManagement />
+          </SuspenseWrapper>
+        ),
+      },
+      {
+        path: 'announcements',
+        element: (
+          <SuspenseWrapper>
+            <Announcements />
+          </SuspenseWrapper>
+        ),
+      },
+      {
+        path: 'ai-assistant',
+        element: (
+          <SuspenseWrapper>
+            <AiAssistant />
+          </SuspenseWrapper>
+        ),
+      },
+
+      // Education Zone
+      {
+        path: 'education',
+        element: (
+          <SuspenseWrapper>
+            <EducationManagementWithRole />
+          </SuspenseWrapper>
+        ),
+      },
+
+      // Analytics & Reports Zone
+      {
+        path: 'lineage',
+        element: (
+          <SuspenseWrapper>
+            <LineageManagementWithRole />
+          </SuspenseWrapper>
+        ),
+      },
+      {
+        path: 'reports',
+        element: (
+          <SuspenseWrapper>
+            <Reports />
+          </SuspenseWrapper>
+        ),
+      },
+      {
+        path: 'statistics',
+        element: (
+          <SuspenseWrapper>
+            <Statistics />
+          </SuspenseWrapper>
+        ),
+      },
+
+      // System Settings Zone
+      {
+        path: 'user-management',
+        element: (
+          <SuspenseWrapper>
+            <UserManagement />
           </SuspenseWrapper>
         ),
       },
@@ -167,10 +294,10 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: 'education',
+        path: 'audit-logs',
         element: (
           <SuspenseWrapper>
-            <EducationManagementWithRole />
+            <AuditLogs />
           </SuspenseWrapper>
         ),
       },

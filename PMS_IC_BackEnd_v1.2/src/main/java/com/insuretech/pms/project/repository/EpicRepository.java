@@ -80,4 +80,29 @@ public interface EpicRepository extends JpaRepository<Epic, String> {
      * @return true if the epic exists
      */
     boolean existsByProjectIdAndName(String projectId, String name);
+
+    /**
+     * Find all epics linked to a specific phase
+     *
+     * @param phaseId the phase ID
+     * @return list of epics linked to the phase
+     */
+    List<Epic> findByPhaseId(String phaseId);
+
+    /**
+     * Find all unlinked epics for a project (no phase assigned)
+     *
+     * @param projectId the project ID
+     * @return list of epics not linked to any phase
+     */
+    @Query("SELECT e FROM Epic e WHERE e.projectId = :projectId AND e.phaseId IS NULL ORDER BY e.name ASC")
+    List<Epic> findUnlinkedByProjectId(@Param("projectId") String projectId);
+
+    /**
+     * Count epics linked to a phase
+     *
+     * @param phaseId the phase ID
+     * @return count of epics linked to the phase
+     */
+    long countByPhaseId(String phaseId);
 }

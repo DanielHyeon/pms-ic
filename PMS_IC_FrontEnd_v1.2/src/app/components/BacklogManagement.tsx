@@ -1,7 +1,20 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Plus, Star, ArrowUp, ArrowDown, Users, Check, RotateCcw, Pencil, Trash2 } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronRight,
+  Plus,
+  Star,
+  ArrowUp,
+  ArrowDown,
+  Users,
+  Check,
+  RotateCcw,
+  Pencil,
+  Trash2,
+} from 'lucide-react';
 import { UserRole } from '../App';
 import { useStories, useCreateStory, useUpdateStory, useUpdateStoryPriority } from '../../hooks/api/useStories';
+import { useActiveSprint, useAssignToSprint } from '../../hooks/api/useSprints';
 import { canEdit as checkCanEdit, canPrioritize as checkCanPrioritize } from '../../utils/rolePermissions';
 import {
   UserStory,
@@ -11,12 +24,21 @@ import {
   validateStoryForm,
   getPriorityColor,
 } from '../../utils/storyTypes';
+import { SprintPanel, EpicTreeView } from './backlog';
+import { UserStory as BacklogStory } from '../../types/backlog';
 
-export default function BacklogManagement({ userRole }: { userRole: UserRole }) {
+interface BacklogManagementProps {
+  userRole: UserRole;
+  projectId?: string;
+}
+
+export default function BacklogManagement({ userRole, projectId = 'project-1' }: BacklogManagementProps) {
   const { data: stories = [], isLoading: isLoadingStories } = useStories();
+  const { data: activeSprint } = useActiveSprint(projectId);
   const createStoryMutation = useCreateStory();
   const updateStoryMutation = useUpdateStory();
   const updatePriorityMutation = useUpdateStoryPriority();
+  const assignToSprintMutation = useAssignToSprint();
 
   const [expandedStory, setExpandedStory] = useState<number | null>(null);
   const [showPlanningPoker, setShowPlanningPoker] = useState(false);
@@ -26,9 +48,9 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
   const [showAddStoryModal, setShowAddStoryModal] = useState(false);
   const [showEditStoryModal, setShowEditStoryModal] = useState(false);
   const [editingStory, setEditingStory] = useState<UserStory | null>(null);
-  // Consolidated form state using extracted types
   const [storyForm, setStoryForm] = useState<StoryFormData>(createEmptyStoryForm());
-  const [selectedEpicFilter, setSelectedEpicFilter] = useState<string>('전체');
+  const [selectedSprintId, setSelectedSprintId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'tree'>('tree');
 
   // Use centralized role permissions
   const canEdit = checkCanEdit(userRole);
@@ -128,25 +150,96 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
     );
   };
 
-  // Filter stories by epic
-  const filteredStories = selectedEpicFilter === '전체'
-    ? stories
-    : stories.filter((s) => s.epic === selectedEpicFilter);
+  // Handlers for Epic Tree View
+  const handleStorySelect = (story: BacklogStory) => {
+    // Convert to old UserStory format for edit modal
+    const legacyStory: UserStory = {
+      id: parseInt(story.id.replace(/\D/g, '')) || 0,
+      title: story.title,
+      description: story.description || '',
+      epic: story.epicId || '',
+      priority: story.priority === 'CRITICAL' ? 1 : story.priority === 'HIGH' ? 2 : story.priority === 'MEDIUM' ? 3 : 4,
+      status: story.status === 'DONE' ? 'COMPLETED' : story.status === 'IN_SPRINT' ? 'SELECTED' : 'BACKLOG',
+      storyPoints: story.storyPoints,
+      acceptanceCriteria: story.acceptanceCriteria || [],
+    };
+    openEditModal(legacyStory);
+  };
 
-  const backlogStories = filteredStories.filter((s) => s.status === 'BACKLOG').sort((a, b) => a.priority - b.priority);
-  const sprintStories = filteredStories.filter((s) => s.status === 'SELECTED');
-  const doneStories = filteredStories.filter((s) => s.status === 'COMPLETED');
+  const handleAddStoryToEpic = (epicId: string, featureId?: string) => {
+    setStoryForm({ ...createEmptyStoryForm(), epic: epicId });
+    setShowAddStoryModal(true);
+  };
+
+  const handleAddEpic = () => {
+    // TODO: Open Epic creation modal
+    alert('Epic 추가 기능은 다음 단계에서 구현됩니다.');
+  };
+
+  const handleAddFeature = (epicId: string) => {
+    // TODO: Open Feature creation modal
+    alert('Feature 추가 기능은 다음 단계에서 구현됩니다.');
+  };
+
+  const handleMoveToSprint = (storyId: string) => {
+    if (!selectedSprintId) {
+      alert('먼저 Sprint를 선택해주세요.');
+      return;
+    }
+    assignToSprintMutation.mutate({ storyId, sprintId: selectedSprintId });
+  };
+
+  // Convert stories to BacklogStory format for EpicTreeView
+  const backlogStories: BacklogStory[] = stories.map((s) => ({
+    id: `story-${s.id}`,
+    title: s.title,
+    description: s.description,
+    epicId: s.epic,
+    priority: s.priority <= 1 ? 'CRITICAL' : s.priority === 2 ? 'HIGH' : s.priority === 3 ? 'MEDIUM' : 'LOW',
+    status: s.status === 'COMPLETED' ? 'DONE' : s.status === 'SELECTED' ? 'IN_SPRINT' : 'BACKLOG',
+    storyPoints: s.storyPoints,
+    acceptanceCriteria: s.acceptanceCriteria,
+    order: s.priority,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }));
+
+  const backlogStoriesOnly = stories.filter((s) => s.status === 'BACKLOG').sort((a, b) => a.priority - b.priority);
+  const sprintStories = stories.filter((s) => s.status === 'SELECTED');
+  const doneStories = stories.filter((s) => s.status === 'COMPLETED');
 
   return (
     <div className="p-6">
+      {/* Header */}
       <div className="mb-6">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-2xl font-semibold text-gray-900">백로그 관리</h2>
-            <p className="text-sm text-gray-500 mt-1">우선순위 기반 사용자 스토리 관리</p>
+            <p className="text-sm text-gray-500 mt-1">Epic → Feature → User Story 계층 구조 관리</p>
           </div>
           <div className="flex gap-3">
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                type="button"
+                onClick={() => setViewMode('tree')}
+                className={`px-3 py-1.5 rounded text-sm transition-colors ${
+                  viewMode === 'tree' ? 'bg-white shadow text-gray-900' : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                계층 보기
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('list')}
+                className={`px-3 py-1.5 rounded text-sm transition-colors ${
+                  viewMode === 'list' ? 'bg-white shadow text-gray-900' : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                목록 보기
+              </button>
+            </div>
             <button
+              type="button"
               onClick={() => setShowPlanningPoker(!showPlanningPoker)}
               className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
             >
@@ -155,6 +248,7 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
             </button>
             {canEdit && (
               <button
+                type="button"
                 onClick={() => setShowAddStoryModal(true)}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
               >
@@ -166,11 +260,20 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
         </div>
       </div>
 
+      {/* Sprint Panel */}
+      <SprintPanel
+        projectId={projectId}
+        activeSprint={activeSprint}
+        onSprintSelect={setSelectedSprintId}
+        selectedSprintId={selectedSprintId}
+        canEdit={canEdit}
+      />
+
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <p className="text-sm text-gray-500">제품 백로그</p>
-          <p className="text-2xl font-semibold text-gray-900 mt-1">{backlogStories.length}</p>
+          <p className="text-2xl font-semibold text-gray-900 mt-1">{backlogStoriesOnly.length}</p>
         </div>
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <p className="text-sm text-gray-500">이번 스프린트</p>
@@ -197,6 +300,7 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
               플래닝 포커 - Story Point 산정
             </h3>
             <button
+              type="button"
               onClick={() => {
                 setShowPlanningPoker(false);
                 setSelectedStoryForPoker(null);
@@ -250,6 +354,7 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
             <div className="flex gap-3 flex-wrap">
               {[1, 2, 3, 5, 8, 13, 21].map((point) => (
                 <button
+                  type="button"
                   key={point}
                   onClick={() => {
                     if (!isPokerConfirmed) {
@@ -258,11 +363,12 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
                   }}
                   disabled={!selectedStoryForPoker || isPokerConfirmed}
                   className={`w-16 h-24 rounded-lg border-2 transition-all flex flex-col items-center justify-center font-bold text-2xl
-                    ${selectedPokerCard === point
-                      ? 'bg-purple-600 border-purple-600 text-white shadow-lg scale-110'
-                      : 'bg-white border-purple-300 text-purple-600 hover:bg-purple-100 hover:border-purple-500'
+                    ${
+                      selectedPokerCard === point
+                        ? 'bg-purple-600 border-purple-600 text-white shadow-lg scale-110'
+                        : 'bg-white border-purple-300 text-purple-600 hover:bg-purple-100 hover:border-purple-500'
                     }
-                    ${!selectedStoryForPoker ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                    ${selectedStoryForPoker ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}
                     ${isPokerConfirmed && selectedPokerCard !== point ? 'opacity-30' : ''}
                   `}
                 >
@@ -278,6 +384,7 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
             <div className="flex gap-3">
               {!isPokerConfirmed ? (
                 <button
+                  type="button"
                   onClick={() => setIsPokerConfirmed(true)}
                   className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
                 >
@@ -287,6 +394,7 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
               ) : (
                 <>
                   <button
+                    type="button"
                     onClick={() => {
                       updateStoryMutation.mutate(
                         { id: selectedStoryForPoker, data: { storyPoints: selectedPokerCard } },
@@ -307,6 +415,7 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
                     {updateStoryMutation.isPending ? '저장 중...' : `${selectedPokerCard} SP 저장`}
                   </button>
                   <button
+                    type="button"
                     onClick={() => {
                       setSelectedPokerCard(null);
                       setIsPokerConfirmed(false);
@@ -331,6 +440,7 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
                   .slice(0, 5)
                   .map((story) => (
                     <button
+                      type="button"
                       key={story.id}
                       onClick={() => {
                         setSelectedStoryForPoker(story.id);
@@ -358,6 +468,7 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-semibold text-gray-900">새 스토리 추가</h3>
               <button
+                type="button"
                 onClick={() => {
                   setShowAddStoryModal(false);
                   setStoryForm(createEmptyStoryForm());
@@ -369,9 +480,7 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
             </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  스토리 제목 *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">스토리 제목 *</label>
                 <input
                   type="text"
                   value={storyForm.title}
@@ -381,9 +490,7 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  설명 *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">설명 *</label>
                 <textarea
                   value={storyForm.description}
                   onChange={(e) => setStoryForm({ ...storyForm, description: e.target.value })}
@@ -393,12 +500,12 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  에픽 *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">에픽 *</label>
                 <select
                   value={storyForm.epic}
                   onChange={(e) => setStoryForm({ ...storyForm, epic: e.target.value })}
+                  title="에픽 선택"
+                  aria-label="에픽 선택"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">에픽 선택</option>
@@ -437,6 +544,7 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
                     />
                     {storyForm.acceptanceCriteria.length > 1 && (
                       <button
+                        type="button"
                         onClick={() => {
                           const updated = storyForm.acceptanceCriteria.filter((_, i) => i !== idx);
                           setStoryForm({ ...storyForm, acceptanceCriteria: updated });
@@ -449,6 +557,7 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
                   </div>
                 ))}
                 <button
+                  type="button"
                   onClick={() =>
                     setStoryForm({
                       ...storyForm,
@@ -464,6 +573,7 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
             </div>
             <div className="flex gap-3 mt-6">
               <button
+                type="button"
                 onClick={handleAddStory}
                 disabled={createStoryMutation.isPending}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -471,6 +581,7 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
                 {createStoryMutation.isPending ? '추가 중...' : '스토리 추가'}
               </button>
               <button
+                type="button"
                 onClick={() => {
                   setShowAddStoryModal(false);
                   setStoryForm(createEmptyStoryForm());
@@ -505,9 +616,7 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
             </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  스토리 제목 *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">스토리 제목 *</label>
                 <input
                   type="text"
                   value={storyForm.title}
@@ -517,9 +626,7 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  설명 *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">설명 *</label>
                 <textarea
                   value={storyForm.description}
                   onChange={(e) => setStoryForm({ ...storyForm, description: e.target.value })}
@@ -529,12 +636,12 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  에픽 *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">에픽 *</label>
                 <select
                   value={storyForm.epic}
                   onChange={(e) => setStoryForm({ ...storyForm, epic: e.target.value })}
+                  title="에픽 선택"
+                  aria-label="에픽 선택"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">에픽 선택</option>
@@ -628,170 +735,217 @@ export default function BacklogManagement({ userRole }: { userRole: UserRole }) 
         </div>
       )}
 
-      {/* Epic Filter */}
-      <div className="mb-6">
-        <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => setSelectedEpicFilter('전체')}
-            className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-              selectedEpicFilter === '전체'
-                ? 'bg-blue-600 text-white'
-                : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            전체
-          </button>
-          {epics.map((epic) => (
-            <button
-              key={epic}
-              onClick={() => setSelectedEpicFilter(epic)}
-              className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                selectedEpicFilter === epic
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              {epic}
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* Main Content - Tree View or List View */}
+      {viewMode === 'tree' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Epic Tree View (2 columns) */}
+          <div className="lg:col-span-2">
+            <EpicTreeView
+              projectId={projectId}
+              stories={backlogStories}
+              onStorySelect={handleStorySelect}
+              onAddStory={handleAddStoryToEpic}
+              onAddEpic={handleAddEpic}
+              onAddFeature={handleAddFeature}
+              onMoveToSprint={handleMoveToSprint}
+              selectedSprintId={selectedSprintId}
+              canEdit={canEdit}
+            />
+          </div>
 
-      {/* Product Backlog */}
-      <div className="space-y-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Star className="text-amber-500" />
-            제품 백로그 (우선순위순)
-          </h3>
-          <div className="space-y-2">
-            {backlogStories.map((story, idx) => (
-              <div key={story.id} className="border border-gray-200 rounded-lg">
-                <div
-                  className="p-4 hover:bg-gray-50 transition-colors cursor-pointer"
-                  onClick={() => setExpandedStory(expandedStory === story.id ? null : story.id)}
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="flex flex-col gap-1">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          movePriority(story.id, 'up');
-                        }}
-                        disabled={idx === 0 || !canPrioritize}
-                        className="p-1 hover:bg-gray-200 rounded disabled:opacity-30 disabled:cursor-not-allowed"
-                      >
-                        <ArrowUp size={14} />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          movePriority(story.id, 'down');
-                        }}
-                        disabled={idx === backlogStories.length - 1 || !canPrioritize}
-                        className="p-1 hover:bg-gray-200 rounded disabled:opacity-30 disabled:cursor-not-allowed"
-                      >
-                        <ArrowDown size={14} />
-                      </button>
-                    </div>
-                    <div className={`px-2 py-1 rounded font-medium text-sm ${getPriorityColor(story.priority)}`}>
-                      P{story.priority}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1">
-                          <h4 className="font-medium text-gray-900">{story.title}</h4>
-                          <p className="text-sm text-gray-500 mt-1">{story.description}</p>
+          {/* Sprint Stories (1 column) */}
+          <div className="lg:col-span-1">
+            <div className="bg-blue-50 rounded-xl border-2 border-blue-300 p-4">
+              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <Star className="text-blue-600" size={18} />
+                {activeSprint ? activeSprint.name : '스프린트'} 백로그
+              </h3>
+              <div className="space-y-2">
+                {sprintStories.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500 text-sm">
+                    스프린트에 스토리를 추가하세요
+                  </div>
+                ) : (
+                  sprintStories.map((story) => (
+                    <div key={story.id} className="bg-white p-3 rounded-lg border border-blue-200">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium text-gray-900 text-sm truncate">{story.title}</h4>
+                          <p className="text-xs text-gray-500 mt-0.5 truncate">{story.epic}</p>
                         </div>
-                        <div className="flex items-center gap-4">
-                          <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-sm font-medium">
+                        <div className="flex items-center gap-1 ml-2">
+                          <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium">
                             {story.storyPoints || '?'} SP
                           </span>
-                          <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-sm">
-                            {story.epic}
-                          </span>
+                          {canEdit && (
+                            <button
+                              type="button"
+                              onClick={() => removeFromSprint(story.id)}
+                              className="p-1 text-gray-400 hover:text-red-500 rounded"
+                              title="스프린트에서 제거"
+                            >
+                              <RotateCcw size={12} />
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
-                    <div>
-                      {expandedStory === story.id ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
-                    </div>
-                  </div>
-                </div>
-
-                {expandedStory === story.id && (
-                  <div className="px-4 pb-4 border-t border-gray-200 bg-gray-50">
-                    <div className="mt-4">
-                      <h5 className="font-medium text-gray-900 mb-2">완료 조건 (Acceptance Criteria):</h5>
-                      <ul className="space-y-1">
-                        {story.acceptanceCriteria.map((criteria, idx) => (
-                          <li key={idx} className="flex items-start gap-2 text-sm text-gray-700">
-                            <span className="text-green-600 mt-0.5">✓</span>
-                            <span>{criteria}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div className="mt-4 flex gap-2">
-                      <button
-                        className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
-                        onClick={() => moveToSprint(story.id)}
-                      >
-                        스프린트에 추가
-                      </button>
-                      <button
-                        className="px-3 py-1.5 bg-purple-600 text-white rounded text-sm hover:bg-purple-700"
-                        onClick={() => {
-                          setSelectedStoryForPoker(story.id);
-                          setShowPlanningPoker(true);
-                        }}
-                      >
-                        포커 산정
-                      </button>
-                      {canEdit && (
-                        <button
-                          className="px-3 py-1.5 border border-gray-300 text-gray-700 rounded text-sm hover:bg-gray-100 flex items-center gap-1"
-                          onClick={() => openEditModal(story)}
-                        >
-                          <Pencil size={14} />
-                          수정
-                        </button>
-                      )}
-                    </div>
-                  </div>
+                  ))
                 )}
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Sprint Backlog */}
-        <div className="bg-blue-50 rounded-xl border-2 border-blue-300 p-6">
-          <h3 className="font-semibold text-gray-900 mb-4">이번 스프린트 백로그</h3>
-          <div className="space-y-2">
-            {sprintStories.map((story) => (
-              <div key={story.id} className="bg-white p-4 rounded-lg border border-blue-200">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <h4 className="font-medium text-gray-900">{story.title}</h4>
-                    <p className="text-sm text-gray-500 mt-1">{story.description}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {story.assignee && (
-                      <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-sm">
-                        {story.assignee}
-                      </span>
-                    )}
-                    <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-sm font-medium">
-                      {story.storyPoints} SP
+              {sprintStories.length > 0 && (
+                <div className="mt-4 pt-3 border-t border-blue-200">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">총 스토리 포인트</span>
+                    <span className="font-semibold text-purple-600">
+                      {sprintStories.reduce((sum, s) => sum + (s.storyPoints || 0), 0)} SP
                     </span>
                   </div>
                 </div>
-              </div>
-            ))}
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        /* List View - Original Layout */
+        <div className="space-y-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <Star className="text-amber-500" />
+              제품 백로그 (우선순위순)
+            </h3>
+            <div className="space-y-2">
+              {backlogStoriesOnly.map((story, idx) => (
+                <div key={story.id} className="border border-gray-200 rounded-lg">
+                  <div
+                    className="p-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                    onClick={() => setExpandedStory(expandedStory === story.id ? null : story.id)}
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="flex flex-col gap-1">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            movePriority(story.id, 'up');
+                          }}
+                          disabled={idx === 0 || !canPrioritize}
+                          title="우선순위 올리기"
+                          aria-label="우선순위 올리기"
+                          className="p-1 hover:bg-gray-200 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          <ArrowUp size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            movePriority(story.id, 'down');
+                          }}
+                          disabled={idx === backlogStoriesOnly.length - 1 || !canPrioritize}
+                          title="우선순위 내리기"
+                          aria-label="우선순위 내리기"
+                          className="p-1 hover:bg-gray-200 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          <ArrowDown size={14} />
+                        </button>
+                      </div>
+                      <div className={`px-2 py-1 rounded font-medium text-sm ${getPriorityColor(story.priority)}`}>
+                        P{story.priority}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <h4 className="font-medium text-gray-900">{story.title}</h4>
+                            <p className="text-sm text-gray-500 mt-1">{story.description}</p>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-sm font-medium">
+                              {story.storyPoints || '?'} SP
+                            </span>
+                            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-sm">{story.epic}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div>{expandedStory === story.id ? <ChevronDown size={20} /> : <ChevronRight size={20} />}</div>
+                    </div>
+                  </div>
+
+                  {expandedStory === story.id && (
+                    <div className="px-4 pb-4 border-t border-gray-200 bg-gray-50">
+                      <div className="mt-4">
+                        <h5 className="font-medium text-gray-900 mb-2">완료 조건 (Acceptance Criteria):</h5>
+                        <ul className="space-y-1">
+                          {story.acceptanceCriteria.map((criteria, cidx) => (
+                            <li key={cidx} className="flex items-start gap-2 text-sm text-gray-700">
+                              <span className="text-green-600 mt-0.5">✓</span>
+                              <span>{criteria}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="mt-4 flex gap-2">
+                        <button
+                          type="button"
+                          className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+                          onClick={() => moveToSprint(story.id)}
+                        >
+                          스프린트에 추가
+                        </button>
+                        <button
+                          type="button"
+                          className="px-3 py-1.5 bg-purple-600 text-white rounded text-sm hover:bg-purple-700"
+                          onClick={() => {
+                            setSelectedStoryForPoker(story.id);
+                            setShowPlanningPoker(true);
+                          }}
+                        >
+                          포커 산정
+                        </button>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            className="px-3 py-1.5 border border-gray-300 text-gray-700 rounded text-sm hover:bg-gray-100 flex items-center gap-1"
+                            onClick={() => openEditModal(story)}
+                          >
+                            <Pencil size={14} />
+                            수정
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Sprint Backlog */}
+          <div className="bg-blue-50 rounded-xl border-2 border-blue-300 p-6">
+            <h3 className="font-semibold text-gray-900 mb-4">이번 스프린트 백로그</h3>
+            <div className="space-y-2">
+              {sprintStories.map((story) => (
+                <div key={story.id} className="bg-white p-4 rounded-lg border border-blue-200">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <h4 className="font-medium text-gray-900">{story.title}</h4>
+                      <p className="text-sm text-gray-500 mt-1">{story.description}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {story.assignee && (
+                        <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-sm">{story.assignee}</span>
+                      )}
+                      <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-sm font-medium">
+                        {story.storyPoints} SP
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

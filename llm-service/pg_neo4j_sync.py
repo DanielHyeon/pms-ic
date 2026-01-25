@@ -62,6 +62,10 @@ class EntityType(Enum):
     DELIVERABLE = "Deliverable"
     ISSUE = "Issue"
     USER = "User"
+    EPIC = "Epic"
+    FEATURE = "Feature"
+    WBS_GROUP = "WbsGroup"
+    WBS_ITEM = "WbsItem"
 
 
 class RelationType(Enum):
@@ -77,6 +81,13 @@ class RelationType(Enum):
     HAS_STORY = "HAS_STORY"
     HAS_PHASE = "HAS_PHASE"
     HAS_DELIVERABLE = "HAS_DELIVERABLE"
+    HAS_EPIC = "HAS_EPIC"
+    HAS_FEATURE = "HAS_FEATURE"
+    HAS_WBS_GROUP = "HAS_WBS_GROUP"
+    HAS_WBS_ITEM = "HAS_WBS_ITEM"
+    BELONGS_TO_PHASE = "BELONGS_TO_PHASE"
+    LINKED_TO_WBS_GROUP = "LINKED_TO_WBS_GROUP"
+    LINKED_TO_WBS_ITEM = "LINKED_TO_WBS_ITEM"
 
 
 # =============================================================================
@@ -199,6 +210,55 @@ class PGQueries:
         LIMIT %s OFFSET %s
     """
 
+    EPICS = """
+        SELECT e.id, e.name, e.description, e.status, e.goal,
+               e.project_id, e.phase_id, e.owner_id, e.color,
+               e.progress, e.priority, e.business_value,
+               e.total_story_points, e.item_count,
+               e.target_completion_date,
+               e.created_at, e.updated_at
+        FROM project.epics e
+        WHERE e.updated_at > %s OR %s IS NULL
+        ORDER BY e.id
+        LIMIT %s OFFSET %s
+    """
+
+    FEATURES = """
+        SELECT f.id, f.name, f.description, f.status, f.priority,
+               f.epic_id, f.wbs_group_id, f.order_num,
+               f.created_at, f.updated_at
+        FROM project.features f
+        WHERE f.updated_at > %s OR %s IS NULL
+        ORDER BY f.id
+        LIMIT %s OFFSET %s
+    """
+
+    WBS_GROUPS = """
+        SELECT wg.id, wg.code, wg.name, wg.description, wg.status,
+               wg.phase_id, wg.linked_epic_id, wg.progress, wg.weight,
+               wg.planned_start_date, wg.planned_end_date,
+               wg.actual_start_date, wg.actual_end_date,
+               wg.order_num,
+               wg.created_at, wg.updated_at
+        FROM project.wbs_groups wg
+        WHERE wg.updated_at > %s OR %s IS NULL
+        ORDER BY wg.id
+        LIMIT %s OFFSET %s
+    """
+
+    WBS_ITEMS = """
+        SELECT wi.id, wi.code, wi.name, wi.description, wi.status,
+               wi.group_id, wi.phase_id, wi.progress, wi.weight,
+               wi.planned_start_date, wi.planned_end_date,
+               wi.estimated_hours, wi.actual_hours, wi.assignee_id,
+               wi.order_num,
+               wi.created_at, wi.updated_at
+        FROM project.wbs_items wi
+        WHERE wi.updated_at > %s OR %s IS NULL
+        ORDER BY wi.id
+        LIMIT %s OFFSET %s
+    """
+
     # Relationship queries - these tables don't exist yet in the schema
     # When implemented, they should be created as junction tables
     TASK_DEPENDENCIES = """
@@ -227,6 +287,10 @@ class Neo4jQueries:
         "CREATE CONSTRAINT IF NOT EXISTS FOR (d:Deliverable) REQUIRE d.id IS UNIQUE",
         "CREATE CONSTRAINT IF NOT EXISTS FOR (i:Issue) REQUIRE i.id IS UNIQUE",
         "CREATE CONSTRAINT IF NOT EXISTS FOR (u:User) REQUIRE u.id IS UNIQUE",
+        "CREATE CONSTRAINT IF NOT EXISTS FOR (e:Epic) REQUIRE e.id IS UNIQUE",
+        "CREATE CONSTRAINT IF NOT EXISTS FOR (f:Feature) REQUIRE f.id IS UNIQUE",
+        "CREATE CONSTRAINT IF NOT EXISTS FOR (wg:WbsGroup) REQUIRE wg.id IS UNIQUE",
+        "CREATE CONSTRAINT IF NOT EXISTS FOR (wi:WbsItem) REQUIRE wi.id IS UNIQUE",
     ]
 
     # Create indexes for better query performance
@@ -237,6 +301,10 @@ class Neo4jQueries:
         "CREATE INDEX IF NOT EXISTS FOR (t:Task) ON (t.priority)",
         "CREATE INDEX IF NOT EXISTS FOR (us:UserStory) ON (us.status)",
         "CREATE INDEX IF NOT EXISTS FOR (i:Issue) ON (i.status)",
+        "CREATE INDEX IF NOT EXISTS FOR (e:Epic) ON (e.status)",
+        "CREATE INDEX IF NOT EXISTS FOR (f:Feature) ON (f.status)",
+        "CREATE INDEX IF NOT EXISTS FOR (wg:WbsGroup) ON (wg.status)",
+        "CREATE INDEX IF NOT EXISTS FOR (wi:WbsItem) ON (wi.status)",
     ]
 
     # Merge queries (upsert) - aligned with actual PMS schema
@@ -395,6 +463,95 @@ class Neo4jQueries:
         MATCH (t:Task {id: row.task_id})
         MATCH (u:User {id: row.assignee_id})
         MERGE (t)-[:ASSIGNED_TO]->(u)
+    """
+
+    MERGE_EPIC = """
+        UNWIND $batch AS row
+        MERGE (e:Epic {id: row.id})
+        SET e.name = row.name,
+            e.description = row.description,
+            e.status = row.status,
+            e.goal = row.goal,
+            e.color = row.color,
+            e.progress = row.progress,
+            e.priority = row.priority,
+            e.business_value = row.business_value,
+            e.total_story_points = row.total_story_points,
+            e.target_completion_date = row.target_completion_date,
+            e.synced_at = datetime()
+        WITH e, row
+        WHERE row.project_id IS NOT NULL
+        MATCH (p:Project {id: row.project_id})
+        MERGE (p)-[:HAS_EPIC]->(e)
+        WITH e, row
+        WHERE row.phase_id IS NOT NULL
+        MATCH (ph:Phase {id: row.phase_id})
+        MERGE (e)-[:BELONGS_TO_PHASE]->(ph)
+    """
+
+    MERGE_FEATURE = """
+        UNWIND $batch AS row
+        MERGE (f:Feature {id: row.id})
+        SET f.name = row.name,
+            f.description = row.description,
+            f.status = row.status,
+            f.priority = row.priority,
+            f.order_num = row.order_num,
+            f.synced_at = datetime()
+        WITH f, row
+        WHERE row.epic_id IS NOT NULL
+        MATCH (e:Epic {id: row.epic_id})
+        MERGE (e)-[:HAS_FEATURE]->(f)
+        WITH f, row
+        WHERE row.wbs_group_id IS NOT NULL
+        MATCH (wg:WbsGroup {id: row.wbs_group_id})
+        MERGE (f)-[:LINKED_TO_WBS_GROUP]->(wg)
+    """
+
+    MERGE_WBS_GROUP = """
+        UNWIND $batch AS row
+        MERGE (wg:WbsGroup {id: row.id})
+        SET wg.code = row.code,
+            wg.name = row.name,
+            wg.description = row.description,
+            wg.status = row.status,
+            wg.progress = row.progress,
+            wg.weight = row.weight,
+            wg.planned_start_date = row.planned_start_date,
+            wg.planned_end_date = row.planned_end_date,
+            wg.actual_start_date = row.actual_start_date,
+            wg.actual_end_date = row.actual_end_date,
+            wg.order_num = row.order_num,
+            wg.synced_at = datetime()
+        WITH wg, row
+        WHERE row.phase_id IS NOT NULL
+        MATCH (ph:Phase {id: row.phase_id})
+        MERGE (ph)-[:HAS_WBS_GROUP]->(wg)
+        WITH wg, row
+        WHERE row.linked_epic_id IS NOT NULL
+        MATCH (e:Epic {id: row.linked_epic_id})
+        MERGE (e)-[:LINKED_TO]->(wg)
+    """
+
+    MERGE_WBS_ITEM = """
+        UNWIND $batch AS row
+        MERGE (wi:WbsItem {id: row.id})
+        SET wi.code = row.code,
+            wi.name = row.name,
+            wi.description = row.description,
+            wi.status = row.status,
+            wi.progress = row.progress,
+            wi.weight = row.weight,
+            wi.planned_start_date = row.planned_start_date,
+            wi.planned_end_date = row.planned_end_date,
+            wi.estimated_hours = row.estimated_hours,
+            wi.actual_hours = row.actual_hours,
+            wi.order_num = row.order_num,
+            wi.synced_at = datetime()
+        WITH wi, row
+        WHERE row.group_id IS NOT NULL
+        MATCH (wg:WbsGroup {id: row.group_id})
+        MERGE (wg)-[:HAS_WBS_ITEM]->(wi)
     """
 
 
@@ -678,6 +835,10 @@ class PGNeo4jSyncService:
             (EntityType.PROJECT, PGQueries.PROJECTS, Neo4jQueries.MERGE_PROJECT),
             (EntityType.SPRINT, PGQueries.SPRINTS, Neo4jQueries.MERGE_SPRINT),
             (EntityType.PHASE, PGQueries.PHASES, Neo4jQueries.MERGE_PHASE),
+            (EntityType.EPIC, PGQueries.EPICS, Neo4jQueries.MERGE_EPIC),
+            (EntityType.WBS_GROUP, PGQueries.WBS_GROUPS, Neo4jQueries.MERGE_WBS_GROUP),
+            (EntityType.WBS_ITEM, PGQueries.WBS_ITEMS, Neo4jQueries.MERGE_WBS_ITEM),
+            (EntityType.FEATURE, PGQueries.FEATURES, Neo4jQueries.MERGE_FEATURE),
             (EntityType.TASK, PGQueries.TASKS, Neo4jQueries.MERGE_TASK),
             (EntityType.USER_STORY, PGQueries.USER_STORIES, Neo4jQueries.MERGE_USER_STORY),
             (EntityType.DELIVERABLE, PGQueries.DELIVERABLES, Neo4jQueries.MERGE_DELIVERABLE),
@@ -735,6 +896,10 @@ class PGNeo4jSyncService:
             (EntityType.PROJECT, PGQueries.PROJECTS, Neo4jQueries.MERGE_PROJECT),
             (EntityType.SPRINT, PGQueries.SPRINTS, Neo4jQueries.MERGE_SPRINT),
             (EntityType.PHASE, PGQueries.PHASES, Neo4jQueries.MERGE_PHASE),
+            (EntityType.EPIC, PGQueries.EPICS, Neo4jQueries.MERGE_EPIC),
+            (EntityType.WBS_GROUP, PGQueries.WBS_GROUPS, Neo4jQueries.MERGE_WBS_GROUP),
+            (EntityType.WBS_ITEM, PGQueries.WBS_ITEMS, Neo4jQueries.MERGE_WBS_ITEM),
+            (EntityType.FEATURE, PGQueries.FEATURES, Neo4jQueries.MERGE_FEATURE),
             (EntityType.TASK, PGQueries.TASKS, Neo4jQueries.MERGE_TASK),
             (EntityType.USER_STORY, PGQueries.USER_STORIES, Neo4jQueries.MERGE_USER_STORY),
             (EntityType.DELIVERABLE, PGQueries.DELIVERABLES, Neo4jQueries.MERGE_DELIVERABLE),

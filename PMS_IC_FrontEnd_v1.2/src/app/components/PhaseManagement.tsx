@@ -14,7 +14,17 @@ import {
   Pencil,
   Trash2,
   Settings,
+  FolderTree,
+  ListChecks,
+  LayoutTemplate,
+  Link2,
 } from 'lucide-react';
+import { WbsTreeView, StoryLinkModal } from './wbs';
+import { TemplateLibrary, ApplyTemplateModal } from './templates';
+import { WbsBacklogIntegration } from './integration';
+import { useStories } from '../../hooks/api/useStories';
+import { useTemplateSets } from '../../hooks/api/useTemplates';
+import { TemplateSet } from '../../types/templates';
 import { UserRole } from '../App';
 import { apiService } from '../../services/api';
 import {
@@ -164,6 +174,15 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
   const [editingKpi, setEditingKpi] = useState<KPI | null>(null);
   const [kpiForm, setKpiForm] = useState({ name: '', target: '', current: '', status: 'onTrack' as KPI['status'] });
   const [showPhaseModal, setShowPhaseModal] = useState(false);
+  // Tab state for Phase Detail view
+  const [activeTab, setActiveTab] = useState<'deliverables' | 'wbs' | 'templates' | 'integration'>('deliverables');
+  // Story link modal state
+  const [showStoryLinkModal, setShowStoryLinkModal] = useState(false);
+  // Template modal state
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<TemplateSet | null>(null);
+  const [selectedWbsItemId, setSelectedWbsItemId] = useState<string>('');
+  const [selectedWbsItemName, setSelectedWbsItemName] = useState<string>('');
   const [editingPhase, setEditingPhase] = useState<Phase | null>(null);
   const [phaseForm, setPhaseForm] = useState({
     name: '',
@@ -191,6 +210,24 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
   const createKpiMutation = useCreatePhaseKpi();
   const updateKpiMutation = useUpdatePhaseKpi();
   const deleteKpiMutation = useDeletePhaseKpi();
+
+  // Stories for WBS linking
+  const { data: storiesData = [] } = useStories();
+  const storiesForLinking = storiesData.map((s: any) => ({
+    id: s.id,
+    title: s.title,
+    epicName: s.epic,
+    status: s.status,
+    storyPoints: s.storyPoints,
+  }));
+
+  // Story link handler
+  const handleLinkStory = (wbsItemId: string) => {
+    // Find the WBS item name (will be set by WbsTreeView)
+    setSelectedWbsItemId(wbsItemId);
+    setSelectedWbsItemName('WBS Item'); // Will be improved with actual name
+    setShowStoryLinkModal(true);
+  };
 
   // Use centralized role permissions
   const permissions = getRolePermissions(userRole);
@@ -572,8 +609,87 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
               </div>
             </div>
 
-            {/* Deliverables */}
-            <div className="mb-6">
+            {/* Tab Navigation */}
+            <div className="flex border-b border-gray-200 mb-6">
+              <button
+                type="button"
+                onClick={() => setActiveTab('deliverables')}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
+                  activeTab === 'deliverables'
+                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <ListChecks size={18} />
+                산출물 / KPI
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('wbs')}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
+                  activeTab === 'wbs'
+                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <FolderTree size={18} />
+                WBS 관리
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('templates')}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
+                  activeTab === 'templates'
+                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <LayoutTemplate size={18} />
+                템플릿
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('integration')}
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
+                  activeTab === 'integration'
+                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <Link2 size={18} />
+                통합
+              </button>
+            </div>
+
+            {/* Tab Content */}
+            {activeTab === 'integration' ? (
+              <WbsBacklogIntegration
+                phaseId={selectedPhase.id}
+                phaseName={selectedPhase.name}
+                projectId="proj-001"
+                canEdit={canEdit}
+              />
+            ) : activeTab === 'templates' ? (
+              <TemplateLibrary
+                projectId={selectedPhase.id}
+                canEdit={canEdit}
+                onApplySuccess={(phaseIds) => {
+                  // Refresh phase list after applying template
+                  setActiveTab('wbs');
+                }}
+              />
+            ) : activeTab === 'wbs' ? (
+              <WbsTreeView
+                phaseId={selectedPhase.id}
+                phaseName={selectedPhase.name}
+                phaseCode={String(syncedPhases.findIndex((p) => p.id === selectedPhase.id) + 1)}
+                canEdit={canEdit}
+                onLinkStory={handleLinkStory}
+              />
+            ) : (
+              <>
+                {/* Deliverables */}
+                <div className="mb-6">
               <div className="flex items-center justify-between mb-3">
                 <h4 className="font-medium text-gray-900 flex items-center gap-2">
                   <FileText size={18} />
@@ -750,6 +866,8 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
                   ))}
                 </div>
               </div>
+            )}
+              </>
             )}
           </div>
 
@@ -1034,6 +1152,16 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
             )}
           </div>
         </div>
+      )}
+
+      {/* Story Link Modal */}
+      {showStoryLinkModal && (
+        <StoryLinkModal
+          wbsItemId={selectedWbsItemId}
+          wbsItemName={selectedWbsItemName}
+          stories={storiesForLinking}
+          onClose={() => setShowStoryLinkModal(false)}
+        />
       )}
     </div>
   );

@@ -1656,6 +1656,276 @@ export class ApiService {
     );
     return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
   }
+
+  // ========== WBS API ==========
+  async getWbsGroups(phaseId: string) {
+    const response = await this.fetchWithFallback(`/phases/${phaseId}/wbs/groups`, {}, { data: [] });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async getWbsGroup(groupId: string) {
+    const response = await this.fetchWithFallback(`/wbs/groups/${groupId}`, {}, { data: null });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async createWbsGroup(phaseId: string, data: any) {
+    const response = await this.fetchWithFallback(`/phases/${phaseId}/wbs/groups`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }, { data: { ...data, id: `wbs-grp-${Date.now()}` } });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async updateWbsGroup(groupId: string, data: any) {
+    const response = await this.fetchWithFallback(`/wbs/groups/${groupId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }, { data: { ...data, id: groupId } });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async deleteWbsGroup(groupId: string) {
+    return this.fetchWithFallback(`/wbs/groups/${groupId}`, {
+      method: 'DELETE',
+    }, { message: 'WBS Group deleted' });
+  }
+
+  async getWbsItems(groupId: string) {
+    const response = await this.fetchWithFallback(`/wbs/groups/${groupId}/items`, {}, { data: [] });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async getWbsItem(itemId: string) {
+    const response = await this.fetchWithFallback(`/wbs/items/${itemId}`, {}, { data: null });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async createWbsItem(groupId: string, data: any) {
+    const response = await this.fetchWithFallback(`/wbs/groups/${groupId}/items`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }, { data: { ...data, id: `wbs-item-${Date.now()}` } });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async updateWbsItem(itemId: string, data: any) {
+    const response = await this.fetchWithFallback(`/wbs/items/${itemId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }, { data: { ...data, id: itemId } });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async deleteWbsItem(itemId: string) {
+    return this.fetchWithFallback(`/wbs/items/${itemId}`, {
+      method: 'DELETE',
+    }, { message: 'WBS Item deleted' });
+  }
+
+  async getWbsTasks(itemId: string) {
+    const response = await this.fetchWithFallback(`/wbs/items/${itemId}/tasks`, {}, { data: [] });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async getWbsTask(taskId: string) {
+    const response = await this.fetchWithFallback(`/wbs/tasks/${taskId}`, {}, { data: null });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async createWbsTask(itemId: string, data: any) {
+    const response = await this.fetchWithFallback(`/wbs/items/${itemId}/tasks`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }, { data: { ...data, id: `wbs-task-${Date.now()}` } });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async updateWbsTask(taskId: string, data: any) {
+    const response = await this.fetchWithFallback(`/wbs/tasks/${taskId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }, { data: { ...data, id: taskId } });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async deleteWbsTask(taskId: string) {
+    return this.fetchWithFallback(`/wbs/tasks/${taskId}`, {
+      method: 'DELETE',
+    }, { message: 'WBS Task deleted' });
+  }
+
+  // ========== Feature API ==========
+  async getFeatures(epicId: string) {
+    const response = await this.fetchWithFallback(`/epics/${epicId}/features`, {}, { data: [] });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async getFeaturesByWbsGroup(wbsGroupId: string) {
+    const response = await this.fetchWithFallback(`/wbs/groups/${wbsGroupId}/features`, {}, { data: [] });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async getUnlinkedFeatures(epicId: string) {
+    const response = await this.fetchWithFallback(`/epics/${epicId}/features/unlinked`, {}, { data: [] });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async getFeature(featureId: string) {
+    const response = await this.fetchWithFallback(`/features/${featureId}`, {}, { data: null });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async createFeature(epicId: string, data: any) {
+    const response = await this.fetchWithFallback(`/epics/${epicId}/features`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }, { data: { ...data, id: `feature-${Date.now()}` } });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async updateFeature(featureId: string, data: any) {
+    const response = await this.fetchWithFallback(`/features/${featureId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }, { data: { ...data, id: featureId } });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async deleteFeature(featureId: string) {
+    return this.fetchWithFallback(`/features/${featureId}`, {
+      method: 'DELETE',
+    }, { message: 'Feature deleted' });
+  }
+
+  async linkFeatureToWbsGroup(featureId: string, wbsGroupId: string) {
+    const response = await this.fetchWithFallback(`/features/${featureId}/link-wbs-group/${wbsGroupId}`, {
+      method: 'POST',
+    }, { data: { featureId, wbsGroupId } });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async unlinkFeatureFromWbsGroup(featureId: string) {
+    const response = await this.fetchWithFallback(`/features/${featureId}/link-wbs-group`, {
+      method: 'DELETE',
+    }, { data: { featureId } });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  // ========== Template API ==========
+  async getTemplateSets(category?: string) {
+    const params = category ? `?category=${category}` : '';
+    const response = await this.fetchWithFallback(`/templates${params}`, {}, { data: [] });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async getTemplateSet(templateSetId: string) {
+    const response = await this.fetchWithFallback(`/templates/${templateSetId}`, {}, { data: null });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async createTemplateSet(data: any) {
+    const response = await this.fetchWithFallback('/templates', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }, { data: { ...data, id: `tmpl-${Date.now()}` } });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async deleteTemplateSet(templateSetId: string) {
+    return this.fetchWithFallback(`/templates/${templateSetId}`, {
+      method: 'DELETE',
+    }, { message: 'Template Set deleted' });
+  }
+
+  async applyTemplate(templateSetId: string, projectId: string, startDate?: string) {
+    const params = new URLSearchParams({ projectId });
+    if (startDate) params.append('startDate', startDate);
+    const response = await this.fetchWithFallback(`/templates/${templateSetId}/apply?${params}`, {
+      method: 'POST',
+    }, { message: 'Template applied successfully' });
+    return response;
+  }
+
+  // ========== Integration API ==========
+  async linkEpicToPhase(epicId: string, phaseId: string) {
+    const response = await this.fetchWithFallback(`/integration/epic-phase?epicId=${epicId}&phaseId=${phaseId}`, {
+      method: 'POST',
+    }, { message: 'Epic linked to Phase successfully' });
+    return response;
+  }
+
+  async unlinkEpicFromPhase(epicId: string) {
+    const response = await this.fetchWithFallback(`/integration/epic-phase/${epicId}`, {
+      method: 'DELETE',
+    }, { message: 'Epic unlinked from Phase successfully' });
+    return response;
+  }
+
+  async getEpicsByPhase(phaseId: string) {
+    const response = await this.fetchWithFallback(`/integration/phases/${phaseId}/epics`, {}, { data: [] });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async getUnlinkedEpics(projectId: string) {
+    const response = await this.fetchWithFallback(`/integration/projects/${projectId}/epics/unlinked`, {}, { data: [] });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async linkFeatureToWbsGroupIntegration(featureId: string, wbsGroupId: string) {
+    const response = await this.fetchWithFallback(`/integration/feature-group?featureId=${featureId}&wbsGroupId=${wbsGroupId}`, {
+      method: 'POST',
+    }, { message: 'Feature linked to WBS Group successfully' });
+    return response;
+  }
+
+  async unlinkFeatureFromWbsGroupIntegration(featureId: string) {
+    const response = await this.fetchWithFallback(`/integration/feature-group/${featureId}`, {
+      method: 'DELETE',
+    }, { message: 'Feature unlinked from WBS Group successfully' });
+    return response;
+  }
+
+  async getFeaturesByWbsGroupIntegration(wbsGroupId: string) {
+    const response = await this.fetchWithFallback(`/integration/wbs-groups/${wbsGroupId}/features`, {}, { data: [] });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async linkStoryToWbsItem(storyId: string, wbsItemId: string) {
+    const response = await this.fetchWithFallback(`/integration/story-item?storyId=${storyId}&wbsItemId=${wbsItemId}`, {
+      method: 'POST',
+    }, { message: 'Story linked to WBS Item successfully' });
+    return response;
+  }
+
+  async unlinkStoryFromWbsItem(storyId: string) {
+    const response = await this.fetchWithFallback(`/integration/story-item/${storyId}`, {
+      method: 'DELETE',
+    }, { message: 'Story unlinked from WBS Item successfully' });
+    return response;
+  }
+
+  async getStoriesByWbsItem(wbsItemId: string) {
+    const response = await this.fetchWithFallback(`/integration/wbs-items/${wbsItemId}/stories`, {}, { data: [] });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async getUnlinkedStories(projectId: string) {
+    const response = await this.fetchWithFallback(`/integration/projects/${projectId}/stories/unlinked`, {}, { data: [] });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async getPhaseIntegrationSummary(phaseId: string, projectId: string) {
+    const response = await this.fetchWithFallback(`/integration/phases/${phaseId}/summary?projectId=${projectId}`, {}, {
+      data: {
+        phaseId,
+        linkedEpicCount: 0,
+        wbsGroupCount: 0,
+        linkedFeatureCount: 0,
+        linkedStoryCount: 0,
+      }
+    });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
 }
 
 export const apiService = new ApiService();

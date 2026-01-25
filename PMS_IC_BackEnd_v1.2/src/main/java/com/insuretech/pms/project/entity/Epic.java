@@ -89,6 +89,33 @@ public class Epic extends BaseEntity {
     @Column(name = "item_count")
     private Integer itemCount;
 
+    /**
+     * Phase ID for Epic-Phase integration
+     */
+    @Column(name = "phase_id", length = 50)
+    private String phaseId;
+
+    /**
+     * Color for UI display
+     */
+    @Column(name = "color", length = 20)
+    private String color;
+
+    /**
+     * Epic completion percentage (0-100)
+     */
+    @Column(name = "progress")
+    @Builder.Default
+    private Integer progress = 0;
+
+    /**
+     * Priority level
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "priority", length = 50)
+    @Builder.Default
+    private Priority priority = Priority.MEDIUM;
+
     @PrePersist
     @Override
     protected void onCreate() {
@@ -112,5 +139,15 @@ public class Epic extends BaseEntity {
         ACTIVE,
         COMPLETED,
         CANCELLED
+    }
+
+    /**
+     * Priority enumeration
+     */
+    public enum Priority {
+        CRITICAL,
+        HIGH,
+        MEDIUM,
+        LOW
     }
 }
