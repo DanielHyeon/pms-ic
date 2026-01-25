@@ -29,7 +29,7 @@ const DeliverableManagement = lazy(() => import('../app/components/PlaceholderPa
 const MeetingManagement = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.MeetingManagementPage })));
 const Announcements = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.AnnouncementsPage })));
 const AiAssistant = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.AiAssistantPage })));
-const Reports = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.ReportsPage })));
+const ReportManagement = lazy(() => import('../app/components/ReportManagement'));
 const Statistics = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.StatisticsPage })));
 const UserManagement = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.UserManagementPage })));
 const AuditLogs = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.AuditLogsPage })));
@@ -59,6 +59,7 @@ const RoleManagementWithRole = withUserRole(RoleManagement);
 const CommonManagementWithRole = withUserRole(CommonManagement);
 const EducationManagementWithRole = withUserRole(EducationManagement);
 const SettingsWithRole = withUserRole(Settings);
+const ReportManagementWithRole = withUserRole(ReportManagement);
 
 function Loading() {
   return (
@@ -263,7 +264,7 @@ export const router = createBrowserRouter([
         path: 'reports',
         element: (
           <SuspenseWrapper>
-            <Reports />
+            <ReportManagementWithRole />
           </SuspenseWrapper>
         ),
       },

@@ -376,6 +376,7 @@ export const menuAccessByRole: Record<UserRole, string[]> = {
     'ai-assistant',
     'education',
     'lineage',
+    'reports',
     'settings',
   ],
   qa: [
@@ -389,6 +390,7 @@ export const menuAccessByRole: Record<UserRole, string[]> = {
     'ai-assistant',
     'education',
     'lineage',
+    'reports',
     'settings',
   ],
   business_analyst: [
