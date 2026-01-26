@@ -139,7 +139,7 @@ public class ReportGenerationService {
         if (request.getTemplateId() != null) {
             return templateRepository.findById(request.getTemplateId()).orElse(null);
         }
-        return templateRepository.findDefaultTemplateForRole(request.getReportType(), userRole).orElse(null);
+        return templateRepository.findDefaultTemplateForRole(request.getReportType().name(), userRole).orElse(null);
     }
 
     private List<String> determineSections(ReportGenerationRequest request,

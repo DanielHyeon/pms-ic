@@ -193,7 +193,7 @@ public class ReportService {
                 .findByRoleAndReportType(role, reportType)
                 .orElseGet(() -> createDefaultRoleDefaults(role, reportType));
 
-        List<ReportTemplate> templates = templateRepository.findTemplatesForRole(reportType, role);
+        List<ReportTemplate> templates = templateRepository.findTemplatesForRole(reportType.name(), role);
 
         return ReportOptionsDto.builder()
                 .role(role)

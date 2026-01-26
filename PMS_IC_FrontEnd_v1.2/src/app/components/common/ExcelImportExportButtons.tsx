@@ -33,31 +33,50 @@ export function ExcelImportExportButtons({
   const [isOpen, setIsOpen] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [showResultDialog, setShowResultDialog] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isLoading = isDownloadingTemplate || isExporting || isImporting;
 
   const handleDownloadTemplate = async () => {
     setIsOpen(false);
-    await onDownloadTemplate();
+    setErrorMessage(null);
+    try {
+      await onDownloadTemplate();
+    } catch (error) {
+      console.error('Template download failed:', error);
+      setErrorMessage('템플릿 다운로드에 실패했습니다. 서버 연결을 확인해주세요.');
+    }
   };
 
   const handleExport = async () => {
     setIsOpen(false);
-    await onExport();
+    setErrorMessage(null);
+    try {
+      await onExport();
+    } catch (error) {
+      console.error('Export failed:', error);
+      setErrorMessage('Excel 내보내기에 실패했습니다. 서버 연결을 확인해주세요.');
+    }
   };
 
   const handleImportClick = () => {
     setIsOpen(false);
+    setErrorMessage(null);
     fileInputRef.current?.click();
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const result = await onImport(file);
-      setImportResult(result);
-      setShowResultDialog(true);
+      try {
+        const result = await onImport(file);
+        setImportResult(result);
+        setShowResultDialog(true);
+      } catch (error) {
+        console.error('Import failed:', error);
+        setErrorMessage('Excel 가져오기에 실패했습니다. 파일 형식과 서버 연결을 확인해주세요.');
+      }
     }
     // Reset input so same file can be selected again
     e.target.value = '';
@@ -144,6 +163,27 @@ export function ExcelImportExportButtons({
         />
       </div>
 
+      {/* Error Alert */}
+      {errorMessage && (
+        <div className="fixed bottom-4 right-4 z-50 max-w-md bg-red-50 border border-red-200 rounded-lg p-4 shadow-lg">
+          <div className="flex items-start gap-3">
+            <AlertCircle size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm text-red-800">{errorMessage}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setErrorMessage(null)}
+              className="text-red-400 hover:text-red-600"
+              title="닫기"
+              aria-label="오류 메시지 닫기"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Import Result Dialog */}
       {showResultDialog && importResult && (
         <ImportResultDialog
@@ -192,8 +232,11 @@ export function ImportResultDialog({ result, onClose }: ImportResultDialogProps)
             </h3>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+            title="닫기"
+            aria-label="결과 대화상자 닫기"
           >
             <X size={20} />
           </button>
@@ -262,6 +305,7 @@ export function ImportResultDialog({ result, onClose }: ImportResultDialogProps)
         {/* Footer */}
         <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
           <button
+            type="button"
             onClick={onClose}
             className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >

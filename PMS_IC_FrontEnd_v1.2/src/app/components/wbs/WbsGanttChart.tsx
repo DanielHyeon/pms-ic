@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   ZoomIn,
   ZoomOut,
   Calendar,
@@ -17,12 +18,15 @@ import {
   WbsGroupWithItems,
   WbsItemWithTasks,
   WbsTask,
+  WbsDependency,
   getWbsStatusColor,
   isOverdue,
 } from '../../../types/wbs';
+import { apiService } from '../../../services/api';
 
 interface WbsGanttChartProps {
   phases: PhaseWithWbs[];
+  projectId: string;
   isLoading?: boolean;
 }
 
@@ -42,6 +46,8 @@ interface GanttItem {
   color?: string;
   dependencies?: string[];
   isExpanded?: boolean;
+  isLastChild?: boolean;
+  hasChildren?: boolean;
 }
 
 // Generate date range
@@ -120,67 +126,110 @@ function getBarColor(item: GanttItem): string {
   }
 }
 
-// Dependency line component
-function DependencyLine({
-  fromItem,
-  toItem,
+// Dependency lines container component
+function DependencyLines({
   items,
   startDate,
   cellWidth,
   rowHeight,
 }: {
-  fromItem: GanttItem;
-  toItem: GanttItem;
   items: GanttItem[];
   startDate: Date;
   cellWidth: number;
   rowHeight: number;
 }) {
-  const fromIndex = items.findIndex(i => i.id === fromItem.id);
-  const toIndex = items.findIndex(i => i.id === toItem.id);
+  // Collect all dependency paths
+  const paths: { fromId: string; toId: string; path: string }[] = [];
 
-  if (fromIndex === -1 || toIndex === -1) return null;
+  items.forEach((toItem) => {
+    if (!toItem.dependencies || toItem.dependencies.length === 0) return;
 
-  const fromBar = calculateBarStyle(fromItem, startDate, 0, cellWidth);
-  const toBar = calculateBarStyle(toItem, startDate, 0, cellWidth);
+    const toIndex = items.findIndex(i => i.id === toItem.id);
+    if (toIndex === -1) return;
 
-  if (!fromBar || !toBar) return null;
+    const toBar = calculateBarStyle(toItem, startDate, 0, cellWidth);
+    if (!toBar) return;
 
-  const fromX = fromBar.left + fromBar.width;
-  const fromY = fromIndex * rowHeight + rowHeight / 2;
-  const toX = toBar.left;
-  const toY = toIndex * rowHeight + rowHeight / 2;
+    toItem.dependencies.forEach((depId) => {
+      const fromItem = items.find(i => i.id === depId);
+      if (!fromItem) return;
 
-  // Create path with curved corners
-  const midX = (fromX + toX) / 2;
-  const path = `M ${fromX} ${fromY}
-                C ${midX} ${fromY}, ${midX} ${toY}, ${toX} ${toY}`;
+      const fromIndex = items.findIndex(i => i.id === fromItem.id);
+      if (fromIndex === -1) return;
+
+      const fromBar = calculateBarStyle(fromItem, startDate, 0, cellWidth);
+      if (!fromBar) return;
+
+      // Calculate connection points (FS: Finish-to-Start)
+      const fromX = fromBar.left + fromBar.width + 2; // End of predecessor + small gap
+      const fromY = fromIndex * rowHeight + rowHeight / 2;
+      const toX = toBar.left - 2; // Start of successor - small gap
+      const toY = toIndex * rowHeight + rowHeight / 2;
+
+      // Calculate control points for smooth curve
+      const horizontalGap = Math.abs(toX - fromX);
+      const verticalGap = Math.abs(toY - fromY);
+
+      let path: string;
+
+      if (toX > fromX + 20) {
+        // Normal case: successor starts after predecessor ends
+        const controlOffset = Math.min(horizontalGap / 2, 50);
+        path = `M ${fromX} ${fromY} C ${fromX + controlOffset} ${fromY}, ${toX - controlOffset} ${toY}, ${toX} ${toY}`;
+      } else {
+        // Overlap case: need to route around
+        const bendOffset = 15;
+        const controlY = fromY < toY
+          ? Math.max(fromY, toY) + bendOffset
+          : Math.min(fromY, toY) - bendOffset;
+
+        path = `M ${fromX} ${fromY} ` +
+               `L ${fromX + bendOffset} ${fromY} ` +
+               `Q ${fromX + bendOffset} ${controlY}, ${(fromX + toX) / 2} ${controlY} ` +
+               `Q ${toX - bendOffset} ${controlY}, ${toX - bendOffset} ${toY} ` +
+               `L ${toX} ${toY}`;
+      }
+
+      paths.push({ fromId: fromItem.id, toId: toItem.id, path });
+    });
+  });
+
+  if (paths.length === 0) return null;
 
   return (
     <svg
-      className="absolute top-0 left-0 pointer-events-none"
-      style={{ overflow: 'visible' }}
+      className="absolute top-0 left-0 pointer-events-none z-10"
+      style={{
+        overflow: 'visible',
+        width: '100%',
+        height: items.length * rowHeight,
+      }}
     >
       <defs>
         <marker
-          id="arrowhead"
-          markerWidth="6"
-          markerHeight="6"
-          refX="5"
-          refY="3"
+          id="dependency-arrowhead"
+          markerWidth="8"
+          markerHeight="8"
+          refX="7"
+          refY="4"
           orient="auto"
+          markerUnits="strokeWidth"
         >
-          <polygon points="0 0, 6 3, 0 6" fill="#9CA3AF" />
+          <polygon points="0 0, 8 4, 0 8" fill="#6B7280" />
         </marker>
       </defs>
-      <path
-        d={path}
-        fill="none"
-        stroke="#9CA3AF"
-        strokeWidth="1.5"
-        strokeDasharray="4 2"
-        markerEnd="url(#arrowhead)"
-      />
+      {paths.map(({ fromId, toId, path }) => (
+        <path
+          key={`dep-${fromId}-${toId}`}
+          d={path}
+          fill="none"
+          stroke="#6B7280"
+          strokeWidth="1.5"
+          strokeDasharray="5 3"
+          markerEnd="url(#dependency-arrowhead)"
+          opacity="0.7"
+        />
+      ))}
     </svg>
   );
 }
@@ -208,11 +257,26 @@ function TodayLine({ startDate, cellWidth, height }: { startDate: Date; cellWidt
 }
 
 // Main component
-export default function WbsGanttChart({ phases, isLoading = false }: WbsGanttChartProps) {
+export default function WbsGanttChart({ phases, projectId, isLoading = false }: WbsGanttChartProps) {
   const [zoom, setZoom] = useState<ZoomLevel>('day');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set(phases.map(p => p.id)));
   const [showDependencies, setShowDependencies] = useState(true);
+  const [dependencies, setDependencies] = useState<WbsDependency[]>([]);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Load dependencies from API
+  useEffect(() => {
+    if (!projectId) return;
+
+    apiService.getWbsDependencies(projectId)
+      .then((data: WbsDependency[]) => {
+        setDependencies(data || []);
+      })
+      .catch((error: Error) => {
+        console.error('Failed to load dependencies:', error);
+        setDependencies([]);
+      });
+  }, [projectId]);
 
   // Cell widths based on zoom level
   const cellWidth = zoom === 'day' ? 30 : zoom === 'week' ? 60 : 100;
@@ -220,9 +284,19 @@ export default function WbsGanttChart({ phases, isLoading = false }: WbsGanttCha
 
   // Convert phases to flat gantt items
   const ganttItems = useMemo(() => {
+    // Helper function to get predecessors for a given item
+    const getPredecessorIds = (itemId: string): string[] => {
+      return dependencies
+        .filter(dep => dep.successorId === itemId)
+        .map(dep => dep.predecessorId);
+    };
+
     const items: GanttItem[] = [];
 
-    phases.forEach((phase) => {
+    phases.forEach((phase, phaseIdx) => {
+      const isLastPhase = phaseIdx === phases.length - 1;
+      const hasGroups = phase.groups.length > 0;
+
       // Add phase
       items.push({
         id: phase.id,
@@ -235,10 +309,15 @@ export default function WbsGanttChart({ phases, isLoading = false }: WbsGanttCha
         status: phase.status,
         color: 'blue',
         isExpanded: expandedIds.has(phase.id),
+        isLastChild: isLastPhase,
+        hasChildren: hasGroups,
       });
 
       if (expandedIds.has(phase.id)) {
-        phase.groups.forEach((group) => {
+        phase.groups.forEach((group, groupIdx) => {
+          const isLastGroup = groupIdx === phase.groups.length - 1;
+          const hasItems = group.items.length > 0;
+
           // Add group
           items.push({
             id: group.id,
@@ -250,12 +329,17 @@ export default function WbsGanttChart({ phases, isLoading = false }: WbsGanttCha
             endDate: group.plannedEndDate,
             progress: group.calculatedProgress,
             status: group.status,
-            dependencies: group.linkedFeatureIds,
+            dependencies: getPredecessorIds(group.id),
             isExpanded: expandedIds.has(group.id),
+            isLastChild: isLastGroup,
+            hasChildren: hasItems,
           });
 
           if (expandedIds.has(group.id)) {
-            group.items.forEach((item) => {
+            group.items.forEach((item, itemIdx) => {
+              const isLastItem = itemIdx === group.items.length - 1;
+              const hasTasks = item.tasks.length > 0;
+
               // Add item
               items.push({
                 id: item.id,
@@ -268,11 +352,16 @@ export default function WbsGanttChart({ phases, isLoading = false }: WbsGanttCha
                 progress: item.calculatedProgress,
                 status: item.status,
                 assignee: item.assigneeName,
+                dependencies: getPredecessorIds(item.id),
                 isExpanded: expandedIds.has(item.id),
+                isLastChild: isLastItem,
+                hasChildren: hasTasks,
               });
 
               if (expandedIds.has(item.id)) {
-                item.tasks.forEach((task) => {
+                item.tasks.forEach((task, taskIdx) => {
+                  const isLastTask = taskIdx === item.tasks.length - 1;
+
                   // Add task
                   items.push({
                     id: task.id,
@@ -285,6 +374,9 @@ export default function WbsGanttChart({ phases, isLoading = false }: WbsGanttCha
                     progress: task.progress,
                     status: task.status,
                     assignee: task.assigneeName,
+                    dependencies: getPredecessorIds(task.id),
+                    isLastChild: isLastTask,
+                    hasChildren: false,
                   });
                 });
               }
@@ -295,7 +387,7 @@ export default function WbsGanttChart({ phases, isLoading = false }: WbsGanttCha
     });
 
     return items;
-  }, [phases, expandedIds]);
+  }, [phases, expandedIds, dependencies]);
 
   // Calculate date range
   const { dateRange, startDate, endDate, totalDays } = useMemo(() => {
@@ -427,60 +519,120 @@ export default function WbsGanttChart({ phases, isLoading = false }: WbsGanttCha
 
           {/* Task rows */}
           <div className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 300px)' }}>
-            {ganttItems.map((item) => (
-              <div
-                key={item.id}
-                className={`flex items-center gap-2 px-4 border-b border-gray-100 hover:bg-gray-100 cursor-pointer transition-colors ${
-                  item.type === 'phase' ? 'bg-blue-50' : ''
-                }`}
-                style={{
-                  height: rowHeight,
-                  paddingLeft: `${16 + item.level * 16}px`,
-                }}
-                onClick={() => item.type !== 'task' && toggleExpand(item.id)}
-              >
-                {/* Expand icon */}
-                {item.type !== 'task' && (
-                  <span className="w-4 h-4 flex items-center justify-center text-gray-400">
-                    {item.isExpanded ? '▼' : '▶'}
-                  </span>
-                )}
+            {ganttItems.map((item, index) => {
+              // Calculate tree line visibility for each level
+              const showTreeLines: boolean[] = [];
+              for (let lvl = 1; lvl <= item.level; lvl++) {
+                // Find if parent at this level has more siblings below
+                let hasMoreSiblings = false;
+                for (let i = index + 1; i < ganttItems.length; i++) {
+                  const nextItem = ganttItems[i];
+                  if (nextItem.level < lvl) break;
+                  if (nextItem.level === lvl) {
+                    hasMoreSiblings = true;
+                    break;
+                  }
+                }
+                showTreeLines[lvl] = hasMoreSiblings;
+              }
 
-                {/* Type indicator */}
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    item.type === 'phase' ? 'bg-blue-500' :
-                    item.type === 'group' ? 'bg-indigo-500' :
-                    item.type === 'item' ? 'bg-purple-500' :
-                    'bg-cyan-500'
+              return (
+                <div
+                  key={item.id}
+                  className={`relative flex items-center border-b border-gray-100 hover:bg-gray-100 cursor-pointer transition-colors ${
+                    item.type === 'phase' ? 'bg-blue-50' : ''
                   }`}
-                />
-
-                {/* Name */}
-                <span
-                  className={`flex-1 truncate text-sm ${
-                    item.type === 'phase' ? 'font-semibold text-gray-900' :
-                    item.type === 'group' ? 'font-medium text-gray-800' :
-                    'text-gray-700'
-                  }`}
+                  style={{ height: rowHeight }}
+                  onClick={() => item.type !== 'task' && toggleExpand(item.id)}
                 >
-                  {item.name}
-                </span>
+                  {/* Tree lines */}
+                  {item.level > 0 && (
+                    <>
+                      {/* Vertical lines for each level */}
+                      {Array.from({ length: item.level }).map((_, lvl) => (
+                        showTreeLines[lvl + 1] && (
+                          <div
+                            key={`vline-${lvl}`}
+                            className="absolute top-0 bottom-0 w-px bg-gray-200"
+                            style={{ left: 16 + lvl * 16 + 7 }}
+                          />
+                        )
+                      ))}
+                      {/* Horizontal connector line */}
+                      <div
+                        className="absolute w-2 h-px bg-gray-200"
+                        style={{
+                          left: 16 + (item.level - 1) * 16 + 7,
+                          top: rowHeight / 2,
+                        }}
+                      />
+                      {/* Vertical line to this item */}
+                      <div
+                        className="absolute w-px bg-gray-200"
+                        style={{
+                          left: 16 + (item.level - 1) * 16 + 7,
+                          top: 0,
+                          height: item.isLastChild ? rowHeight / 2 : rowHeight,
+                        }}
+                      />
+                    </>
+                  )}
 
-                {/* Assignee */}
-                {item.assignee && (
-                  <span className="text-xs text-gray-400 flex items-center gap-1">
-                    <User size={10} />
-                    {item.assignee.slice(0, 3)}
-                  </span>
-                )}
+                  {/* Content with padding */}
+                  <div
+                    className="flex items-center gap-2 flex-1"
+                    style={{ paddingLeft: `${16 + item.level * 16}px`, paddingRight: 16 }}
+                  >
+                    {/* Expand icon */}
+                    {item.type !== 'task' ? (
+                      <button type="button" className="w-4 h-4 flex items-center justify-center text-gray-400 hover:text-gray-600">
+                        {item.isExpanded ? (
+                          <ChevronDown size={14} />
+                        ) : (
+                          <ChevronRight size={14} />
+                        )}
+                      </button>
+                    ) : (
+                      <span className="w-4" />
+                    )}
 
-                {/* Overdue indicator */}
-                {item.endDate && isOverdue(item.endDate) && item.status !== 'COMPLETED' && (
-                  <AlertTriangle size={12} className="text-red-500" />
-                )}
-              </div>
-            ))}
+                    {/* Type indicator */}
+                    <span
+                      className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                        item.type === 'phase' ? 'bg-blue-500' :
+                        item.type === 'group' ? 'bg-indigo-500' :
+                        item.type === 'item' ? 'bg-purple-500' :
+                        'bg-cyan-500'
+                      }`}
+                    />
+
+                    {/* Name */}
+                    <span
+                      className={`flex-1 truncate text-sm ${
+                        item.type === 'phase' ? 'font-semibold text-gray-900' :
+                        item.type === 'group' ? 'font-medium text-gray-800' :
+                        'text-gray-700'
+                      }`}
+                    >
+                      {item.name}
+                    </span>
+
+                    {/* Assignee */}
+                    {item.assignee && (
+                      <span className="text-xs text-gray-400 flex items-center gap-1">
+                        <User size={10} />
+                        {item.assignee.slice(0, 3)}
+                      </span>
+                    )}
+
+                    {/* Overdue indicator */}
+                    {item.endDate && isOverdue(item.endDate) && item.status !== 'COMPLETED' && (
+                      <AlertTriangle size={12} className="text-red-500" />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -526,22 +678,13 @@ export default function WbsGanttChart({ phases, isLoading = false }: WbsGanttCha
             />
 
             {/* Dependency lines */}
-            {showDependencies && ganttItems.map((item) =>
-              item.dependencies?.map((depId) => {
-                const depItem = ganttItems.find(i => i.id === depId);
-                if (!depItem) return null;
-                return (
-                  <DependencyLine
-                    key={`${item.id}-${depId}`}
-                    fromItem={depItem}
-                    toItem={item}
-                    items={ganttItems}
-                    startDate={startDate}
-                    cellWidth={cellWidth}
-                    rowHeight={rowHeight}
-                  />
-                );
-              })
+            {showDependencies && (
+              <DependencyLines
+                items={ganttItems}
+                startDate={startDate}
+                cellWidth={cellWidth}
+                rowHeight={rowHeight}
+              />
             )}
 
             {/* Task bars */}

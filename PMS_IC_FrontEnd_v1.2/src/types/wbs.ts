@@ -84,6 +84,30 @@ export interface WbsTask {
   updatedAt: string;
 }
 
+// WBS Dependency (Predecessor/Successor relationship)
+export type WbsItemType = 'GROUP' | 'ITEM' | 'TASK';
+export type DependencyType = 'FS' | 'SS' | 'FF' | 'SF'; // Finish-to-Start, Start-to-Start, etc.
+
+export interface WbsDependency {
+  id: string;
+  predecessorType: WbsItemType;
+  predecessorId: string;
+  successorType: WbsItemType;
+  successorId: string;
+  dependencyType: DependencyType;
+  lagDays: number;
+  projectId: string;
+}
+
+export interface CreateWbsDependencyRequest {
+  predecessorType: WbsItemType;
+  predecessorId: string;
+  successorType: WbsItemType;
+  successorId: string;
+  dependencyType?: DependencyType;
+  lagDays?: number;
+}
+
 // Form data types
 export interface WbsGroupFormData {
   name: string;

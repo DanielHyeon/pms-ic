@@ -31,22 +31,22 @@ public interface ReportTemplateRepository extends JpaRepository<ReportTemplate, 
     List<ReportTemplate> findByScopeAndReportTypeAndIsActiveTrueOrderByNameAsc(
             TemplateScope scope, ReportType reportType);
 
-    // Find default template for role
-    @Query("SELECT t FROM ReportTemplate t WHERE t.isActive = true " +
-           "AND t.reportType = :reportType " +
-           "AND :role = ANY(t.targetRoles) " +
-           "AND t.isDefault = true")
+    // Find default template for role (native query for PostgreSQL array)
+    @Query(value = "SELECT * FROM report.report_templates t WHERE t.is_active = true " +
+           "AND t.report_type = :reportType " +
+           "AND :role = ANY(t.target_roles) " +
+           "AND t.is_default = true", nativeQuery = true)
     Optional<ReportTemplate> findDefaultTemplateForRole(
-            @Param("reportType") ReportType reportType,
+            @Param("reportType") String reportType,
             @Param("role") String role);
 
-    // Find templates for role
-    @Query("SELECT t FROM ReportTemplate t WHERE t.isActive = true " +
-           "AND t.reportType = :reportType " +
-           "AND :role = ANY(t.targetRoles) " +
-           "ORDER BY t.isDefault DESC, t.name ASC")
+    // Find templates for role (native query for PostgreSQL array)
+    @Query(value = "SELECT * FROM report.report_templates t WHERE t.is_active = true " +
+           "AND t.report_type = :reportType " +
+           "AND :role = ANY(t.target_roles) " +
+           "ORDER BY t.is_default DESC, t.name ASC", nativeQuery = true)
     List<ReportTemplate> findTemplatesForRole(
-            @Param("reportType") ReportType reportType,
+            @Param("reportType") String reportType,
             @Param("role") String role);
 
     // Find by creator

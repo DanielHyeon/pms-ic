@@ -1915,6 +1915,33 @@ export class ApiService {
     }, { message: 'WBS Task deleted' });
   }
 
+  // ========== WBS Dependency API ==========
+  async getWbsDependencies(projectId: string) {
+    const response = await this.fetchWithFallback(`/projects/${projectId}/wbs/dependencies`, {}, { data: [] });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async createWbsDependency(projectId: string, data: {
+    predecessorType: string;
+    predecessorId: string;
+    successorType: string;
+    successorId: string;
+    dependencyType?: string;
+    lagDays?: number;
+  }) {
+    const response = await this.fetchWithFallback(`/projects/${projectId}/wbs/dependencies`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }, { data: { ...data, id: `wbs-dep-${Date.now()}`, projectId } });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async deleteWbsDependency(projectId: string, dependencyId: string) {
+    return this.fetchWithFallback(`/projects/${projectId}/wbs/dependencies/${dependencyId}`, {
+      method: 'DELETE',
+    }, { message: 'WBS Dependency deleted' });
+  }
+
   // ========== Feature API ==========
   async getFeatures(epicId: string) {
     const response = await this.fetchWithFallback(`/epics/${epicId}/features`, {}, { data: [] });
@@ -2209,48 +2236,57 @@ export class ApiService {
    * Download requirements Excel template
    */
   async downloadRequirementTemplate(projectId: string): Promise<Blob | null> {
-    if (this.useMockData) {
+        if (this.useMockData) {
       return null;
     }
-
     const headers: HeadersInit = {
       ...(this.token && { Authorization: `Bearer ${this.token}` }),
     };
 
-    const response = await fetch(`${API_BASE_URL}/projects/${projectId}/requirements/excel/template`, {
-      method: 'GET',
-      headers,
-    });
+    try {
+      const response = await fetch(`${API_BASE_URL}/projects/${projectId}/requirements/excel/template`, {
+        method: 'GET',
+        headers,
+      });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Download template failed:', response.status, errorText);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return response.blob();
+    } catch (error) {
+      console.error('Failed to download requirement template:', error);
+      throw error;
     }
-
-    return response.blob();
   }
 
   /**
    * Export requirements to Excel
    */
   async exportRequirementsToExcel(projectId: string): Promise<Blob | null> {
-    if (this.useMockData) {
-      return null;
-    }
-
     const headers: HeadersInit = {
       ...(this.token && { Authorization: `Bearer ${this.token}` }),
     };
 
-    const response = await fetch(`${API_BASE_URL}/projects/${projectId}/requirements/excel/export`, {
-      method: 'GET',
-      headers,
-    });
+    try {
+      const response = await fetch(`${API_BASE_URL}/projects/${projectId}/requirements/excel/export`, {
+        method: 'GET',
+        headers,
+      });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Export requirements failed:', response.status, errorText);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return response.blob();
+    } catch (error) {
+      console.error('Failed to export requirements to Excel:', error);
+      throw error;
     }
-
-    return response.blob();
   }
 
   /**
@@ -2283,72 +2319,81 @@ export class ApiService {
    * Download WBS Excel template
    */
   async downloadWbsTemplate(projectId: string): Promise<Blob | null> {
-    if (this.useMockData) {
-      return null;
-    }
-
     const headers: HeadersInit = {
       ...(this.token && { Authorization: `Bearer ${this.token}` }),
     };
 
-    const response = await fetch(`${API_BASE_URL}/projects/${projectId}/wbs/excel/template`, {
-      method: 'GET',
-      headers,
-    });
+    try {
+      const response = await fetch(`${API_BASE_URL}/projects/${projectId}/wbs/excel/template`, {
+        method: 'GET',
+        headers,
+      });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Download WBS template failed:', response.status, errorText);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return response.blob();
+    } catch (error) {
+      console.error('Failed to download WBS template:', error);
+      throw error;
     }
-
-    return response.blob();
   }
 
   /**
    * Export WBS to Excel
    */
   async exportWbsToExcel(projectId: string): Promise<Blob | null> {
-    if (this.useMockData) {
-      return null;
-    }
-
     const headers: HeadersInit = {
       ...(this.token && { Authorization: `Bearer ${this.token}` }),
     };
 
-    const response = await fetch(`${API_BASE_URL}/projects/${projectId}/wbs/excel/export`, {
-      method: 'GET',
-      headers,
-    });
+    try {
+      const response = await fetch(`${API_BASE_URL}/projects/${projectId}/wbs/excel/export`, {
+        method: 'GET',
+        headers,
+      });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Export WBS failed:', response.status, errorText);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return response.blob();
+    } catch (error) {
+      console.error('Failed to export WBS to Excel:', error);
+      throw error;
     }
-
-    return response.blob();
   }
 
   /**
    * Export WBS by phase to Excel
    */
   async exportWbsByPhaseToExcel(phaseId: string): Promise<Blob | null> {
-    if (this.useMockData) {
-      return null;
-    }
-
     const headers: HeadersInit = {
       ...(this.token && { Authorization: `Bearer ${this.token}` }),
     };
 
-    const response = await fetch(`${API_BASE_URL}/phases/${phaseId}/wbs/excel/export`, {
-      method: 'GET',
-      headers,
-    });
+    try {
+      const response = await fetch(`${API_BASE_URL}/phases/${phaseId}/wbs/excel/export`, {
+        method: 'GET',
+        headers,
+      });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Export WBS by phase failed:', response.status, errorText);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return response.blob();
+    } catch (error) {
+      console.error('Failed to export WBS by phase to Excel:', error);
+      throw error;
     }
-
-    return response.blob();
   }
 
   /**

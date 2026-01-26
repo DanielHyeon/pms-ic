@@ -60,7 +60,7 @@ public class ReportTemplateService {
      * Get templates for a specific role
      */
     public List<ReportTemplateDto> getTemplatesForRole(String role, ReportType reportType) {
-        return templateRepository.findTemplatesForRole(reportType, role)
+        return templateRepository.findTemplatesForRole(reportType.name(), role)
                 .stream()
                 .map(ReportTemplateDto::from)
                 .collect(Collectors.toList());

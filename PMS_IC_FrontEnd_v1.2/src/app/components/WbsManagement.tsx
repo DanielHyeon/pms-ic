@@ -245,6 +245,7 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
       {viewMode === 'gantt' && (
         <WbsGanttChart
           phases={phasesWithWbs}
+          projectId={projectId}
           isLoading={wbsLoading}
         />
       )}

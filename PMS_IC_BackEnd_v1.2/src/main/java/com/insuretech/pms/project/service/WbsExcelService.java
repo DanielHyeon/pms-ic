@@ -34,9 +34,9 @@ public class WbsExcelService {
 
     // Column headers - using Phase ID since Phase entity doesn't have a code field
     private static final String[] HEADERS = {
-        "Level", "Phase ID", "Group Code", "Item Code", "Task Code",
-        "Name", "Description", "Status", "Weight", "Order",
-        "Planned Start", "Planned End", "Estimated Hours", "Assignee ID"
+        "레벨", "단계 ID", "그룹 코드", "항목 코드", "태스크 코드",
+        "이름", "설명", "상태", "가중치", "순서",
+        "계획 시작일", "계획 종료일", "예상 시간", "담당자 ID"
     };
 
     // Column indices
@@ -88,8 +88,8 @@ public class WbsExcelService {
             createCell(groupRow, COL_GROUP_CODE, "1.1", dataStyle);
             createCell(groupRow, COL_ITEM_CODE, "", dataStyle);
             createCell(groupRow, COL_TASK_CODE, "", dataStyle);
-            createCell(groupRow, COL_NAME, "Sample Group: Requirements Analysis", dataStyle);
-            createCell(groupRow, COL_DESCRIPTION, "Analyze and document requirements", dataStyle);
+            createCell(groupRow, COL_NAME, "예시 그룹: 요구사항 분석", dataStyle);
+            createCell(groupRow, COL_DESCRIPTION, "요구사항 분석 및 문서화", dataStyle);
             createCell(groupRow, COL_STATUS, "NOT_STARTED", dataStyle);
             createCell(groupRow, COL_WEIGHT, 100, dataStyle);
             createCell(groupRow, COL_ORDER, 1, dataStyle);
@@ -105,8 +105,8 @@ public class WbsExcelService {
             createCell(itemRow, COL_GROUP_CODE, "1.1", dataStyle);
             createCell(itemRow, COL_ITEM_CODE, "1.1.1", dataStyle);
             createCell(itemRow, COL_TASK_CODE, "", dataStyle);
-            createCell(itemRow, COL_NAME, "Sample Item: Stakeholder Interviews", dataStyle);
-            createCell(itemRow, COL_DESCRIPTION, "Interview key stakeholders", dataStyle);
+            createCell(itemRow, COL_NAME, "예시 항목: 이해관계자 인터뷰", dataStyle);
+            createCell(itemRow, COL_DESCRIPTION, "주요 이해관계자 인터뷰 수행", dataStyle);
             createCell(itemRow, COL_STATUS, "NOT_STARTED", dataStyle);
             createCell(itemRow, COL_WEIGHT, 100, dataStyle);
             createCell(itemRow, COL_ORDER, 1, dataStyle);
@@ -122,8 +122,8 @@ public class WbsExcelService {
             createCell(taskRow, COL_GROUP_CODE, "1.1", dataStyle);
             createCell(taskRow, COL_ITEM_CODE, "1.1.1", dataStyle);
             createCell(taskRow, COL_TASK_CODE, "1.1.1.1", dataStyle);
-            createCell(taskRow, COL_NAME, "Sample Task: Prepare questionnaire", dataStyle);
-            createCell(taskRow, COL_DESCRIPTION, "Create interview questions", dataStyle);
+            createCell(taskRow, COL_NAME, "예시 태스크: 질문지 작성", dataStyle);
+            createCell(taskRow, COL_DESCRIPTION, "인터뷰 질문 작성", dataStyle);
             createCell(taskRow, COL_STATUS, "NOT_STARTED", dataStyle);
             createCell(taskRow, COL_WEIGHT, 100, dataStyle);
             createCell(taskRow, COL_ORDER, 1, dataStyle);
@@ -338,46 +338,46 @@ public class WbsExcelService {
     // =============================================
 
     private void createInstructionsSheet(XSSFWorkbook workbook, List<Phase> phases) {
-        Sheet sheet = workbook.createSheet("Instructions");
+        Sheet sheet = workbook.createSheet("안내");
         CellStyle boldStyle = workbook.createCellStyle();
         Font boldFont = workbook.createFont();
         boldFont.setBold(true);
         boldStyle.setFont(boldFont);
 
         int row = 0;
-        sheet.createRow(row++).createCell(0).setCellValue("WBS Import/Export Instructions");
+        sheet.createRow(row++).createCell(0).setCellValue("WBS 가져오기/내보내기 안내");
         sheet.getRow(row - 1).getCell(0).setCellStyle(boldStyle);
         row++;
 
-        sheet.createRow(row++).createCell(0).setCellValue("Hierarchy: Phase -> GROUP -> ITEM -> TASK");
+        sheet.createRow(row++).createCell(0).setCellValue("계층 구조: 단계(Phase) -> 그룹(GROUP) -> 항목(ITEM) -> 태스크(TASK)");
         row++;
 
-        sheet.createRow(row++).createCell(0).setCellValue("Available Phases:");
+        sheet.createRow(row++).createCell(0).setCellValue("사용 가능한 단계:");
         sheet.getRow(row - 1).getCell(0).setCellStyle(boldStyle);
         for (Phase phase : phases) {
             Row r = sheet.createRow(row++);
-            r.createCell(0).setCellValue("  - ID: " + phase.getId() + ", Name: " + phase.getName());
+            r.createCell(0).setCellValue("  - ID: " + phase.getId() + ", 이름: " + phase.getName());
         }
         row++;
 
-        sheet.createRow(row++).createCell(0).setCellValue("Level Column:");
+        sheet.createRow(row++).createCell(0).setCellValue("레벨 컬럼:");
         sheet.getRow(row - 1).getCell(0).setCellStyle(boldStyle);
-        sheet.createRow(row++).createCell(0).setCellValue("  GROUP - WBS Group (second level)");
-        sheet.createRow(row++).createCell(0).setCellValue("  ITEM - WBS Item/Work Package (third level)");
-        sheet.createRow(row++).createCell(0).setCellValue("  TASK - WBS Task/Activity (fourth level)");
+        sheet.createRow(row++).createCell(0).setCellValue("  GROUP - WBS 그룹 (2단계)");
+        sheet.createRow(row++).createCell(0).setCellValue("  ITEM - WBS 항목/작업 패키지 (3단계)");
+        sheet.createRow(row++).createCell(0).setCellValue("  TASK - WBS 태스크/작업 (4단계)");
         row++;
 
-        sheet.createRow(row++).createCell(0).setCellValue("Status Values:");
+        sheet.createRow(row++).createCell(0).setCellValue("상태 값:");
         sheet.getRow(row - 1).getCell(0).setCellStyle(boldStyle);
-        sheet.createRow(row++).createCell(0).setCellValue("  NOT_STARTED, IN_PROGRESS, COMPLETED, ON_HOLD, CANCELLED");
+        sheet.createRow(row++).createCell(0).setCellValue("  NOT_STARTED(미시작), IN_PROGRESS(진행중), COMPLETED(완료), ON_HOLD(보류), CANCELLED(취소)");
         row++;
 
-        sheet.createRow(row++).createCell(0).setCellValue("Import Rules:");
+        sheet.createRow(row++).createCell(0).setCellValue("가져오기 규칙:");
         sheet.getRow(row - 1).getCell(0).setCellStyle(boldStyle);
-        sheet.createRow(row++).createCell(0).setCellValue("  - If Phase ID + Group Code exists, GROUP will be updated");
-        sheet.createRow(row++).createCell(0).setCellValue("  - If Group Code + Item Code exists, ITEM will be updated");
-        sheet.createRow(row++).createCell(0).setCellValue("  - If Item Code + Task Code exists, TASK will be updated");
-        sheet.createRow(row++).createCell(0).setCellValue("  - Otherwise, new entries will be created");
+        sheet.createRow(row++).createCell(0).setCellValue("  - 단계 ID + 그룹 코드가 존재하면 그룹이 업데이트됩니다");
+        sheet.createRow(row++).createCell(0).setCellValue("  - 그룹 코드 + 항목 코드가 존재하면 항목이 업데이트됩니다");
+        sheet.createRow(row++).createCell(0).setCellValue("  - 항목 코드 + 태스크 코드가 존재하면 태스크가 업데이트됩니다");
+        sheet.createRow(row++).createCell(0).setCellValue("  - 해당하지 않으면 신규 항목이 생성됩니다");
 
         sheet.setColumnWidth(0, 20000);
     }

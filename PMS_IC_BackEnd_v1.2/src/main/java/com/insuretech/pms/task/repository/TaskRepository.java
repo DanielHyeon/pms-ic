@@ -33,9 +33,9 @@ public interface TaskRepository extends JpaRepository<Task, String> {
     long countByColumn_ProjectIdAndStatus(String projectId, Task.TaskStatus status);
 
     // Multi-project counting (for portfolio dashboard)
-    @Query("SELECT COUNT(t) FROM Task t WHERE t.column.project.id IN :projectIds")
+    @Query("SELECT COUNT(t) FROM Task t WHERE t.column.projectId IN :projectIds")
     long countByProjectIdIn(@Param("projectIds") List<String> projectIds);
 
-    @Query("SELECT COUNT(t) FROM Task t WHERE t.column.project.id IN :projectIds AND t.status = :status")
+    @Query("SELECT COUNT(t) FROM Task t WHERE t.column.projectId IN :projectIds AND t.status = :status")
     long countByProjectIdInAndStatus(@Param("projectIds") List<String> projectIds, @Param("status") Task.TaskStatus status);
 }

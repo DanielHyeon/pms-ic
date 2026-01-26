@@ -33,8 +33,8 @@ public class RequirementExcelService {
 
     // Column headers for the Excel template
     private static final String[] HEADERS = {
-        "Code", "Title", "Description", "Category", "Priority", "Status",
-        "Acceptance Criteria", "Assignee ID", "Due Date", "Estimated Effort (hours)", "Story Points"
+        "코드", "제목", "설명", "유형", "우선순위", "상태",
+        "인수 기준", "담당자 ID", "마감일", "예상 공수(시간)", "스토리 포인트"
     };
 
     // Column indices
@@ -82,12 +82,12 @@ public class RequirementExcelService {
             Row sampleRow = sheet.createRow(1);
 
             createCell(sampleRow, COL_CODE, "", dataStyle);
-            createCell(sampleRow, COL_TITLE, "Sample: User Authentication Feature", dataStyle);
-            createCell(sampleRow, COL_DESCRIPTION, "Implement OAuth2 based authentication", dataStyle);
+            createCell(sampleRow, COL_TITLE, "예시: 사용자 인증 기능", dataStyle);
+            createCell(sampleRow, COL_DESCRIPTION, "OAuth2 기반 인증 구현", dataStyle);
             createCell(sampleRow, COL_CATEGORY, "FUNCTIONAL", dataStyle);
             createCell(sampleRow, COL_PRIORITY, "HIGH", dataStyle);
             createCell(sampleRow, COL_STATUS, "IDENTIFIED", dataStyle);
-            createCell(sampleRow, COL_ACCEPTANCE_CRITERIA, "User can login with Google/GitHub", dataStyle);
+            createCell(sampleRow, COL_ACCEPTANCE_CRITERIA, "Google/GitHub으로 로그인 가능", dataStyle);
             createCell(sampleRow, COL_ASSIGNEE_ID, "", dataStyle);
 
             Cell dateCell = sampleRow.createCell(COL_DUE_DATE);
