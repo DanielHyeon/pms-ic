@@ -1942,6 +1942,33 @@ export class ApiService {
     }, { message: 'WBS Dependency deleted' });
   }
 
+  // ========== Critical Path API ==========
+  async getCriticalPath(projectId: string) {
+    const response = await this.fetchWithFallback(`/projects/${projectId}/wbs/critical-path`, {}, {
+      data: {
+        criticalPath: [],
+        itemsWithFloat: {},
+        projectDuration: 0,
+        calculatedAt: new Date().toISOString(),
+      }
+    });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async refreshCriticalPath(projectId: string) {
+    const response = await this.fetchWithFallback(`/projects/${projectId}/wbs/critical-path/refresh`, {
+      method: 'POST',
+    }, {
+      data: {
+        criticalPath: [],
+        itemsWithFloat: {},
+        projectDuration: 0,
+        calculatedAt: new Date().toISOString(),
+      }
+    });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
   // ========== Feature API ==========
   async getFeatures(epicId: string) {
     const response = await this.fetchWithFallback(`/epics/${epicId}/features`, {}, { data: [] });

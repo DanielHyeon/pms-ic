@@ -307,3 +307,23 @@ export const getDaysRemaining = (endDate?: string): number | null => {
   const today = new Date();
   return Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 };
+
+// ========== Critical Path Types ==========
+export interface ItemFloatData {
+  name: string;
+  duration: number;
+  earlyStart: number;
+  earlyFinish: number;
+  lateStart: number;
+  lateFinish: number;
+  totalFloat: number;
+  freeFloat: number;
+  isCritical: boolean;
+}
+
+export interface CriticalPathResponse {
+  criticalPath: string[];
+  itemsWithFloat: Record<string, ItemFloatData>;
+  projectDuration: number;
+  calculatedAt: string;
+}

@@ -124,6 +124,10 @@ from .analyze_skills import (
     AnalyzeDependencySkill,
     AnalyzeSentimentSkill,
 )
+from .critical_path_skill import (
+    CriticalPathSkill,
+    CriticalPathAnalyzer,
+)
 from .generate_skills import (
     GenerateSummarySkill,
     GenerateReportSkill,
@@ -148,6 +152,9 @@ __all__ = [
     "AnalyzeRiskSkill",
     "AnalyzeDependencySkill",
     "AnalyzeSentimentSkill",
+    # Critical Path
+    "CriticalPathSkill",
+    "CriticalPathAnalyzer",
     # Generate
     "GenerateSummarySkill",
     "GenerateReportSkill",

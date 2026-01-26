@@ -19,6 +19,8 @@ import {
   WbsItemWithTasks,
   WbsTask,
   WbsDependency,
+  CriticalPathResponse,
+  ItemFloatData,
   getWbsStatusColor,
   isOverdue,
 } from '../../../types/wbs';
@@ -132,14 +134,16 @@ function DependencyLines({
   startDate,
   cellWidth,
   rowHeight,
+  criticalPath = [],
 }: {
   items: GanttItem[];
   startDate: Date;
   cellWidth: number;
   rowHeight: number;
+  criticalPath?: string[];
 }) {
   // Collect all dependency paths
-  const paths: { fromId: string; toId: string; path: string }[] = [];
+  const paths: { fromId: string; toId: string; path: string; isCritical: boolean }[] = [];
 
   items.forEach((toItem) => {
     if (!toItem.dependencies || toItem.dependencies.length === 0) return;
@@ -159,6 +163,9 @@ function DependencyLines({
 
       const fromBar = calculateBarStyle(fromItem, startDate, 0, cellWidth);
       if (!fromBar) return;
+
+      // Check if both items are on critical path
+      const isCritical = criticalPath.includes(fromItem.id) && criticalPath.includes(toItem.id);
 
       // Calculate connection points (FS: Finish-to-Start)
       const fromX = fromBar.left + fromBar.width + 2; // End of predecessor + small gap
@@ -190,7 +197,7 @@ function DependencyLines({
                `L ${toX} ${toY}`;
       }
 
-      paths.push({ fromId: fromItem.id, toId: toItem.id, path });
+      paths.push({ fromId: fromItem.id, toId: toItem.id, path, isCritical });
     });
   });
 
@@ -217,17 +224,28 @@ function DependencyLines({
         >
           <polygon points="0 0, 8 4, 0 8" fill="#6B7280" />
         </marker>
+        <marker
+          id="critical-arrowhead"
+          markerWidth="8"
+          markerHeight="8"
+          refX="7"
+          refY="4"
+          orient="auto"
+          markerUnits="strokeWidth"
+        >
+          <polygon points="0 0, 8 4, 0 8" fill="#DC2626" />
+        </marker>
       </defs>
-      {paths.map(({ fromId, toId, path }) => (
+      {paths.map(({ fromId, toId, path, isCritical }) => (
         <path
           key={`dep-${fromId}-${toId}`}
           d={path}
           fill="none"
-          stroke="#6B7280"
-          strokeWidth="1.5"
-          strokeDasharray="5 3"
-          markerEnd="url(#dependency-arrowhead)"
-          opacity="0.7"
+          stroke={isCritical ? "#DC2626" : "#6B7280"}
+          strokeWidth={isCritical ? "2.5" : "1.5"}
+          strokeDasharray={isCritical ? "0" : "5 3"}
+          markerEnd={isCritical ? "url(#critical-arrowhead)" : "url(#dependency-arrowhead)"}
+          opacity={isCritical ? "1" : "0.7"}
         />
       ))}
     </svg>
@@ -261,7 +279,10 @@ export default function WbsGanttChart({ phases, projectId, isLoading = false }: 
   const [zoom, setZoom] = useState<ZoomLevel>('day');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set(phases.map(p => p.id)));
   const [showDependencies, setShowDependencies] = useState(true);
+  const [showCriticalPath, setShowCriticalPath] = useState(false);
   const [dependencies, setDependencies] = useState<WbsDependency[]>([]);
+  const [criticalPathData, setCriticalPathData] = useState<CriticalPathResponse | null>(null);
+  const [isLoadingCriticalPath, setIsLoadingCriticalPath] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Load dependencies from API
@@ -277,6 +298,34 @@ export default function WbsGanttChart({ phases, projectId, isLoading = false }: 
         setDependencies([]);
       });
   }, [projectId]);
+
+  // Load critical path data when toggle is enabled
+  useEffect(() => {
+    if (!projectId || !showCriticalPath || criticalPathData) return;
+
+    setIsLoadingCriticalPath(true);
+    apiService.getCriticalPath(projectId)
+      .then((data: CriticalPathResponse) => {
+        setCriticalPathData(data);
+      })
+      .catch((error: Error) => {
+        console.error('Failed to load critical path:', error);
+        setCriticalPathData(null);
+      })
+      .finally(() => {
+        setIsLoadingCriticalPath(false);
+      });
+  }, [projectId, showCriticalPath, criticalPathData]);
+
+  // Helper to check if item is on critical path
+  const isOnCriticalPath = (itemId: string): boolean => {
+    return showCriticalPath && criticalPathData?.criticalPath?.includes(itemId) || false;
+  };
+
+  // Helper to get float data for an item
+  const getFloatData = (itemId: string): ItemFloatData | undefined => {
+    return showCriticalPath ? criticalPathData?.itemsWithFloat?.[itemId] : undefined;
+  };
 
   // Cell widths based on zoom level
   const cellWidth = zoom === 'day' ? 30 : zoom === 'week' ? 60 : 100;
@@ -498,6 +547,27 @@ export default function WbsGanttChart({ phases, projectId, isLoading = false }: 
             의존성 표시
           </label>
 
+          <label className="flex items-center gap-2 text-sm text-gray-600">
+            <input
+              type="checkbox"
+              checked={showCriticalPath}
+              onChange={(e) => setShowCriticalPath(e.target.checked)}
+              className="rounded border-gray-300"
+            />
+            <span className={showCriticalPath ? 'text-red-600 font-medium' : ''}>
+              크리티컬 패스
+            </span>
+            {isLoadingCriticalPath && (
+              <div className="animate-spin w-3 h-3 border-2 border-red-500 border-t-transparent rounded-full" />
+            )}
+          </label>
+
+          {showCriticalPath && criticalPathData && criticalPathData.projectDuration > 0 && (
+            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+              총 기간: {criticalPathData.projectDuration}일
+            </span>
+          )}
+
           <button
             type="button"
             onClick={scrollToToday}
@@ -684,6 +754,7 @@ export default function WbsGanttChart({ phases, projectId, isLoading = false }: 
                 startDate={startDate}
                 cellWidth={cellWidth}
                 rowHeight={rowHeight}
+                criticalPath={showCriticalPath ? criticalPathData?.criticalPath : []}
               />
             )}
 
@@ -692,10 +763,13 @@ export default function WbsGanttChart({ phases, projectId, isLoading = false }: 
               const barStyle = calculateBarStyle(item, startDate, totalDays, cellWidth);
               if (!barStyle) return null;
 
+              const isCritical = isOnCriticalPath(item.id);
+              const floatData = getFloatData(item.id);
+
               return (
                 <div
                   key={item.id}
-                  className="absolute flex items-center"
+                  className="absolute flex items-center group"
                   style={{
                     top: index * rowHeight + 4,
                     left: barStyle.left,
@@ -705,7 +779,11 @@ export default function WbsGanttChart({ phases, projectId, isLoading = false }: 
                 >
                   {/* Background bar */}
                   <div
-                    className={`absolute inset-0 rounded-md ${getBarColor(item)} opacity-90`}
+                    className={`absolute inset-0 rounded-md ${
+                      isCritical
+                        ? 'bg-gradient-to-r from-red-600 to-red-400 ring-2 ring-red-500 ring-offset-1'
+                        : getBarColor(item)
+                    } opacity-90`}
                   />
 
                   {/* Progress fill */}
@@ -724,6 +802,30 @@ export default function WbsGanttChart({ phases, projectId, isLoading = false }: 
                   {/* Milestone marker for completed items */}
                   {item.status === 'COMPLETED' && (
                     <div className="absolute -right-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-green-500 rounded-full border-2 border-white" />
+                  )}
+
+                  {/* Float indicator (slack time) */}
+                  {showCriticalPath && floatData && floatData.totalFloat > 0 && (
+                    <div
+                      className="absolute top-1/2 -translate-y-1/2 h-2 bg-gray-300 opacity-50 rounded"
+                      style={{
+                        left: barStyle.width + 2,
+                        width: Math.min(floatData.totalFloat * cellWidth, 100),
+                      }}
+                      title={`여유 시간: ${floatData.totalFloat}일`}
+                    />
+                  )}
+
+                  {/* Tooltip on hover */}
+                  {showCriticalPath && floatData && (
+                    <div className="absolute left-0 -top-16 bg-gray-900 text-white text-xs p-2 rounded shadow-lg z-50 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                      <div className="font-medium">{item.name}</div>
+                      <div>ES: {floatData.earlyStart}일 | EF: {floatData.earlyFinish}일</div>
+                      <div>LS: {floatData.lateStart}일 | LF: {floatData.lateFinish}일</div>
+                      <div className={floatData.totalFloat === 0 ? 'text-red-400' : ''}>
+                        여유: {floatData.totalFloat}일 {floatData.isCritical && '(크리티컬)'}
+                      </div>
+                    </div>
                   )}
                 </div>
               );
@@ -758,6 +860,18 @@ export default function WbsGanttChart({ phases, projectId, isLoading = false }: 
           <div className="w-0.5 h-3 bg-red-500" />
           <span className="text-xs text-gray-600">오늘</span>
         </div>
+        {showCriticalPath && (
+          <>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded bg-red-500 ring-2 ring-red-300" />
+              <span className="text-xs text-red-600 font-medium">크리티컬 패스</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-2 bg-gray-300 rounded opacity-50" />
+              <span className="text-xs text-gray-600">여유 시간</span>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

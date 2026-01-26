@@ -16,6 +16,7 @@ monitoring_bp = Blueprint('monitoring', __name__)
 rag_admin_bp = Blueprint('rag_admin', __name__)
 report_bp = Blueprint('report', __name__)
 db_admin_bp = Blueprint('db_admin', __name__)
+wbs_bp = Blueprint('wbs', __name__)
 
 
 def register_blueprints(app):
@@ -29,6 +30,7 @@ def register_blueprints(app):
     from . import rag_admin_routes
     from . import report_routes
     from . import db_admin_routes
+    from . import wbs_routes
 
     app.register_blueprint(chat_bp)
     app.register_blueprint(document_bp)
@@ -39,3 +41,4 @@ def register_blueprints(app):
     app.register_blueprint(rag_admin_bp)
     app.register_blueprint(report_bp)
     app.register_blueprint(db_admin_bp)
+    app.register_blueprint(wbs_bp)
