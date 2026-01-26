@@ -264,10 +264,10 @@ export const menuConfig: MenuConfig = {
       ],
     },
 
-    // Zone 9: System Settings
+    // Zone 9: Settings
     {
       id: 'system-settings',
-      label: '시스템 설정',
+      label: '설정',
       icon: Settings,
       zone: 'ADMIN',
       defaultExpanded: false,
