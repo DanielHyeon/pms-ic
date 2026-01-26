@@ -16,6 +16,12 @@ import { useAllPhases } from '../../hooks/api/usePhases';
 import { useTemplateSets, useApplyTemplateToPhase } from '../../hooks/api/useTemplates';
 import { useStories } from '../../hooks/api/useStories';
 import { useProjectWbs } from '../../hooks/api/useWbs';
+import {
+  useDownloadWbsTemplate,
+  useExportWbs,
+  useImportWbs,
+} from '../../hooks/api/useExcelImportExport';
+import { ExcelImportExportButtons } from './common/ExcelImportExportButtons';
 import { getRolePermissions } from '../../utils/rolePermissions';
 import { TemplateSet } from '../../types/templates';
 import { PhaseWithWbs } from '../../types/wbs';
@@ -44,6 +50,11 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
   const { data: templates = [] } = useTemplateSets();
   const { data: stories = [] } = useStories(projectId);
   const applyTemplateMutation = useApplyTemplateToPhase();
+
+  // Excel import/export hooks
+  const downloadTemplateMutation = useDownloadWbsTemplate();
+  const exportMutation = useExportWbs();
+  const importMutation = useImportWbs();
 
   // Role permissions
   const permissions = getRolePermissions(userRole);
@@ -132,8 +143,21 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
           <p className="text-gray-500 mt-1">Work Breakdown Structure 기반 일정 관리</p>
         </div>
 
-        {/* View Mode Toggle */}
-        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+        <div className="flex items-center gap-4">
+          {/* Excel Import/Export */}
+          {canEdit && (
+            <ExcelImportExportButtons
+              onDownloadTemplate={() => downloadTemplateMutation.mutateAsync(projectId)}
+              onExport={() => exportMutation.mutateAsync({ projectId })}
+              onImport={(file) => importMutation.mutateAsync({ projectId, file })}
+              isDownloadingTemplate={downloadTemplateMutation.isPending}
+              isExporting={exportMutation.isPending}
+              isImporting={importMutation.isPending}
+            />
+          )}
+
+          {/* View Mode Toggle */}
+          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
           {viewModes.map((mode) => (
             <button
               key={mode.id}
@@ -150,6 +174,7 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
               {mode.label}
             </button>
           ))}
+          </div>
         </div>
       </div>
 

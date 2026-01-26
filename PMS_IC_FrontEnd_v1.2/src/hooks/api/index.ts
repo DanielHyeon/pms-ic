@@ -66,3 +66,6 @@ export * from './useWbsBacklogIntegration';
 
 // DB Admin hooks (Sync, Backup, Restore)
 export * from './useDbAdmin';
+
+// Excel Import/Export hooks (Requirements, WBS)
+export * from './useExcelImportExport';

@@ -20,4 +20,7 @@ public interface TaskRepository extends JpaRepository<Task, String> {
 
     // Progress: find tasks linked to a requirement
     List<Task> findByRequirementId(String requirementId);
+
+    // Dashboard: count tasks by status
+    long countByStatus(Task.TaskStatus status);
 }

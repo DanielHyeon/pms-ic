@@ -31,6 +31,12 @@ import {
   useUpdateRequirement,
   useLinkRequirementToTask,
 } from '../../hooks/api/useRequirements';
+import {
+  useDownloadRequirementTemplate,
+  useExportRequirements,
+  useImportRequirements,
+} from '../../hooks/api/useExcelImportExport';
+import { ExcelImportExportButtons } from './common/ExcelImportExportButtons';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -109,6 +115,11 @@ export default function RequirementManagement({ userRole }: RequirementManagemen
   const createMutation = useCreateRequirement();
   const updateMutation = useUpdateRequirement();
   const linkMutation = useLinkRequirementToTask();
+
+  // Excel import/export hooks
+  const downloadTemplateMutation = useDownloadRequirementTemplate();
+  const exportMutation = useExportRequirements();
+  const importMutation = useImportRequirements();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<RequirementStatus | 'ALL'>('ALL');
@@ -278,12 +289,24 @@ export default function RequirementManagement({ userRole }: RequirementManagemen
             프로젝트 요구사항을 추적하고 태스크와 연결합니다.
           </p>
         </div>
-        {canCreate && (
-          <Button onClick={() => setIsCreateDialogOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            요구사항 추가
-          </Button>
-        )}
+        <div className="flex items-center gap-3">
+          {canCreate && (
+            <ExcelImportExportButtons
+              onDownloadTemplate={() => downloadTemplateMutation.mutateAsync(currentProject.id)}
+              onExport={() => exportMutation.mutateAsync({ projectId: currentProject.id })}
+              onImport={(file) => importMutation.mutateAsync({ projectId: currentProject.id, file })}
+              isDownloadingTemplate={downloadTemplateMutation.isPending}
+              isExporting={exportMutation.isPending}
+              isImporting={importMutation.isPending}
+            />
+          )}
+          {canCreate && (
+            <Button onClick={() => setIsCreateDialogOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              요구사항 추가
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* 통계 카드 */}

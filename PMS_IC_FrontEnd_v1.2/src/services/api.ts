@@ -2,6 +2,23 @@ import { DEFAULT_TEMPLATES, getDefaultTemplateById } from '../data/defaultTempla
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8083/api';
 
+// Types for Excel import/export
+export interface ImportError {
+  rowNumber: number;
+  column: string;
+  value: string;
+  message: string;
+}
+
+export interface ImportResult {
+  totalRows: number;
+  successCount: number;
+  createCount: number;
+  updateCount: number;
+  errorCount: number;
+  errors: ImportError[];
+}
+
 export class ApiService {
   private token: string | null = null;
   private useMockData = false;
@@ -2138,6 +2155,178 @@ export class ApiService {
       }
     });
     return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  // ========== Requirements Excel Import/Export ==========
+
+  /**
+   * Download requirements Excel template
+   */
+  async downloadRequirementTemplate(projectId: string): Promise<Blob | null> {
+    if (this.useMockData) {
+      return null;
+    }
+
+    const headers: HeadersInit = {
+      ...(this.token && { Authorization: `Bearer ${this.token}` }),
+    };
+
+    const response = await fetch(`${API_BASE_URL}/projects/${projectId}/requirements/excel/template`, {
+      method: 'GET',
+      headers,
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response.blob();
+  }
+
+  /**
+   * Export requirements to Excel
+   */
+  async exportRequirementsToExcel(projectId: string): Promise<Blob | null> {
+    if (this.useMockData) {
+      return null;
+    }
+
+    const headers: HeadersInit = {
+      ...(this.token && { Authorization: `Bearer ${this.token}` }),
+    };
+
+    const response = await fetch(`${API_BASE_URL}/projects/${projectId}/requirements/excel/export`, {
+      method: 'GET',
+      headers,
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response.blob();
+  }
+
+  /**
+   * Import requirements from Excel file
+   */
+  async importRequirementsFromExcel(projectId: string, file: File): Promise<ImportResult> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    return this.fetchWithFallback(
+      `/projects/${projectId}/requirements/excel/import`,
+      {
+        method: 'POST',
+        body: formData,
+      },
+      {
+        totalRows: 0,
+        successCount: 0,
+        createCount: 0,
+        updateCount: 0,
+        errorCount: 0,
+        errors: [],
+      }
+    );
+  }
+
+  // ========== WBS Excel Import/Export ==========
+
+  /**
+   * Download WBS Excel template
+   */
+  async downloadWbsTemplate(projectId: string): Promise<Blob | null> {
+    if (this.useMockData) {
+      return null;
+    }
+
+    const headers: HeadersInit = {
+      ...(this.token && { Authorization: `Bearer ${this.token}` }),
+    };
+
+    const response = await fetch(`${API_BASE_URL}/projects/${projectId}/wbs/excel/template`, {
+      method: 'GET',
+      headers,
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response.blob();
+  }
+
+  /**
+   * Export WBS to Excel
+   */
+  async exportWbsToExcel(projectId: string): Promise<Blob | null> {
+    if (this.useMockData) {
+      return null;
+    }
+
+    const headers: HeadersInit = {
+      ...(this.token && { Authorization: `Bearer ${this.token}` }),
+    };
+
+    const response = await fetch(`${API_BASE_URL}/projects/${projectId}/wbs/excel/export`, {
+      method: 'GET',
+      headers,
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response.blob();
+  }
+
+  /**
+   * Export WBS by phase to Excel
+   */
+  async exportWbsByPhaseToExcel(phaseId: string): Promise<Blob | null> {
+    if (this.useMockData) {
+      return null;
+    }
+
+    const headers: HeadersInit = {
+      ...(this.token && { Authorization: `Bearer ${this.token}` }),
+    };
+
+    const response = await fetch(`${API_BASE_URL}/phases/${phaseId}/wbs/excel/export`, {
+      method: 'GET',
+      headers,
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response.blob();
+  }
+
+  /**
+   * Import WBS from Excel file
+   */
+  async importWbsFromExcel(projectId: string, file: File): Promise<ImportResult> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    return this.fetchWithFallback(
+      `/projects/${projectId}/wbs/excel/import`,
+      {
+        method: 'POST',
+        body: formData,
+      },
+      {
+        totalRows: 0,
+        successCount: 0,
+        createCount: 0,
+        updateCount: 0,
+        errorCount: 0,
+        errors: [],
+      }
+    );
   }
 }
 

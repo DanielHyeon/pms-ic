@@ -66,6 +66,7 @@ class EntityType(Enum):
     FEATURE = "Feature"
     WBS_GROUP = "WbsGroup"
     WBS_ITEM = "WbsItem"
+    DASHBOARD_KPI = "DashboardKpi"
 
 
 class RelationType(Enum):
@@ -259,6 +260,107 @@ class PGQueries:
         LIMIT %s OFFSET %s
     """
 
+    # Dashboard KPI aggregates per project
+    DASHBOARD_KPI = """
+        WITH project_stats AS (
+            SELECT
+                p.id AS project_id,
+                p.name AS project_name,
+                p.status AS project_status,
+                p.progress AS project_progress,
+                p.budget AS total_budget,
+                p.start_date,
+                p.end_date,
+                COUNT(DISTINCT ph.id) AS total_phases,
+                COUNT(DISTINCT CASE WHEN ph.status = 'COMPLETED' THEN ph.id END) AS completed_phases
+            FROM project.projects p
+            LEFT JOIN project.phases ph ON ph.project_id = p.id
+            GROUP BY p.id, p.name, p.status, p.progress, p.budget, p.start_date, p.end_date
+        ),
+        task_stats AS (
+            SELECT
+                c.project_id,
+                COUNT(t.id) AS total_tasks,
+                COUNT(CASE WHEN t.status = 'DONE' THEN 1 END) AS completed_tasks,
+                COUNT(CASE WHEN t.status = 'IN_PROGRESS' THEN 1 END) AS in_progress_tasks,
+                COUNT(CASE WHEN t.status = 'TODO' THEN 1 END) AS todo_tasks,
+                COUNT(CASE WHEN t.status = 'BACKLOG' THEN 1 END) AS backlog_tasks
+            FROM task.tasks t
+            JOIN task.kanban_columns c ON t.column_id = c.id
+            GROUP BY c.project_id
+        ),
+        story_stats AS (
+            SELECT
+                us.project_id,
+                COUNT(us.id) AS total_stories,
+                COUNT(CASE WHEN us.status = 'DONE' THEN 1 END) AS completed_stories,
+                COALESCE(SUM(us.story_points), 0) AS total_story_points,
+                COALESCE(SUM(CASE WHEN us.status = 'DONE' THEN us.story_points ELSE 0 END), 0) AS completed_story_points
+            FROM task.user_stories us
+            GROUP BY us.project_id
+        ),
+        issue_stats AS (
+            SELECT
+                i.project_id,
+                COUNT(i.id) AS total_issues,
+                COUNT(CASE WHEN i.status = 'OPEN' THEN 1 END) AS open_issues,
+                COUNT(CASE WHEN i.status = 'CLOSED' THEN 1 END) AS closed_issues,
+                COUNT(CASE WHEN i.priority = 'CRITICAL' OR i.priority = 'HIGH' THEN 1 END) AS high_priority_issues
+            FROM project.issues i
+            GROUP BY i.project_id
+        ),
+        sprint_stats AS (
+            SELECT
+                s.project_id,
+                COUNT(s.id) AS total_sprints,
+                COUNT(CASE WHEN s.status = 'ACTIVE' THEN 1 END) AS active_sprints,
+                COUNT(CASE WHEN s.status = 'COMPLETED' THEN 1 END) AS completed_sprints
+            FROM task.sprints s
+            GROUP BY s.project_id
+        )
+        SELECT
+            ps.project_id AS id,
+            ps.project_name,
+            ps.project_status,
+            ps.project_progress,
+            ps.total_budget,
+            ps.start_date,
+            ps.end_date,
+            ps.total_phases,
+            ps.completed_phases,
+            COALESCE(ts.total_tasks, 0) AS total_tasks,
+            COALESCE(ts.completed_tasks, 0) AS completed_tasks,
+            COALESCE(ts.in_progress_tasks, 0) AS in_progress_tasks,
+            COALESCE(ts.todo_tasks, 0) AS todo_tasks,
+            COALESCE(ts.backlog_tasks, 0) AS backlog_tasks,
+            COALESCE(ss.total_stories, 0) AS total_stories,
+            COALESCE(ss.completed_stories, 0) AS completed_stories,
+            COALESCE(ss.total_story_points, 0) AS total_story_points,
+            COALESCE(ss.completed_story_points, 0) AS completed_story_points,
+            COALESCE(is2.total_issues, 0) AS total_issues,
+            COALESCE(is2.open_issues, 0) AS open_issues,
+            COALESCE(is2.closed_issues, 0) AS closed_issues,
+            COALESCE(is2.high_priority_issues, 0) AS high_priority_issues,
+            COALESCE(sps.total_sprints, 0) AS total_sprints,
+            COALESCE(sps.active_sprints, 0) AS active_sprints,
+            COALESCE(sps.completed_sprints, 0) AS completed_sprints,
+            CASE WHEN COALESCE(ts.total_tasks, 0) > 0
+                THEN ROUND(100.0 * COALESCE(ts.completed_tasks, 0) / ts.total_tasks, 1)
+                ELSE 0 END AS task_completion_rate,
+            CASE WHEN COALESCE(ss.total_story_points, 0) > 0
+                THEN ROUND(100.0 * COALESCE(ss.completed_story_points, 0) / ss.total_story_points, 1)
+                ELSE 0 END AS velocity_rate,
+            NOW() AS calculated_at
+        FROM project_stats ps
+        LEFT JOIN task_stats ts ON ts.project_id = ps.project_id
+        LEFT JOIN story_stats ss ON ss.project_id = ps.project_id
+        LEFT JOIN issue_stats is2 ON is2.project_id = ps.project_id
+        LEFT JOIN sprint_stats sps ON sps.project_id = ps.project_id
+        WHERE (ps.start_date IS NULL OR %s IS NULL OR ps.start_date >= %s)
+        ORDER BY ps.project_id
+        LIMIT %s OFFSET %s
+    """
+
     # Relationship queries - these tables don't exist yet in the schema
     # When implemented, they should be created as junction tables
     TASK_DEPENDENCIES = """
@@ -291,6 +393,7 @@ class Neo4jQueries:
         "CREATE CONSTRAINT IF NOT EXISTS FOR (f:Feature) REQUIRE f.id IS UNIQUE",
         "CREATE CONSTRAINT IF NOT EXISTS FOR (wg:WbsGroup) REQUIRE wg.id IS UNIQUE",
         "CREATE CONSTRAINT IF NOT EXISTS FOR (wi:WbsItem) REQUIRE wi.id IS UNIQUE",
+        "CREATE CONSTRAINT IF NOT EXISTS FOR (dk:DashboardKpi) REQUIRE dk.id IS UNIQUE",
     ]
 
     # Create indexes for better query performance
@@ -552,6 +655,44 @@ class Neo4jQueries:
         WHERE row.group_id IS NOT NULL
         MATCH (wg:WbsGroup {id: row.group_id})
         MERGE (wg)-[:HAS_WBS_ITEM]->(wi)
+    """
+
+    # Dashboard KPI node for RAG queries about project metrics
+    MERGE_DASHBOARD_KPI = """
+        UNWIND $batch AS row
+        MERGE (dk:DashboardKpi {id: row.id})
+        SET dk.project_name = row.project_name,
+            dk.project_status = row.project_status,
+            dk.project_progress = row.project_progress,
+            dk.total_budget = row.total_budget,
+            dk.start_date = row.start_date,
+            dk.end_date = row.end_date,
+            dk.total_phases = row.total_phases,
+            dk.completed_phases = row.completed_phases,
+            dk.total_tasks = row.total_tasks,
+            dk.completed_tasks = row.completed_tasks,
+            dk.in_progress_tasks = row.in_progress_tasks,
+            dk.todo_tasks = row.todo_tasks,
+            dk.backlog_tasks = row.backlog_tasks,
+            dk.total_stories = row.total_stories,
+            dk.completed_stories = row.completed_stories,
+            dk.total_story_points = row.total_story_points,
+            dk.completed_story_points = row.completed_story_points,
+            dk.total_issues = row.total_issues,
+            dk.open_issues = row.open_issues,
+            dk.closed_issues = row.closed_issues,
+            dk.high_priority_issues = row.high_priority_issues,
+            dk.total_sprints = row.total_sprints,
+            dk.active_sprints = row.active_sprints,
+            dk.completed_sprints = row.completed_sprints,
+            dk.task_completion_rate = row.task_completion_rate,
+            dk.velocity_rate = row.velocity_rate,
+            dk.calculated_at = row.calculated_at,
+            dk.synced_at = datetime()
+        WITH dk, row
+        WHERE row.id IS NOT NULL
+        MATCH (p:Project {id: row.id})
+        MERGE (p)-[:HAS_KPI]->(dk)
     """
 
 
@@ -843,6 +984,8 @@ class PGNeo4jSyncService:
             (EntityType.USER_STORY, PGQueries.USER_STORIES, Neo4jQueries.MERGE_USER_STORY),
             (EntityType.DELIVERABLE, PGQueries.DELIVERABLES, Neo4jQueries.MERGE_DELIVERABLE),
             (EntityType.ISSUE, PGQueries.ISSUES, Neo4jQueries.MERGE_ISSUE),
+            # Dashboard KPI aggregates - sync last after all entities are synced
+            (EntityType.DASHBOARD_KPI, PGQueries.DASHBOARD_KPI, Neo4jQueries.MERGE_DASHBOARD_KPI),
         ]
 
         for entity_type, pg_query, neo4j_query in entity_mappings:
@@ -904,6 +1047,8 @@ class PGNeo4jSyncService:
             (EntityType.USER_STORY, PGQueries.USER_STORIES, Neo4jQueries.MERGE_USER_STORY),
             (EntityType.DELIVERABLE, PGQueries.DELIVERABLES, Neo4jQueries.MERGE_DELIVERABLE),
             (EntityType.ISSUE, PGQueries.ISSUES, Neo4jQueries.MERGE_ISSUE),
+            # Dashboard KPI aggregates - always sync on incremental to get fresh calculations
+            (EntityType.DASHBOARD_KPI, PGQueries.DASHBOARD_KPI, Neo4jQueries.MERGE_DASHBOARD_KPI),
         ]
 
         for entity_type, pg_query, neo4j_query in entity_mappings:
