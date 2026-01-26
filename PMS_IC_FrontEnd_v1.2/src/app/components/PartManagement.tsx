@@ -40,15 +40,17 @@ export default function PartManagement({ userRole }: PartManagementProps) {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
+  const [showRoleDialog, setShowRoleDialog] = useState(false);
   const [editingPart, setEditingPart] = useState<Part | null>(null);
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
+  const [editingRoleType, setEditingRoleType] = useState<'educationManager' | 'qaLead' | 'ba' | null>(null);
 
-  // Project roles (mock data)
-  const projectRoles = {
-    educationManager: { id: 'user-006', name: '한미영' },
-    qaLead: { id: 'user-007', name: '오정환' },
-    ba: { id: 'user-008', name: '김현우' },
-  };
+  // Project roles state (would be fetched from API in production)
+  const [projectRoles, setProjectRoles] = useState({
+    educationManager: { id: 'user-006', name: '한미영' } as { id: string; name: string } | null,
+    qaLead: { id: 'user-007', name: '오정환' } as { id: string; name: string } | null,
+    ba: { id: 'user-008', name: '김현우' } as { id: string; name: string } | null,
+  });
 
   // Permission checks
   const canManage = ['admin', 'pm', 'pmo_head'].includes(userRole);
@@ -138,6 +140,32 @@ export default function PartManagement({ userRole }: PartManagementProps) {
     );
   };
 
+  // Handle project role change
+  const handleEditRole = (roleType: 'educationManager' | 'qaLead' | 'ba') => {
+    setEditingRoleType(roleType);
+    setShowRoleDialog(true);
+  };
+
+  const handleRoleChange = (userId: string, userName: string) => {
+    if (!editingRoleType) return;
+    setProjectRoles((prev) => ({
+      ...prev,
+      [editingRoleType]: { id: userId, name: userName },
+    }));
+    setShowRoleDialog(false);
+    setEditingRoleType(null);
+  };
+
+  const handleClearRole = () => {
+    if (!editingRoleType) return;
+    setProjectRoles((prev) => ({
+      ...prev,
+      [editingRoleType]: null,
+    }));
+    setShowRoleDialog(false);
+    setEditingRoleType(null);
+  };
+
   if (isLoading) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[400px]">
@@ -183,7 +211,11 @@ export default function PartManagement({ userRole }: PartManagementProps) {
               <div className="text-sm text-gray-900">{projectRoles.educationManager?.name || '미지정'}</div>
             </div>
             {canManage && (
-              <button className="ml-auto p-1.5 text-purple-500 hover:bg-purple-100 rounded">
+              <button
+                onClick={() => handleEditRole('educationManager')}
+                className="ml-auto p-1.5 text-purple-500 hover:bg-purple-100 rounded"
+                title="교육 담당자 변경"
+              >
                 <Edit2 size={14} />
               </button>
             )}
@@ -197,7 +229,11 @@ export default function PartManagement({ userRole }: PartManagementProps) {
               <div className="text-sm text-gray-900">{projectRoles.qaLead?.name || '미지정'}</div>
             </div>
             {canManage && (
-              <button className="ml-auto p-1.5 text-green-500 hover:bg-green-100 rounded">
+              <button
+                onClick={() => handleEditRole('qaLead')}
+                className="ml-auto p-1.5 text-green-500 hover:bg-green-100 rounded"
+                title="QA 담당 변경"
+              >
                 <Edit2 size={14} />
               </button>
             )}
@@ -211,7 +247,11 @@ export default function PartManagement({ userRole }: PartManagementProps) {
               <div className="text-sm text-gray-900">{projectRoles.ba?.name || '미지정'}</div>
             </div>
             {canManage && (
-              <button className="ml-auto p-1.5 text-orange-500 hover:bg-orange-100 rounded">
+              <button
+                onClick={() => handleEditRole('ba')}
+                className="ml-auto p-1.5 text-orange-500 hover:bg-orange-100 rounded"
+                title="BA 담당 변경"
+              >
                 <Edit2 size={14} />
               </button>
             )}
@@ -293,6 +333,20 @@ export default function PartManagement({ userRole }: PartManagementProps) {
             setSelectedPartId(null);
           }}
           onAdd={handleAddMember}
+        />
+      )}
+
+      {/* 프로젝트 담당자 변경 다이얼로그 */}
+      {showRoleDialog && editingRoleType && (
+        <ProjectRoleDialog
+          roleType={editingRoleType}
+          currentUser={projectRoles[editingRoleType]}
+          onClose={() => {
+            setShowRoleDialog(false);
+            setEditingRoleType(null);
+          }}
+          onSelect={handleRoleChange}
+          onClear={handleClearRole}
         />
       )}
     </div>
@@ -740,6 +794,157 @@ function AddMemberDialog({ partId, existingMembers, onClose, onAdd }: AddMemberD
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               추가
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Project role dialog component
+const ROLE_TYPE_INFO = {
+  educationManager: {
+    label: '교육 담당자',
+    description: '프로젝트 내 교육 및 역량 개발을 담당합니다.',
+    color: 'purple',
+  },
+  qaLead: {
+    label: 'QA 담당',
+    description: '품질 관리 및 테스트 전략을 담당합니다.',
+    color: 'green',
+  },
+  ba: {
+    label: 'BA 담당',
+    description: '비즈니스 분석 및 요구사항 정의를 담당합니다.',
+    color: 'orange',
+  },
+};
+
+interface ProjectRoleDialogProps {
+  roleType: 'educationManager' | 'qaLead' | 'ba';
+  currentUser: { id: string; name: string } | null;
+  onClose: () => void;
+  onSelect: (userId: string, userName: string) => void;
+  onClear: () => void;
+}
+
+function ProjectRoleDialog({ roleType, currentUser, onClose, onSelect, onClear }: ProjectRoleDialogProps) {
+  const [selectedUserId, setSelectedUserId] = useState(currentUser?.id || '');
+  const [searchTerm, setSearchTerm] = useState('');
+  const roleInfo = ROLE_TYPE_INFO[roleType];
+
+  // Mock available users for project roles
+  const availableUsers = [
+    { id: 'user-001', name: '김철수', email: 'chulsu@insure.com', department: 'PMO' },
+    { id: 'user-002', name: '이영희', email: 'younghee@insure.com', department: '개발팀' },
+    { id: 'user-003', name: '박민수', email: 'minsu@insure.com', department: '개발팀' },
+    { id: 'user-004', name: '최영수', email: 'youngsu@insure.com', department: 'QA팀' },
+    { id: 'user-005', name: '정수진', email: 'sujin@insure.com', department: '기획팀' },
+    { id: 'user-006', name: '한미영', email: 'miyoung@insure.com', department: '교육팀' },
+    { id: 'user-007', name: '오정환', email: 'junghwan@insure.com', department: 'QA팀' },
+    { id: 'user-008', name: '김현우', email: 'hyunwoo@insure.com', department: '기획팀' },
+    { id: 'user-009', name: '김태희', email: 'taehee@insure.com', department: '개발팀' },
+    { id: 'user-010', name: '이상현', email: 'sanghyun@insure.com', department: '운영팀' },
+  ];
+
+  const filteredUsers = availableUsers.filter(
+    (u) =>
+      u.name.includes(searchTerm) ||
+      u.email.includes(searchTerm) ||
+      u.department.includes(searchTerm)
+  );
+
+  const handleConfirm = () => {
+    const user = availableUsers.find((u) => u.id === selectedUserId);
+    if (user) {
+      onSelect(user.id, user.name);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+        <div className={`px-6 py-4 border-b border-gray-200 bg-${roleInfo.color}-50`}>
+          <h2 className="text-lg font-semibold text-gray-900">{roleInfo.label} 변경</h2>
+          <p className="text-sm text-gray-500 mt-1">{roleInfo.description}</p>
+        </div>
+        <div className="p-6 space-y-4">
+          {/* Current assignment */}
+          {currentUser && (
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <div>
+                <div className="text-xs text-gray-500">현재 담당자</div>
+                <div className="font-medium text-gray-900">{currentUser.name}</div>
+              </div>
+              <button
+                type="button"
+                onClick={onClear}
+                className="text-sm text-red-600 hover:text-red-700 hover:underline"
+              >
+                담당 해제
+              </button>
+            </div>
+          )}
+
+          {/* Search input */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            <input
+              type="text"
+              placeholder="이름, 이메일 또는 부서로 검색..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* User list */}
+          <div className="max-h-60 overflow-y-auto space-y-2">
+            {filteredUsers.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">검색 결과가 없습니다</div>
+            ) : (
+              filteredUsers.map((user) => (
+                <div
+                  key={user.id}
+                  className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
+                    selectedUserId === user.id
+                      ? 'bg-blue-50 border border-blue-200'
+                      : 'bg-gray-50 border border-transparent hover:bg-gray-100'
+                  }`}
+                  onClick={() => setSelectedUserId(user.id)}
+                >
+                  <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-sm font-medium text-gray-600">
+                    {user.name[0]}
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900">{user.name}</div>
+                    <div className="text-xs text-gray-500">
+                      {user.email} · {user.department}
+                    </div>
+                  </div>
+                  {selectedUserId === user.id && <CheckCircle className="text-blue-600" size={20} />}
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex justify-end gap-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirm}
+              disabled={!selectedUserId}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              변경
             </button>
           </div>
         </div>

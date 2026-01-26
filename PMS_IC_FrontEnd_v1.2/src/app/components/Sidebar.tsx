@@ -36,17 +36,15 @@ const roleLabels: Record<UserRole, string> = {
   admin: 'Administrator',
 };
 
-// Menu item component
+// Menu item component for standalone items
 function MenuItemButton({
   item,
   isActive,
   onClick,
-  indent = false,
 }: {
   item: MenuItem;
   isActive: boolean;
   onClick: () => void;
-  indent?: boolean;
 }) {
   const Icon = item.icon;
 
@@ -55,8 +53,6 @@ function MenuItemButton({
       type="button"
       onClick={onClick}
       className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all text-sm ${
-        indent ? 'pl-10' : ''
-      } ${
         isActive
           ? 'bg-white/20 text-white shadow-lg backdrop-blur-sm'
           : 'text-white/70 hover:bg-white/10 hover:text-white'
@@ -66,6 +62,54 @@ function MenuItemButton({
       <Icon size={18} />
       <span className="truncate">{item.label}</span>
     </button>
+  );
+}
+
+// Sub-menu item component with tree line indicator
+function SubMenuItemButton({
+  item,
+  isActive,
+  isLast,
+  onClick,
+}: {
+  item: MenuItem;
+  isActive: boolean;
+  isLast: boolean;
+  onClick: () => void;
+}) {
+  const Icon = item.icon;
+
+  return (
+    <div className="relative flex items-center">
+      {/* Tree line guide */}
+      <div className="absolute left-6 top-0 bottom-0 flex items-center">
+        {/* Vertical line - full height for non-last items, half for last */}
+        <div
+          className={`absolute left-0 w-px bg-white/30 ${
+            isLast ? 'top-0 h-1/2' : 'top-0 bottom-0'
+          }`}
+        />
+        {/* Horizontal connector line */}
+        <div className="absolute left-0 w-3 h-px bg-white/30" />
+        {/* Active indicator dot */}
+        {isActive && (
+          <div className="absolute left-[-3px] w-[7px] h-[7px] rounded-full bg-white shadow-sm shadow-white/50" />
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={onClick}
+        className={`flex-1 flex items-center gap-2.5 ml-10 pl-3 pr-3 py-2 rounded-lg transition-all text-sm ${
+          isActive
+            ? 'bg-white/20 text-white border-l-2 border-white'
+            : 'text-white/70 hover:bg-white/10 hover:text-white'
+        }`}
+        title={item.description}
+      >
+        <Icon size={16} />
+        <span className="truncate">{item.label}</span>
+      </button>
+    </div>
   );
 }
 
@@ -115,26 +159,27 @@ function MenuGroupSection({
         )}
       </button>
 
-      {/* Group items (collapsible) */}
+      {/* Group items (collapsible) with tree line */}
       <div
         className={`overflow-hidden transition-all duration-200 ease-in-out ${
           isExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
         }`}
       >
-        <div className="mt-1 space-y-0.5">
-          {group.items.map((item) => {
+        <div className="mt-1 relative">
+          {group.items.map((item, index) => {
             const isActive =
               item.path === '/'
                 ? currentPath === '/'
                 : currentPath.startsWith(item.path);
+            const isLast = index === group.items.length - 1;
 
             return (
-              <MenuItemButton
+              <SubMenuItemButton
                 key={item.id}
                 item={item}
                 isActive={isActive}
+                isLast={isLast}
                 onClick={() => onNavigate(item.path)}
-                indent
               />
             );
           })}
