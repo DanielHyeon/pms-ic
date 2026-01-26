@@ -4,7 +4,7 @@ import {
   Copy,
   Trash2,
   Download,
-  Eye,
+  Edit2,
   ChevronDown,
   ChevronRight,
   FolderTree,
@@ -24,6 +24,7 @@ import {
 
 interface TemplateSetCardProps {
   template: TemplateSet;
+  onEdit?: (template: TemplateSet) => void;
   onDuplicate?: (id: string) => void;
   onDelete?: (id: string) => void;
   onExport?: (id: string) => void;
@@ -33,6 +34,7 @@ interface TemplateSetCardProps {
 
 export default function TemplateSetCard({
   template,
+  onEdit,
   onDuplicate,
   onDelete,
   onExport,
@@ -78,6 +80,16 @@ export default function TemplateSetCard({
                 className="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition-colors"
               >
                 적용
+              </button>
+            )}
+            {onEdit && canEdit && (
+              <button
+                type="button"
+                onClick={() => onEdit(template)}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                title="편집"
+              >
+                <Edit2 size={16} />
               </button>
             )}
             {onExport && (

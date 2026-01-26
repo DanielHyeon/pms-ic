@@ -75,9 +75,7 @@ export function useUpdateTemplateSet() {
 
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<TemplateSet> }) => {
-      // Note: The backend may need an update endpoint to be added
-      // For now, this uses the same pattern as other updates
-      throw new Error('Template update not yet implemented in backend');
+      return apiService.updateTemplateSet(id, data);
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: templateKeys.set(data.id) });

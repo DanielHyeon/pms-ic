@@ -740,8 +740,8 @@ class TwoTrackWorkflow:
                     is_short_question = len(message) < 30
 
                     if is_simple_question and is_short_question:
-                        max_tokens = min(base_max_tokens, 500)
-                        logger.info(f"  → Track A: reduced max_tokens={max_tokens} for simple question")
+                        max_tokens = min(base_max_tokens, 800)
+                        logger.info(f"  → Track A: max_tokens={max_tokens} for definition question")
                     else:
                         max_tokens = base_max_tokens
 

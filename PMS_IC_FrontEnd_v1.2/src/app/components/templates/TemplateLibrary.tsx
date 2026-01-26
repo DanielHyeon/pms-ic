@@ -23,9 +23,11 @@ import {
   useDuplicateTemplateSet,
   useExportTemplate,
   useImportTemplate,
+  useUpdateTemplateSet,
 } from '../../../hooks/api/useTemplates';
 import TemplateSetCard from './TemplateSetCard';
 import ApplyTemplateModal from './ApplyTemplateModal';
+import TemplateEditor from './TemplateEditor';
 
 interface TemplateLibraryProps {
   projectId?: string;
@@ -53,6 +55,7 @@ export default function TemplateLibrary({
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [templateToApply, setTemplateToApply] = useState<TemplateSet | null>(null);
+  const [templateToEdit, setTemplateToEdit] = useState<TemplateSet | null>(null);
   const [importJson, setImportJson] = useState('');
 
   const { data: templates = [], isLoading, refetch } = useTemplateSets(
@@ -64,6 +67,7 @@ export default function TemplateLibrary({
   const duplicateMutation = useDuplicateTemplateSet();
   const exportMutation = useExportTemplate();
   const importMutation = useImportTemplate();
+  const updateMutation = useUpdateTemplateSet();
 
   // Filter templates by search term
   const filteredTemplates = templates.filter(
@@ -107,6 +111,16 @@ export default function TemplateLibrary({
 
   const handleApply = (template: TemplateSet) => {
     setTemplateToApply(template);
+  };
+
+  const handleEdit = (template: TemplateSet) => {
+    setTemplateToEdit(template);
+  };
+
+  const handleSaveEdit = async (updatedTemplate: TemplateSet) => {
+    await updateMutation.mutateAsync({ id: updatedTemplate.id, data: updatedTemplate });
+    setTemplateToEdit(null);
+    refetch();
   };
 
   const handleApplySuccess = (phaseIds: string[]) => {
@@ -227,6 +241,7 @@ export default function TemplateLibrary({
               <TemplateSetCard
                 key={template.id}
                 template={template}
+                onEdit={canEdit ? handleEdit : undefined}
                 onDuplicate={canEdit ? handleDuplicate : undefined}
                 onDelete={canEdit ? handleDelete : undefined}
                 onExport={handleExport}
@@ -309,6 +324,16 @@ export default function TemplateLibrary({
           projectId={projectId}
           onClose={() => setTemplateToApply(null)}
           onSuccess={handleApplySuccess}
+        />
+      )}
+
+      {/* Template Editor Modal */}
+      {templateToEdit && (
+        <TemplateEditor
+          template={templateToEdit}
+          onSave={handleSaveEdit}
+          onClose={() => setTemplateToEdit(null)}
+          isLoading={updateMutation.isPending}
         />
       )}
     </div>

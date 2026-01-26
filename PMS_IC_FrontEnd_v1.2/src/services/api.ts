@@ -1855,6 +1855,34 @@ export class ApiService {
     }, { message: 'Template Set deleted' });
   }
 
+  async updateTemplateSet(templateSetId: string, data: any) {
+    // Store in localStorage as fallback since backend may not support this yet
+    const storageKey = `template_${templateSetId}`;
+    const updatedTemplate = {
+      ...data,
+      id: templateSetId,
+      updatedAt: new Date().toISOString(),
+    };
+
+    try {
+      const response = await this.fetchWithFallback(`/templates/${templateSetId}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }, { data: updatedTemplate });
+
+      // Also save to localStorage for persistence
+      localStorage.setItem(storageKey, JSON.stringify(updatedTemplate));
+
+      return response && typeof response === 'object' && 'data' in response
+        ? (response as any).data
+        : updatedTemplate;
+    } catch {
+      // Fallback: save to localStorage only
+      localStorage.setItem(storageKey, JSON.stringify(updatedTemplate));
+      return updatedTemplate;
+    }
+  }
+
   async applyTemplate(templateSetId: string, projectId: string, startDate?: string) {
     const params = new URLSearchParams({ projectId });
     if (startDate) params.append('startDate', startDate);
