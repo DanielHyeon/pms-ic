@@ -19,6 +19,14 @@ RUN apt-get update && apt-get install -y \
     libgl1 \
     libglib2.0-0 \
     poppler-utils \
+    gnupg \
+    lsb-release \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install PostgreSQL 17 client for pg_dump/psql
+RUN curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/keyrings/postgresql-keyring.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/postgresql-keyring.gpg] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update && apt-get install -y postgresql-client-17 \
     && rm -rf /var/lib/apt/lists/*
 
 # CUDA stub libs for build-time linking (libcuda.so.1)
@@ -42,6 +50,7 @@ COPY pdf_ocr_pipeline.py .
 COPY rag_service_neo4j.py .
 COPY load_ragdata_pdfs_neo4j.py .
 COPY service_state.py .
+COPY pg_neo4j_sync.py .
 
 # Copy services directory
 COPY services/ ./services/
@@ -49,8 +58,8 @@ COPY services/ ./services/
 # Copy routes directory
 COPY routes/ ./routes/
 
-# 모델 디렉토리 생성 (볼륨 마운트로 모델 제공)
-RUN mkdir -p /app/models /models /data /output
+# 모델 및 백업 디렉토리 생성 (볼륨 마운트로 모델 제공)
+RUN mkdir -p /app/models /models /data /output /app/backups
 
 # 헬스체크를 위한 curl 설치됨
 EXPOSE 8000

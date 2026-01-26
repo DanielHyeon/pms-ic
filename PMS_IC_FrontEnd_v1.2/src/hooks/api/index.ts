@@ -63,3 +63,6 @@ export * from './useTemplates';
 
 // WBS-Backlog Integration hooks (Phase-Epic, WbsGroup-Feature, WbsItem-Story)
 export * from './useWbsBacklogIntegration';
+
+// DB Admin hooks (Sync, Backup, Restore)
+export * from './useDbAdmin';

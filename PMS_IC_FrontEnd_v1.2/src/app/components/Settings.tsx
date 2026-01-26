@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { UserRole } from '../App';
-import { Cpu, AlertCircle, CheckCircle, Loader, RefreshCw, FileText, Zap, Scale, Database, Trash2, Upload, FolderOpen, User } from 'lucide-react';
+import { Cpu, AlertCircle, CheckCircle, Loader, RefreshCw, FileText, Zap, Scale, Database, Trash2, Upload, FolderOpen, User, HardDrive } from 'lucide-react';
 import { apiService } from '../../services/api';
+import DatabaseSettings from './DatabaseSettings';
 
 interface SettingsProps {
   userRole: UserRole;
@@ -113,7 +114,7 @@ export default function Settings({ userRole }: SettingsProps) {
   const [isChangingLightweight, setIsChangingLightweight] = useState(false);
   const [isChangingMedium, setIsChangingMedium] = useState(false);
   const [isChangingOCR, setIsChangingOCR] = useState(false);
-  const [activeTab, setActiveTab] = useState<'personal' | 'llm' | 'ocr' | 'rag'>('personal');
+  const [activeTab, setActiveTab] = useState<'personal' | 'llm' | 'ocr' | 'rag' | 'db'>('personal');
 
   // RAG State
   const [ragDocuments, setRagDocuments] = useState<any[]>([]);
@@ -483,6 +484,17 @@ export default function Settings({ userRole }: SettingsProps) {
               >
                 <Database size={18} />
                 RAG 지식베이스
+              </button>
+              <button
+                onClick={() => setActiveTab('db')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                  activeTab === 'db'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <HardDrive size={18} />
+                DB 관리
               </button>
             </>
           )}
@@ -1153,6 +1165,11 @@ export default function Settings({ userRole }: SettingsProps) {
               )}
             </div>
           </div>
+        )}
+
+        {/* Database Settings Tab */}
+        {activeTab === 'db' && canAccessSystemSettings && (
+          <DatabaseSettings />
         )}
 
         {/* Status Message */}

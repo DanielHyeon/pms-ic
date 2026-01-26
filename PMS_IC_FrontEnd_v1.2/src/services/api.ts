@@ -1659,6 +1659,102 @@ export class ApiService {
     return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
   }
 
+  // ========== DB Admin API ==========
+  async triggerDbSync(syncType: 'full' | 'incremental' = 'full') {
+    const response = await this.fetchWithFallback(
+      '/admin/db/sync',
+      {
+        method: 'POST',
+        body: JSON.stringify({ syncType }),
+      },
+      { message: 'Sync started', sync_type: syncType }
+    );
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async getDbSyncStatus() {
+    const response = await this.fetchWithFallback(
+      '/admin/db/sync/status',
+      {},
+      { is_syncing: false, sync_type: null, current_entity: null, progress: 0, started_at: null, error: null }
+    );
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async getDbSyncHistory(limit: number = 10) {
+    const response = await this.fetchWithFallback(
+      `/admin/db/sync/history?limit=${limit}`,
+      {},
+      { data: [] }
+    );
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async createDbBackup(backupType: 'POSTGRES' | 'NEO4J' | 'FULL' = 'FULL') {
+    const response = await this.fetchWithFallback(
+      '/admin/db/backup',
+      {
+        method: 'POST',
+        body: JSON.stringify({ backupType }),
+      },
+      { message: 'Backup started', backup_type: backupType }
+    );
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async getDbBackupStatus() {
+    const response = await this.fetchWithFallback(
+      '/admin/db/backup/status',
+      {},
+      { is_running: false, backup_type: null, backup_name: null, progress: 0, started_at: null }
+    );
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async getDbBackups(limit: number = 20) {
+    const response = await this.fetchWithFallback(
+      `/admin/db/backups?limit=${limit}`,
+      {},
+      { data: [] }
+    );
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async restoreDbBackup(backupId: string) {
+    const response = await this.fetchWithFallback(
+      `/admin/db/restore/${backupId}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ confirm: true }),
+      },
+      { message: 'Restore started', backup_id: backupId }
+    );
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async deleteDbBackup(backupId: string) {
+    const response = await this.fetchWithFallback(
+      `/admin/db/backups/${backupId}`,
+      { method: 'DELETE' },
+      { message: 'Backup deleted', backup_id: backupId }
+    );
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async getDbStats() {
+    const response = await this.fetchWithFallback(
+      '/admin/db/stats',
+      {},
+      {
+        postgres: { tables: 0, total_rows: 0, size_bytes: 0 },
+        neo4j: { nodes: 0, relationships: 0, labels: [] },
+        last_sync_at: null,
+        last_backup_at: null,
+      }
+    );
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
   // ========== WBS API ==========
   async getWbsGroups(phaseId: string) {
     const response = await this.fetchWithFallback(`/phases/${phaseId}/wbs/groups`, {}, { data: [] });
