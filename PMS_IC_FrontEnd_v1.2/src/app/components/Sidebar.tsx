@@ -209,7 +209,7 @@ export default function Sidebar({ userRole }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+      <nav className="flex-1 p-3 space-y-1 overflow-y-auto sidebar-scrollbar">
         {/* Standalone items (Dashboard) */}
         {filteredMenu.standalone.map((item) => {
           const isActive =

@@ -1,3 +1,5 @@
+import { DEFAULT_TEMPLATES, getDefaultTemplateById } from '../data/defaultTemplates';
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8083/api';
 
 export class ApiService {
@@ -1814,13 +1816,29 @@ export class ApiService {
   // ========== Template API ==========
   async getTemplateSets(category?: string) {
     const params = category ? `?category=${category}` : '';
-    const response = await this.fetchWithFallback(`/templates${params}`, {}, { data: [] });
-    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+    // Use DEFAULT_TEMPLATES as fallback when backend is unavailable
+    const fallbackData = category
+      ? DEFAULT_TEMPLATES.filter(t => t.category === category)
+      : DEFAULT_TEMPLATES;
+    const response = await this.fetchWithFallback(`/templates${params}`, {}, { data: fallbackData });
+    const result = response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+    // If empty array from backend, return default templates
+    if (Array.isArray(result) && result.length === 0) {
+      return fallbackData;
+    }
+    return result;
   }
 
   async getTemplateSet(templateSetId: string) {
-    const response = await this.fetchWithFallback(`/templates/${templateSetId}`, {}, { data: null });
-    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+    // Check default templates first for fallback
+    const defaultTemplate = getDefaultTemplateById(templateSetId);
+    const response = await this.fetchWithFallback(`/templates/${templateSetId}`, {}, { data: defaultTemplate || null });
+    const result = response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+    // If null from backend, try default template
+    if (!result && defaultTemplate) {
+      return defaultTemplate;
+    }
+    return result;
   }
 
   async createTemplateSet(data: any) {
@@ -1844,6 +1862,77 @@ export class ApiService {
       method: 'POST',
     }, { message: 'Template applied successfully' });
     return response;
+  }
+
+  // Apply a template to a specific phase (creates WBS structure)
+  async applyTemplateToPhase(templateSetId: string, phaseId: string, projectId: string) {
+    // Get the template
+    const template = await this.getTemplateSet(templateSetId);
+    if (!template) {
+      throw new Error('Template not found');
+    }
+
+    // Get phases for this project to find the matching phase index
+    const phases = await this.getPhases(projectId);
+    const phaseIndex = phases.findIndex((p: any) => p.id === phaseId);
+
+    if (phaseIndex === -1) {
+      throw new Error('Phase not found');
+    }
+
+    // Find the phase template that matches the phase order
+    const phaseTemplate = template.phases?.[phaseIndex];
+    if (!phaseTemplate) {
+      throw new Error(`No template defined for phase ${phaseIndex + 1}`);
+    }
+
+    // Create WBS groups, items, and tasks from the template
+    const createdGroups: any[] = [];
+
+    for (const groupTemplate of phaseTemplate.wbsGroups || []) {
+      // Create group
+      const group = await this.createWbsGroup(phaseId, {
+        code: `${phaseIndex + 1}.${groupTemplate.relativeOrder}`,
+        name: groupTemplate.name,
+        description: groupTemplate.description,
+        weight: groupTemplate.defaultWeight || 100,
+        status: 'NOT_STARTED',
+        progress: 0,
+      });
+
+      // Create items for this group
+      for (const itemTemplate of groupTemplate.items || []) {
+        const item = await this.createWbsItem(group.id, {
+          code: `${group.code}.${itemTemplate.relativeOrder}`,
+          name: itemTemplate.name,
+          description: itemTemplate.description,
+          weight: itemTemplate.defaultWeight || 100,
+          estimatedHours: itemTemplate.estimatedHours,
+          status: 'NOT_STARTED',
+          progress: 0,
+        });
+
+        // Create tasks for this item
+        for (const taskTemplate of itemTemplate.tasks || []) {
+          await this.createWbsTask(item.id, {
+            code: `${item.code}.${taskTemplate.relativeOrder}`,
+            name: taskTemplate.name,
+            weight: taskTemplate.defaultWeight || 100,
+            estimatedHours: taskTemplate.estimatedHours,
+            status: 'NOT_STARTED',
+            progress: 0,
+          });
+        }
+      }
+
+      createdGroups.push(group);
+    }
+
+    return {
+      success: true,
+      message: `템플릿 "${phaseTemplate.name}"이(가) 적용되었습니다`,
+      createdGroups: createdGroups.length,
+    };
   }
 
   // ========== Integration API ==========

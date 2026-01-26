@@ -122,8 +122,9 @@ export default function UserManagementPage({ userRole, projectId = 'proj-001' }:
   const [filterRole, setFilterRole] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
 
-  // Role-based access - only ADMIN and PMO_HEAD can manage users
-  const canManage = userRole === 'ADMIN' || userRole === 'PMO_HEAD';
+  // Role-based access - only admin and pmo_head can manage users
+  // Note: userRole uses lowercase (admin, pmo_head) from authStore
+  const canManage = userRole === 'admin' || userRole === 'pmo_head';
 
   // Filter users
   const filteredUsers = users.filter((user) => {

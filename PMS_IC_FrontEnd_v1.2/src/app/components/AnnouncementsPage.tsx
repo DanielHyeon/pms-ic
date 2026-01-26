@@ -12,6 +12,8 @@ import {
   CheckCircle,
   Edit,
   Trash2,
+  Search,
+  Filter,
 } from 'lucide-react';
 import { UserRole } from '../App';
 import { formatDate, isWithinDays } from '../../utils/formatters';
@@ -143,7 +145,8 @@ export default function AnnouncementsPage({ userRole, projectId = 'proj-001' }: 
   const [filterStatus, setFilterStatus] = useState<string>('');
 
   // Role-based access
-  const canManage = userRole === 'ADMIN' || userRole === 'PMO_HEAD' || userRole === 'PM';
+  // Note: userRole uses lowercase from authStore
+  const canManage = userRole === 'admin' || userRole === 'pmo_head' || userRole === 'pm';
 
   // Filter announcements
   const filteredAnnouncements = announcements.filter((item) => {

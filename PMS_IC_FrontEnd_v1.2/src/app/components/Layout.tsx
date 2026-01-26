@@ -15,7 +15,8 @@ export default function Layout() {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
 
-  const userRole = user?.role || 'pm';
+  // Default to auditor (read-only) for minimum privilege principle
+  const userRole = user?.role || 'auditor';
   const canUseAI = checkCanUseAI(user?.role);
 
   const handleLogout = () => {
@@ -33,7 +34,7 @@ export default function Layout() {
   } : {
     id: '',
     name: 'Guest',
-    role: 'pm' as const,
+    role: 'auditor' as const,
     email: '',
     department: '',
   };

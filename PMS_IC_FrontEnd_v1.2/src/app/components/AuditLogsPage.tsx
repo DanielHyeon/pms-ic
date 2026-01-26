@@ -197,9 +197,10 @@ export default function AuditLogsPage({ userRole, projectId = 'proj-001' }: Audi
   const [filterCategory, setFilterCategory] = useState<string>('');
   const [filterSeverity, setFilterSeverity] = useState<string>('');
 
-  // Role-based access - only ADMIN, PMO_HEAD, and AUDITOR can view audit logs
-  const canViewLogs = userRole === 'ADMIN' || userRole === 'PMO_HEAD' || userRole === 'AUDITOR';
-  const canExport = userRole === 'ADMIN' || userRole === 'AUDITOR';
+  // Role-based access - only admin, pmo_head, and auditor can view audit logs
+  // Note: userRole uses lowercase from authStore
+  const canViewLogs = userRole === 'admin' || userRole === 'pmo_head' || userRole === 'auditor';
+  const canExport = userRole === 'admin' || userRole === 'auditor';
 
   if (!canViewLogs) {
     return (

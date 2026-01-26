@@ -59,8 +59,8 @@ import {
 const initialPhases: Phase[] = [
   {
     id: '1',
-    name: '1단계: 업무 진단 및 목표 설정',
-    description: '업무 분석 및 목표 설정',
+    name: '1단계: 업무 현황 진단/분석',
+    description: '지급심사 프로세스 현황 파악 및 AI 적용 타당성 검토',
     status: 'completed',
     progress: 100,
     startDate: '2025-01-02',
@@ -77,8 +77,8 @@ const initialPhases: Phase[] = [
   },
   {
     id: '2',
-    name: '2단계: 데이터 수집 및 준비',
-    description: '데이터 수집 및 준비',
+    name: '2단계: 데이터 수집/정제',
+    description: '데이터 수집, 정제, 라벨링 및 피처 엔지니어링',
     status: 'completed',
     progress: 100,
     startDate: '2025-02-16',
@@ -95,8 +95,8 @@ const initialPhases: Phase[] = [
   },
   {
     id: '3',
-    name: '3단계: AI 모델링 및 학습',
-    description: 'AI 모델링 및 학습',
+    name: '3단계: AI모델 설계/학습',
+    description: 'AI 모델 설계, 학습, 평가 및 하이브리드 로직 구축',
     status: 'inProgress',
     progress: 85,
     startDate: '2025-05-01',
@@ -115,8 +115,8 @@ const initialPhases: Phase[] = [
   },
   {
     id: '4',
-    name: '4단계: 시스템 통합 및 연동',
-    description: '시스템 통합 및 연동',
+    name: '4단계: 업무시스템 연동/운영 자동화',
+    description: '기존 업무시스템과 AI 통합 및 MLOps 구축',
     status: 'pending',
     progress: 0,
     startDate: '2025-09-01',
@@ -130,8 +130,8 @@ const initialPhases: Phase[] = [
   },
   {
     id: '5',
-    name: '5단계: 성능 검증 및 PoC',
-    description: '성능 검증 및 PoC',
+    name: '5단계: 효과 검증/운영고도화',
+    description: 'PoC 검증, 성능 평가 및 지속적 개선',
     status: 'pending',
     progress: 0,
     startDate: '2025-11-01',
@@ -145,8 +145,8 @@ const initialPhases: Phase[] = [
   },
   {
     id: '6',
-    name: '6단계: 변화 관리 및 확산',
-    description: '변화 관리 및 확산',
+    name: '6단계: 조직/프로세스 변화관리',
+    description: '교육, 가이드라인, AI 거버넌스 체계 구축',
     status: 'pending',
     progress: 0,
     startDate: '2025-12-01',

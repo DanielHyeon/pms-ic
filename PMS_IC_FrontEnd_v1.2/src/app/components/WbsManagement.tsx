@@ -11,7 +11,7 @@ import { WbsTreeView, StoryLinkModal } from './wbs';
 import { TemplateLibrary, ApplyTemplateModal } from './templates';
 import { WbsBacklogIntegration } from './integration';
 import { useAllPhases } from '../../hooks/api/usePhases';
-import { useTemplateSets, useApplyTemplate } from '../../hooks/api/useTemplates';
+import { useTemplateSets, useApplyTemplateToPhase } from '../../hooks/api/useTemplates';
 import { useStories } from '../../hooks/api/useStories';
 import { getRolePermissions } from '../../utils/rolePermissions';
 import { TemplateSet } from '../../types/templates';
@@ -37,7 +37,7 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
   const { data: phasesData } = useAllPhases();
   const { data: templates = [] } = useTemplateSets();
   const { data: stories = [] } = useStories(projectId);
-  const applyTemplateMutation = useApplyTemplate();
+  const applyTemplateMutation = useApplyTemplateToPhase();
 
   // Role permissions
   const permissions = getRolePermissions(userRole);

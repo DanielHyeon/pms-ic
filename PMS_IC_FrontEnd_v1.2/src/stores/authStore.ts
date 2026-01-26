@@ -69,5 +69,5 @@ export { menuAccessByRole, canAccessMenu } from '../config/menuConfig';
 // Helper to check if user can use AI assistant
 export function canUseAI(role: UserRole | undefined): boolean {
   if (!role) return false;
-  return ['sponsor', 'pmo_head', 'pm', 'developer', 'qa', 'business_analyst'].includes(role);
+  return ['sponsor', 'pmo_head', 'pm', 'developer', 'qa', 'business_analyst', 'admin'].includes(role);
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { UserRole } from '../App';
-import { Cpu, AlertCircle, CheckCircle, Loader, RefreshCw, FileText, Zap, Scale, Database, Trash2, Upload, FolderOpen } from 'lucide-react';
+import { Cpu, AlertCircle, CheckCircle, Loader, RefreshCw, FileText, Zap, Scale, Database, Trash2, Upload, FolderOpen, User } from 'lucide-react';
 import { apiService } from '../../services/api';
 
 interface SettingsProps {
@@ -113,7 +113,7 @@ export default function Settings({ userRole }: SettingsProps) {
   const [isChangingLightweight, setIsChangingLightweight] = useState(false);
   const [isChangingMedium, setIsChangingMedium] = useState(false);
   const [isChangingOCR, setIsChangingOCR] = useState(false);
-  const [activeTab, setActiveTab] = useState<'llm' | 'ocr' | 'rag'>('llm');
+  const [activeTab, setActiveTab] = useState<'personal' | 'llm' | 'ocr' | 'rag'>('personal');
 
   // RAG State
   const [ragDocuments, setRagDocuments] = useState<any[]>([]);
@@ -127,7 +127,8 @@ export default function Settings({ userRole }: SettingsProps) {
   const [deleteConfirmDocId, setDeleteConfirmDocId] = useState<string | null>(null);
   const [clearAllConfirm, setClearAllConfirm] = useState(false);
 
-  const isAdmin = userRole === 'admin';
+  // Admin or PMO_HEAD can access system settings (AI, OCR, RAG)
+  const canAccessSystemSettings = userRole === 'admin' || userRole === 'pmo_head';
   const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8083/api';
 
   const getAuthHeaders = () => {
@@ -427,71 +428,152 @@ export default function Settings({ userRole }: SettingsProps) {
   const lightweightModels = availableModels.filter(m => m.category === 'lightweight');
   const mediumModels = availableModels.filter(m => m.category === 'medium');
 
-  if (!isAdmin) {
-    return (
-      <div className="p-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
-            <div className="flex items-center gap-3">
-              <AlertCircle className="text-yellow-600" size={24} />
-              <div>
-                <h3 className="font-semibold text-yellow-900">접근 권한 없음</h3>
-                <p className="text-yellow-700 mt-1">설정 페이지는 시스템 관리자만 접근할 수 있습니다.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="p-8">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">시스템 설정</h1>
-          <p className="text-gray-600">AI 모델 및 OCR 엔진을 관리합니다.</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">설정</h1>
+          <p className="text-gray-600">개인 설정 및 시스템 환경을 관리합니다.</p>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex gap-2 mb-6">
+        <div className="flex gap-2 mb-6 flex-wrap">
           <button
-            onClick={() => setActiveTab('llm')}
+            onClick={() => setActiveTab('personal')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-              activeTab === 'llm'
-                ? 'bg-purple-600 text-white'
+              activeTab === 'personal'
+                ? 'bg-blue-600 text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
-            <Cpu size={18} />
-            AI 모델
+            <User size={18} />
+            개인 설정
           </button>
-          <button
-            onClick={() => setActiveTab('ocr')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-              activeTab === 'ocr'
-                ? 'bg-purple-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            <FileText size={18} />
-            OCR 엔진
-          </button>
-          <button
-            onClick={() => setActiveTab('rag')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-              activeTab === 'rag'
-                ? 'bg-purple-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            <Database size={18} />
-            RAG 지식베이스
-          </button>
+          {canAccessSystemSettings && (
+            <>
+              <button
+                onClick={() => setActiveTab('llm')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                  activeTab === 'llm'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <Cpu size={18} />
+                AI 모델
+              </button>
+              <button
+                onClick={() => setActiveTab('ocr')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                  activeTab === 'ocr'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <FileText size={18} />
+                OCR 엔진
+              </button>
+              <button
+                onClick={() => setActiveTab('rag')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                  activeTab === 'rag'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <Database size={18} />
+                RAG 지식베이스
+              </button>
+            </>
+          )}
         </div>
 
+        {/* Personal Settings Tab */}
+        {activeTab === 'personal' && (
+          <div className="bg-white rounded-lg shadow-md border border-gray-200">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <User className="text-blue-600" size={20} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">개인 설정</h2>
+                  <p className="text-sm text-gray-600">알림, 테마 등 개인 환경을 설정합니다</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Theme Settings */}
+              <div className="p-4 border border-gray-200 rounded-lg">
+                <h3 className="font-semibold text-gray-900 mb-4">테마 설정</h3>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="theme" value="light" defaultChecked className="w-4 h-4 text-blue-600" />
+                    <span className="text-gray-700">라이트 모드</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="theme" value="dark" className="w-4 h-4 text-blue-600" />
+                    <span className="text-gray-700">다크 모드</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="theme" value="system" className="w-4 h-4 text-blue-600" />
+                    <span className="text-gray-700">시스템 설정</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Notification Settings */}
+              <div className="p-4 border border-gray-200 rounded-lg">
+                <h3 className="font-semibold text-gray-900 mb-4">알림 설정</h3>
+                <div className="space-y-3">
+                  <label className="flex items-center justify-between cursor-pointer">
+                    <span className="text-gray-700">이메일 알림</span>
+                    <input type="checkbox" defaultChecked className="w-5 h-5 text-blue-600 rounded" />
+                  </label>
+                  <label className="flex items-center justify-between cursor-pointer">
+                    <span className="text-gray-700">브라우저 알림</span>
+                    <input type="checkbox" defaultChecked className="w-5 h-5 text-blue-600 rounded" />
+                  </label>
+                  <label className="flex items-center justify-between cursor-pointer">
+                    <span className="text-gray-700">이슈 할당 알림</span>
+                    <input type="checkbox" defaultChecked className="w-5 h-5 text-blue-600 rounded" />
+                  </label>
+                  <label className="flex items-center justify-between cursor-pointer">
+                    <span className="text-gray-700">회의 알림</span>
+                    <input type="checkbox" defaultChecked className="w-5 h-5 text-blue-600 rounded" />
+                  </label>
+                </div>
+              </div>
+
+              {/* Language Settings */}
+              <div className="p-4 border border-gray-200 rounded-lg">
+                <label htmlFor="language-select" className="block font-semibold text-gray-900 mb-4">언어 설정</label>
+                <select
+                  id="language-select"
+                  title="언어 선택"
+                  className="w-full md:w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="ko">한국어</option>
+                  <option value="en">English</option>
+                </select>
+              </div>
+
+              {/* Save Button */}
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-all"
+                >
+                  설정 저장
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* LLM Model Settings Tab */}
-        {activeTab === 'llm' && (
+        {activeTab === 'llm' && canAccessSystemSettings && (
           <div className="bg-white rounded-lg shadow-md border border-gray-200">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center gap-3">
@@ -684,7 +766,7 @@ export default function Settings({ userRole }: SettingsProps) {
         )}
 
         {/* OCR Engine Settings Tab */}
-        {activeTab === 'ocr' && (
+        {activeTab === 'ocr' && canAccessSystemSettings && (
           <div className="bg-white rounded-lg shadow-md border border-gray-200">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center gap-3">
@@ -820,7 +902,7 @@ export default function Settings({ userRole }: SettingsProps) {
         )}
 
         {/* RAG Knowledge Base Settings Tab */}
-        {activeTab === 'rag' && (
+        {activeTab === 'rag' && canAccessSystemSettings && (
           <div className="bg-white rounded-lg shadow-md border border-gray-200">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center gap-3">

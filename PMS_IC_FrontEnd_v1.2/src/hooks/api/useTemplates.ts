@@ -215,6 +215,30 @@ export function useApplyTemplate() {
   });
 }
 
+// Apply template to a specific phase (creates WBS structure)
+export function useApplyTemplateToPhase() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      templateSetId,
+      phaseId,
+      projectId,
+    }: {
+      templateSetId: string;
+      phaseId: string;
+      projectId: string;
+    }) => {
+      return apiService.applyTemplateToPhase(templateSetId, phaseId, projectId);
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['wbs'] });
+      queryClient.invalidateQueries({ queryKey: ['wbs', 'groups', { phaseId: variables.phaseId }] });
+      queryClient.invalidateQueries({ queryKey: ['wbs', 'phase', variables.phaseId] });
+    },
+  });
+}
+
 // ============ Export Template ============
 
 export function useExportTemplate() {

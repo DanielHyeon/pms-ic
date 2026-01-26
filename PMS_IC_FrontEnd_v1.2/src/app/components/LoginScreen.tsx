@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Shield, Lock, User, AlertCircle, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 import { useLogin, useSetToken } from '../../hooks/api';
@@ -147,8 +148,11 @@ export default function LoginScreen() {
   const handleQuickLogin = async (userEmail: string) => {
     const user = demoUsers[userEmail];
     if (user) {
-      setEmail(userEmail);
-      setPassword(user.password);
+      // Use flushSync to ensure state updates are reflected in UI immediately
+      flushSync(() => {
+        setEmail(userEmail);
+        setPassword(user.password);
+      });
 
       try {
         const response = await loginMutation.mutateAsync({ email: userEmail, password: user.password });

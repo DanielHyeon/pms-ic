@@ -345,7 +345,6 @@ export const menuAccessByRole: Record<UserRole, string[]> = {
   ],
   pm: [
     'dashboard',
-    'projects',
     'parts',
     'rfp',
     'requirements',

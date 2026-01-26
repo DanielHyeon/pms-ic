@@ -44,7 +44,8 @@ function withUserRole<P extends { userRole: UserRole }>(
 ): ComponentType<Omit<P, 'userRole'>> {
   return function WrappedComponent(props: Omit<P, 'userRole'>) {
     const { user } = useAuthStore();
-    const userRole = user?.role || 'pm';
+    // Default to auditor (read-only) for minimum privilege principle
+    const userRole = user?.role || 'auditor';
     return <Component {...(props as P)} userRole={userRole} />;
   };
 }
