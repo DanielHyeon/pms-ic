@@ -1,7 +1,7 @@
 # PMS-IC Documentation Index
 
 **Project**: Insurance Claims Project Management System with AI Support
-**Last Updated**: 2026-01-26
+**Last Updated**: 2026-01-27
 
 ---
 
@@ -56,10 +56,10 @@
 
 ## 3. Security & Authorization
 
-- **[Project-Scoped-Authorization-Design.md](./Project-Scoped-Authorization-Design.md)** - Multi-role authorization
-  - Project-scoped RBAC design
-  - Database schema changes
-  - Migration strategy
+- **[Project-Scoped-Authorization-Design.md](./Project-Scoped-Authorization-Design.md)** - Multi-role authorization ✅
+  - Project-scoped RBAC design (Implemented)
+  - Tenant-aware Dashboard filtering (Implemented 2026-01-26)
+  - ProjectSecurityService for authorization checks
 
 ---
 
@@ -93,24 +93,18 @@
   - TextToSQL natural language queries
   - Role-based customizable reports
 
+> **Note**: Completed implementation plans have been removed. See git history for reference.
+
 ---
 
 ## 6. Project Management Features (Korean)
-
-### Core Implementation
-- **[프로젝트관리_구현계획.md](./프로젝트관리_구현계획.md)** - Project management implementation
-  - Multi-project support
-  - Hierarchical permission system
-
-### RFP Management
-- **[구현계획_RFP관리_v2.0.md](./구현계획_RFP관리_v2.0.md)** - RFP management v2.0
-  - Backlog entity integration
-  - Requirement collection & prioritization
 
 ### Sprint & Metadata
 - **[스프린트_DoD_메타데이터_체크리스트.md](./스프린트_DoD_메타데이터_체크리스트.md)** - Sprint DoD checklist
   - Definition of Done standards
   - Metadata requirements
+
+> **Note**: Implementation plans (프로젝트관리_구현계획.md, 구현계획_RFP관리_v2.0.md) have been completed and removed.
 
 ---
 
@@ -134,11 +128,6 @@
 | [보험금지급심사 AI기반 수행 단계별 절차와 방법론.pdf](./보험금지급심사%20AI기반%20수행%20단계별%20절차와%20방법론.pdf) | Methodology PDF |
 | [PMS-제품화전략.pdf](./PMS-제품화전략.pdf) | Productization strategy PDF |
 
-### Archived
-- **[_archived/](./_archived/)** - Deprecated/superseded documents
-  - `RFP_관리_기능_설계서_v1.0.md` - Superseded by v2.0
-  - `LLM_GUIDE.md` - Consolidated into LLM_ARCHITECTURE.md
-
 ---
 
 ## Implementation Status Summary
@@ -152,6 +141,8 @@
 | AI Phase 1 (Gates) | ✅ Complete | 100% |
 | AI Phase 2 (Workflows) | ✅ Complete | 100% |
 | AI Phase 3 (Productization) | ✅ Complete | 100% |
+| Project-Scoped Authorization | ✅ Complete | 100% |
+| Tenant-Aware Dashboard | ✅ Complete | 100% |
 
 For detailed status, see [ai-architecture/implementation-status.md](./ai-architecture/implementation-status.md).
 

@@ -5,10 +5,12 @@ import { trackProgressData, subProjectData, partLeaderData, phaseData, sprintVel
 import { getStatusColor, getStatusLabel, getTrackColor, getActivityColor } from '../../utils/status';
 import { useProject } from '../../contexts/ProjectContext';
 import { useProjectsWithDetails } from '../../hooks/api/useProjects';
+import { usePortfolioActivities, useProjectActivities } from '../../hooks/api/useDashboard';
 
 // 포트폴리오 뷰 (전체 프로젝트 현황)
 function PortfolioView({ userRole, onSelectProject }: { userRole: UserRole; onSelectProject: (projectId: string) => void }) {
   const { data: projects = [], isLoading } = useProjectsWithDetails();
+  const { data: activities = [] } = usePortfolioActivities();
 
   const getStatusInfo = (status: string) => {
     switch (status) {
@@ -215,16 +217,44 @@ function PortfolioView({ userRole, onSelectProject }: { userRole: UserRole; onSe
           </div>
         </div>
       </div>
+
+      {/* Portfolio Recent Activities */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h3 className="font-semibold text-gray-900 mb-4">포트폴리오 최근 활동</h3>
+        <div className="space-y-3">
+          {activities.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-4">최근 활동이 없습니다</p>
+          ) : (
+            activities.slice(0, 10).map((activity, idx) => (
+              <div key={idx} className="flex items-center gap-4 py-3 border-b border-gray-100 last:border-0">
+                <div className={`w-2 h-2 rounded-full ${getActivityColor(activity.type || 'info')}`}></div>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-900">
+                    <span className="font-medium">{activity.user}</span> {activity.action}
+                  </p>
+                  {activity.projectName && (
+                    <p className="text-xs text-gray-500">{activity.projectName}</p>
+                  )}
+                </div>
+                <span className="text-xs text-gray-500">{activity.time}</span>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
 export default function Dashboard({ userRole }: { userRole: UserRole }) {
   const { currentProject, selectProject } = useProject();
-  
+
   // PMO, Admin이고 프로젝트 미선택 시 포트폴리오 뷰
   const showPortfolioView = ['pmo_head', 'admin'].includes(userRole) && !currentProject;
-  
+
+  // Fetch project activities when a project is selected
+  const { data: projectActivities = [] } = useProjectActivities(currentProject?.id || null);
+
   if (showPortfolioView) {
     return <PortfolioView userRole={userRole} onSelectProject={selectProject} />;
   }
@@ -584,23 +614,21 @@ export default function Dashboard({ userRole }: { userRole: UserRole }) {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <h3 className="font-semibold text-gray-900 mb-4">최근 활동</h3>
         <div className="space-y-3">
-          {[
-            { user: '박민수', action: 'OCR 모델 v2.1 성능 테스트 완료', time: '5분 전', type: 'success' },
-            { user: '이영희', action: '데이터 비식별화 문서 승인 요청', time: '1시간 전', type: 'info' },
-            { user: 'AI 어시스턴트', action: '일정 지연 위험 감지 알림 발송', time: '2시간 전', type: 'warning' },
-            { user: '김철수', action: 'Sprint 5 회고 회의록 등록', time: '3시간 전', type: 'info' },
-            { user: '최지훈', action: '긴급 이슈 #47 해결 완료', time: '5시간 전', type: 'success' },
-          ].map((activity, idx) => (
-            <div key={idx} className="flex items-center gap-4 py-3 border-b border-gray-100 last:border-0">
-              <div className={`w-2 h-2 rounded-full ${getActivityColor(activity.type)}`}></div>
-              <div className="flex-1">
-                <p className="text-sm text-gray-900">
-                  <span className="font-medium">{activity.user}</span> {activity.action}
-                </p>
+          {projectActivities.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-4">최근 활동이 없습니다</p>
+          ) : (
+            projectActivities.slice(0, 10).map((activity, idx) => (
+              <div key={idx} className="flex items-center gap-4 py-3 border-b border-gray-100 last:border-0">
+                <div className={`w-2 h-2 rounded-full ${getActivityColor(activity.type || 'info')}`}></div>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-900">
+                    <span className="font-medium">{activity.user}</span> {activity.action}
+                  </p>
+                </div>
+                <span className="text-xs text-gray-500">{activity.time}</span>
               </div>
-              <span className="text-xs text-gray-500">{activity.time}</span>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
     </div>

@@ -8,13 +8,18 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-@Tag(name = "Dashboard", description = "대시보드 API")
+/**
+ * Portfolio Dashboard Controller.
+ * Provides aggregated dashboard statistics for user's accessible projects.
+ */
+@Tag(name = "Dashboard", description = "Portfolio Dashboard API")
 @RestController
 @RequestMapping("/api/dashboard")
 @RequiredArgsConstructor
@@ -22,17 +27,21 @@ public class DashboardController {
 
     private final DashboardService dashboardService;
 
-    @Operation(summary = "대시보드 통계 조회")
+    @Operation(summary = "Portfolio 대시보드 통계 조회",
+               description = "로그인 사용자가 접근 가능한 프로젝트들의 집계 통계를 반환합니다.")
     @GetMapping("/stats")
-    public ResponseEntity<ApiResponse<DashboardStats>> getStats() {
-        DashboardStats stats = dashboardService.getStats();
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<DashboardStats>> getPortfolioStats() {
+        DashboardStats stats = dashboardService.getPortfolioStats();
         return ResponseEntity.ok(ApiResponse.success(stats));
     }
 
-    @Operation(summary = "최근 활동 조회")
+    @Operation(summary = "Portfolio 최근 활동 조회",
+               description = "로그인 사용자가 접근 가능한 프로젝트들의 최근 활동을 반환합니다.")
     @GetMapping("/activities")
-    public ResponseEntity<ApiResponse<List<ActivityDto>>> getActivities() {
-        List<ActivityDto> activities = dashboardService.getRecentActivities();
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<List<ActivityDto>>> getPortfolioActivities() {
+        List<ActivityDto> activities = dashboardService.getPortfolioActivities();
         return ResponseEntity.ok(ApiResponse.success(activities));
     }
 }

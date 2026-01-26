@@ -1,4 +1,4 @@
-# PMS Insurance Claims - 핵심 요약 (v2.1-lite)
+# PMS Insurance Claims - 핵심 요약 (v2.2-lite)
 
 ## 1. 미션
 보험심사 프로젝트 전주기 관리 + GraphRAG AI 의사결정 지원 플랫폼
@@ -30,8 +30,11 @@ Project ↔ ChatSession → ChatMessage
 - API 호출은 /api 폴더에서만
 
 ## 6. 보안 & 권한 핵심
-- JWT (24시간) + RBAC
-- 주요 역할: SPONSOR, PMO_HEAD, PM, DEVELOPER, QA, BUSINESS_ANALYST, ADMIN
+- JWT (24시간) + Project-Scoped RBAC
+- 시스템 역할: ADMIN, AUDITOR (전역)
+- 프로젝트 역할: SPONSOR, PMO_HEAD, PM, DEVELOPER, QA, BUSINESS_ANALYST, MEMBER
+- ProjectSecurityService: `@PreAuthorize("@projectSecurity.hasRole(#projectId, 'PM')")`
+- Tenant-aware Dashboard: 사용자별 접근 가능한 프로젝트만 표시
 
 ## 7. 가장 자주 참조하는 설정값
 - AI_SERVICE_URL=http://llm-service:8000

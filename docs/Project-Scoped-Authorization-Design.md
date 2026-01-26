@@ -1,9 +1,9 @@
 # Project-Scoped Authorization System Design
 
-> **Version**: 1.0
-> **Date**: 2026-01-17
+> **Version**: 1.1
+> **Date**: 2026-01-26
 > **Author**: PMS Insurance Claims Team
-> **Status**: Draft - Pending Review
+> **Status**: ✅ Implemented
 
 ---
 
@@ -1292,12 +1292,60 @@ class ProjectControllerSecurityIntegrationTest {
 
 ---
 
-**Document Status**: Draft - Pending Review
+## 12. Tenant-Aware Dashboard (Implemented 2026-01-26)
 
-**Reviewers**:
-- [ ] Backend Lead
-- [ ] Security Team
-- [ ] Frontend Lead
-- [ ] Product Owner
+### 12.1 Overview
 
-**Approval Date**: TBD
+Dashboard has been updated to filter data based on user's project membership and role.
+
+### 12.2 API Endpoints
+
+| Endpoint | Authorization | Description |
+|----------|--------------|-------------|
+| `GET /api/dashboard/stats` | `isAuthenticated()` | Portfolio stats (user's accessible projects) |
+| `GET /api/dashboard/activities` | `isAuthenticated()` | Portfolio activities |
+| `GET /api/projects/{projectId}/dashboard/stats` | `@projectSecurity.isProjectMember()` | Project-specific stats |
+| `GET /api/projects/{projectId}/dashboard/activities` | `@projectSecurity.isProjectMember()` | Project-specific activities |
+
+### 12.3 Role-Based Data Access
+
+| Role | Portfolio View | Project View |
+|------|---------------|--------------|
+| ADMIN | All projects | Any project |
+| PMO_HEAD | All projects | Any project |
+| AUDITOR | All projects (read-only) | Any project |
+| PM | Member projects only | Membership required |
+| DEVELOPER | Member projects only | Membership required |
+| Other roles | Member projects only | Membership required |
+
+### 12.4 Implementation Details
+
+**Backend:**
+- `DashboardController`: Portfolio endpoints with `@PreAuthorize("isAuthenticated()")`
+- `ProjectDashboardController`: Project-specific endpoints with membership check
+- `DashboardService`: Filters data using `ProjectSecurityService` and `ProjectMemberRepository`
+
+**Frontend:**
+- `useDashboard.ts`: Hooks for both portfolio and project-specific views
+- `Dashboard.tsx`: Auto-switches between portfolio and project views based on context
+- `api.ts`: New methods for tenant-aware dashboard API calls
+
+**Database:**
+- `outbox_events.project_id`: Added for efficient activity filtering
+- Index on `(project_id, created_at DESC)` for performance
+
+### 12.5 Cache Strategy
+
+| Cache Key Pattern | TTL | Invalidation |
+|------------------|-----|--------------|
+| `portfolio-stats-{userId}` | 1 hour | Project create/update |
+| `project-stats-{projectId}` | 1 hour | Task status change |
+
+---
+
+**Document Status**: ✅ Implemented
+
+**Implementation History**:
+- 2026-01-17: Initial design approved
+- 2026-01-26: ProjectSecurityService implemented
+- 2026-01-26: Tenant-aware Dashboard implemented

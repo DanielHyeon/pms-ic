@@ -91,4 +91,18 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
      * Find all events with pagination
      */
     Page<OutboxEvent> findAllByOrderByCreatedAtDesc(Pageable pageable);
+
+    // ===== Tenant-Aware Dashboard Methods =====
+
+    /**
+     * Find events for a specific project with pagination (for project dashboard)
+     */
+    Page<OutboxEvent> findByProjectIdOrderByCreatedAtDesc(String projectId, Pageable pageable);
+
+    /**
+     * Find events for multiple projects with pagination (for portfolio dashboard)
+     */
+    @Query("SELECT e FROM OutboxEvent e WHERE e.projectId IN :projectIds ORDER BY e.createdAt DESC")
+    Page<OutboxEvent> findByProjectIdInOrderByCreatedAtDesc(
+            @Param("projectIds") List<String> projectIds, Pageable pageable);
 }

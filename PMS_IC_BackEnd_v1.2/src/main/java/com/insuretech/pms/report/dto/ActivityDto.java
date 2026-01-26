@@ -14,4 +14,6 @@ public class ActivityDto {
     private String action;
     private String time;
     private String type; // success, info, warning, error
+    private String projectId;   // for tenant-aware filtering
+    private String projectName; // for display in portfolio view
 }

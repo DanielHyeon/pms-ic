@@ -37,6 +37,9 @@ public class OutboxEvent {
     @Column(name = "aggregate_id", nullable = false, length = 100)
     private String aggregateId;
 
+    @Column(name = "project_id", length = 50)
+    private String projectId;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "payload", nullable = false, columnDefinition = "jsonb")
     private Map<String, Object> payload;

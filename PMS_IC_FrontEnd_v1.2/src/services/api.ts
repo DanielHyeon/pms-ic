@@ -153,25 +153,71 @@ export class ApiService {
     );
   }
 
-  async getDashboardStats() {
+  // ========== Portfolio Dashboard API (aggregated for user's accessible projects) ==========
+
+  async getPortfolioDashboardStats() {
     return this.fetchWithFallback('/dashboard/stats', {}, {
-      overallProgress: 62,
-      budgetUsage: 58,
-      budgetTotal: 1000,
-      budgetUsed: 580,
-      activeIssues: 7,
-      highPriorityIssues: 3,
-      completedTasks: 142,
+      isPortfolioView: true,
+      projectId: null,
+      projectName: null,
+      totalProjects: 5,
+      activeProjects: 3,
       totalTasks: 230,
+      completedTasks: 142,
+      avgProgress: 62,
+      projectsByStatus: {
+        'PLANNING': 1,
+        'IN_PROGRESS': 3,
+        'ON_HOLD': 0,
+        'COMPLETED': 1,
+        'CANCELLED': 0,
+      },
     });
   }
 
-  async getActivities() {
+  async getPortfolioActivities() {
     return this.fetchWithFallback('/dashboard/activities', {}, [
-      { user: '박민수', action: 'OCR 모델 v2.1 성능 테스트 완료', time: '5분 전', type: 'success' as const },
-      { user: '이영희', action: '데이터 비식별화 문서 승인 요청', time: '1시간 전', type: 'info' as const },
-      { user: 'AI 어시스턴트', action: '일정 지연 위험 감지 알림 발송', time: '2시간 전', type: 'warning' as const },
+      { user: '박민수', action: 'OCR 모델 v2.1 성능 테스트 완료', time: '5분 전', type: 'success' as const, projectId: 'proj-001', projectName: 'AI 보험심사 처리 시스템' },
+      { user: '이영희', action: '데이터 비식별화 문서 승인 요청', time: '1시간 전', type: 'info' as const, projectId: 'proj-001', projectName: 'AI 보험심사 처리 시스템' },
+      { user: 'AI 어시스턴트', action: '일정 지연 위험 감지 알림 발송', time: '2시간 전', type: 'warning' as const, projectId: 'proj-002', projectName: '모바일 보험 플랫폼' },
     ]);
+  }
+
+  // ========== Project-specific Dashboard API ==========
+
+  async getProjectDashboardStats(projectId: string) {
+    return this.fetchWithFallback(`/projects/${projectId}/dashboard/stats`, {}, {
+      isPortfolioView: false,
+      projectId,
+      projectName: 'AI 보험심사 처리 시스템',
+      totalProjects: 1,
+      activeProjects: 1,
+      totalTasks: 50,
+      completedTasks: 32,
+      avgProgress: 64,
+      projectsByStatus: {
+        'IN_PROGRESS': 1,
+      },
+    });
+  }
+
+  async getProjectActivities(projectId: string) {
+    return this.fetchWithFallback(`/projects/${projectId}/dashboard/activities`, {}, [
+      { user: '박민수', action: 'OCR 모델 v2.1 성능 테스트 완료', time: '5분 전', type: 'success' as const, projectId, projectName: 'AI 보험심사 처리 시스템' },
+      { user: '이영희', action: '데이터 비식별화 문서 승인 요청', time: '1시간 전', type: 'info' as const, projectId, projectName: 'AI 보험심사 처리 시스템' },
+    ]);
+  }
+
+  // ========== Legacy Dashboard API (backward compatibility) ==========
+
+  /** @deprecated Use getPortfolioDashboardStats() instead */
+  async getDashboardStats() {
+    return this.getPortfolioDashboardStats();
+  }
+
+  /** @deprecated Use getPortfolioActivities() instead */
+  async getActivities() {
+    return this.getPortfolioActivities();
   }
 
   // ========== Project API ==========

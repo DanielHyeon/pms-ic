@@ -12,6 +12,12 @@ import java.util.Map;
 @NoArgsConstructor
 @AllArgsConstructor
 public class DashboardStats {
+    // View mode indicators
+    private Boolean isPortfolioView;
+    private String projectId;
+    private String projectName;
+
+    // Statistics
     private Long totalProjects;
     private Long activeProjects;
     private Long totalTasks;
