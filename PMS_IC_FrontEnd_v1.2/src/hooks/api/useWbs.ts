@@ -396,6 +396,106 @@ export function useUnlinkTaskFromWbs() {
   });
 }
 
+// ============ Project-wide WBS (All Phases) ============
+
+interface PhaseInfo {
+  id: string;
+  name: string;
+  description?: string;
+  status: string;
+  progress: number;
+  startDate?: string;
+  endDate?: string;
+}
+
+export function useProjectWbs(projectId: string, phases: PhaseInfo[]) {
+  return useQuery({
+    queryKey: wbsKeys.projectWbs(projectId),
+    queryFn: async () => {
+      if (!phases || phases.length === 0) return [];
+
+      const result = [];
+
+      for (const phase of phases) {
+        // Get groups for this phase
+        const groups = await apiService.getWbsGroups(phase.id);
+        const groupsWithItems: WbsGroupWithItems[] = [];
+
+        for (const group of groups || []) {
+          const items = await apiService.getWbsItems(group.id);
+          const itemsWithTasks: WbsItemWithTasks[] = [];
+
+          for (const item of items || []) {
+            const tasks = await apiService.getWbsTasks(item.id);
+            const completedTasks = (tasks || []).filter((t: WbsTask) => t.status === 'COMPLETED').length;
+
+            const calculatedProgress =
+              tasks && tasks.length > 0
+                ? calculateWeightedProgress(tasks.map((t: WbsTask) => ({ weight: t.weight, progress: t.progress })))
+                : item.progress || 0;
+
+            itemsWithTasks.push({
+              ...item,
+              tasks: tasks || [],
+              totalTasks: (tasks || []).length,
+              completedTasks,
+              calculatedProgress,
+            });
+          }
+
+          const totalTasks = itemsWithTasks.reduce((sum, i) => sum + i.totalTasks, 0);
+          const completedTasks = itemsWithTasks.reduce((sum, i) => sum + i.completedTasks, 0);
+          const completedItems = itemsWithTasks.filter((i) => i.status === 'COMPLETED').length;
+
+          const calculatedProgress =
+            itemsWithTasks.length > 0
+              ? calculateWeightedProgress(
+                  itemsWithTasks.map((i) => ({ weight: i.weight, progress: i.calculatedProgress }))
+                )
+              : group.progress || 0;
+
+          groupsWithItems.push({
+            ...group,
+            items: itemsWithTasks,
+            totalItems: itemsWithTasks.length,
+            completedItems,
+            totalTasks,
+            completedTasks,
+            calculatedProgress,
+          });
+        }
+
+        const totalGroups = groupsWithItems.length;
+        const completedGroups = groupsWithItems.filter((g) => g.status === 'COMPLETED').length;
+
+        const calculatedProgress =
+          groupsWithItems.length > 0
+            ? calculateWeightedProgress(
+                groupsWithItems.map((g) => ({ weight: g.weight, progress: g.calculatedProgress }))
+              )
+            : phase.progress || 0;
+
+        result.push({
+          id: phase.id,
+          name: phase.name,
+          description: phase.description,
+          status: phase.status,
+          progress: phase.progress,
+          startDate: phase.startDate,
+          endDate: phase.endDate,
+          groups: groupsWithItems,
+          totalGroups,
+          completedGroups,
+          calculatedProgress,
+        });
+      }
+
+      return result;
+    },
+    enabled: !!projectId && phases.length > 0,
+  });
+}
+
 // ============ Progress Recalculation ============
 
 export function useRecalculateProgress() {

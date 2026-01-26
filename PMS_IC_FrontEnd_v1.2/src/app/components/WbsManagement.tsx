@@ -1,20 +1,24 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   FolderTree,
   Calendar,
   ChevronDown,
   LayoutTemplate,
   Link2,
-  RefreshCw,
+  GanttChartSquare,
+  TreeDeciduous,
+  Layers,
 } from 'lucide-react';
-import { WbsTreeView, StoryLinkModal } from './wbs';
+import { WbsTreeView, StoryLinkModal, WbsOverviewTree, WbsGanttChart } from './wbs';
 import { TemplateLibrary, ApplyTemplateModal } from './templates';
 import { WbsBacklogIntegration } from './integration';
 import { useAllPhases } from '../../hooks/api/usePhases';
 import { useTemplateSets, useApplyTemplateToPhase } from '../../hooks/api/useTemplates';
 import { useStories } from '../../hooks/api/useStories';
+import { useProjectWbs } from '../../hooks/api/useWbs';
 import { getRolePermissions } from '../../utils/rolePermissions';
 import { TemplateSet } from '../../types/templates';
+import { PhaseWithWbs } from '../../types/wbs';
 import { UserRole } from '../App';
 
 interface WbsManagementProps {
@@ -23,10 +27,12 @@ interface WbsManagementProps {
 }
 
 type TabType = 'wbs' | 'templates' | 'integration';
+type ViewMode = 'phase' | 'overview' | 'gantt';
 
 export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsManagementProps) {
   const [selectedPhaseId, setSelectedPhaseId] = useState<string>('');
   const [activeTab, setActiveTab] = useState<TabType>('wbs');
+  const [viewMode, setViewMode] = useState<ViewMode>('phase');
   const [showStoryLinkModal, setShowStoryLinkModal] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [selectedWbsItemId, setSelectedWbsItemId] = useState<string>('');
@@ -47,6 +53,30 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
   const phases = phasesData || [];
   const selectedPhase = phases.find(p => p.id === selectedPhaseId);
 
+  // Prepare phases info for project-wide WBS query
+  const phasesInfo = useMemo(() => {
+    return phases.map(p => ({
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      status: p.status,
+      progress: p.progress || 0,
+      startDate: p.startDate,
+      endDate: p.endDate,
+    }));
+  }, [phases]);
+
+  // Project-wide WBS data for overview and gantt views
+  const { data: projectWbsData, isLoading: wbsLoading, refetch: refetchWbs } = useProjectWbs(
+    projectId,
+    phasesInfo
+  );
+
+  // Convert to PhaseWithWbs type
+  const phasesWithWbs: PhaseWithWbs[] = useMemo(() => {
+    return (projectWbsData || []) as PhaseWithWbs[];
+  }, [projectWbsData]);
+
   // Handle phase selection
   const handlePhaseSelect = (phaseId: string) => {
     setSelectedPhaseId(phaseId);
@@ -55,7 +85,7 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
   // Handle story link
   const handleLinkStory = (wbsItemId: string) => {
     setSelectedWbsItemId(wbsItemId);
-    setSelectedWbsItemName('WBS Item'); // TODO: Get actual name
+    setSelectedWbsItemName('WBS Item');
     setShowStoryLinkModal(true);
   };
 
@@ -87,6 +117,12 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
     { id: 'integration' as TabType, label: '백로그 연결', icon: Link2 },
   ];
 
+  const viewModes = [
+    { id: 'phase' as ViewMode, label: 'Phase별', icon: Layers, description: '단계별 WBS 보기' },
+    { id: 'overview' as ViewMode, label: '전체 트리', icon: TreeDeciduous, description: '전체 WBS 트리 보기' },
+    { id: 'gantt' as ViewMode, label: '간트 차트', icon: GanttChartSquare, description: '타임라인 보기' },
+  ];
+
   return (
     <div className="flex-1 p-6 space-y-6">
       {/* Header */}
@@ -95,132 +131,179 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
           <h1 className="text-2xl font-bold text-gray-900">일정 관리 (WBS)</h1>
           <p className="text-gray-500 mt-1">Work Breakdown Structure 기반 일정 관리</p>
         </div>
-      </div>
 
-      {/* Phase Selector */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Calendar size={18} className="text-gray-500" />
-            <span className="text-sm font-medium text-gray-700">단계 선택:</span>
-          </div>
-          <div className="relative flex-1 max-w-md">
-            <select
-              value={selectedPhaseId}
-              onChange={(e) => handlePhaseSelect(e.target.value)}
-              className="w-full appearance-none px-4 py-2 pr-10 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+        {/* View Mode Toggle */}
+        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+          {viewModes.map((mode) => (
+            <button
+              key={mode.id}
+              type="button"
+              onClick={() => setViewMode(mode.id)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                viewMode === mode.id
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+              title={mode.description}
             >
-              <option value="">단계를 선택하세요</option>
-              {phases.map((phase) => (
-                <option key={phase.id} value={phase.id}>
-                  {phase.name}
-                </option>
-              ))}
-            </select>
-            <ChevronDown
-              size={18}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-            />
-          </div>
-          {selectedPhase && (
-            <div className="flex items-center gap-2">
-              <span
-                className={`px-2 py-1 rounded text-xs font-medium ${
-                  selectedPhase.status === 'COMPLETED'
-                    ? 'bg-green-100 text-green-700'
-                    : selectedPhase.status === 'IN_PROGRESS'
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'bg-gray-100 text-gray-700'
-                }`}
-              >
-                {selectedPhase.status === 'COMPLETED'
-                  ? '완료'
-                  : selectedPhase.status === 'IN_PROGRESS'
-                  ? '진행 중'
-                  : '대기'}
-              </span>
-              <span className="text-sm text-gray-500">
-                진행률: {selectedPhase.progress || 0}%
-              </span>
-            </div>
-          )}
+              <mode.icon size={16} />
+              {mode.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Main Content */}
-      {!selectedPhaseId ? (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-          <FolderTree size={48} className="mx-auto text-gray-300 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
-            단계를 선택하세요
-          </h3>
-          <p className="text-gray-500">
-            WBS 구조를 확인하고 관리하려면 먼저 단계를 선택해 주세요.
-          </p>
-        </div>
-      ) : (
-        <>
-          {/* Tab Navigation */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-            <div className="border-b border-gray-200">
-              <nav className="flex space-x-0">
-                {tabs.map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-                      activeTab === tab.id
-                        ? 'border-blue-600 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                  >
-                    <tab.icon size={16} />
-                    {tab.label}
-                  </button>
+      {/* Phase Selector - Only show for 'phase' view mode */}
+      {viewMode === 'phase' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Calendar size={18} className="text-gray-500" />
+              <span className="text-sm font-medium text-gray-700">단계 선택:</span>
+            </div>
+            <div className="relative flex-1 max-w-md">
+              <select
+                value={selectedPhaseId}
+                onChange={(e) => handlePhaseSelect(e.target.value)}
+                title="단계 선택"
+                aria-label="단계 선택"
+                className="w-full appearance-none px-4 py-2 pr-10 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">단계를 선택하세요</option>
+                {phases.map((phase) => (
+                  <option key={phase.id} value={phase.id}>
+                    {phase.name}
+                  </option>
                 ))}
-              </nav>
+              </select>
+              <ChevronDown
+                size={18}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+              />
             </div>
-
-            {/* Tab Content */}
-            <div className="p-6">
-              {activeTab === 'wbs' && selectedPhase && (
-                <WbsTreeView
-                  phaseId={selectedPhaseId}
-                  phaseName={selectedPhase.name}
-                  phaseCode={selectedPhase.code || '1'}
-                  canEdit={canEdit}
-                  onLinkStory={handleLinkStory}
-                />
-              )}
-
-              {activeTab === 'templates' && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-semibold text-gray-900">템플릿 라이브러리</h3>
-                      <p className="text-sm text-gray-500">
-                        WBS 템플릿을 현재 단계에 적용할 수 있습니다.
-                      </p>
-                    </div>
-                  </div>
-                  <TemplateLibrary
-                    templates={templates}
-                    onApply={handleApplyTemplate}
-                    canApply={canEdit}
-                  />
-                </div>
-              )}
-
-              {activeTab === 'integration' && (
-                <WbsBacklogIntegration
-                  projectId={projectId}
-                  phaseId={selectedPhaseId}
-                  canEdit={canEdit}
-                />
-              )}
-            </div>
+            {selectedPhase && (
+              <div className="flex items-center gap-2">
+                <span
+                  className={`px-2 py-1 rounded text-xs font-medium ${
+                    selectedPhase.status === 'COMPLETED'
+                      ? 'bg-green-100 text-green-700'
+                      : selectedPhase.status === 'IN_PROGRESS'
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'bg-gray-100 text-gray-700'
+                  }`}
+                >
+                  {selectedPhase.status === 'COMPLETED'
+                    ? '완료'
+                    : selectedPhase.status === 'IN_PROGRESS'
+                    ? '진행 중'
+                    : '대기'}
+                </span>
+                <span className="text-sm text-gray-500">
+                  진행률: {selectedPhase.progress || 0}%
+                </span>
+              </div>
+            )}
           </div>
+        </div>
+      )}
+
+      {/* Main Content based on view mode */}
+      {viewMode === 'overview' && (
+        <WbsOverviewTree
+          phases={phasesWithWbs}
+          isLoading={wbsLoading}
+          onRefresh={refetchWbs}
+          canEdit={canEdit}
+        />
+      )}
+
+      {viewMode === 'gantt' && (
+        <WbsGanttChart
+          phases={phasesWithWbs}
+          isLoading={wbsLoading}
+        />
+      )}
+
+      {viewMode === 'phase' && (
+        <>
+          {!selectedPhaseId ? (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+              <FolderTree size={48} className="mx-auto text-gray-300 mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                단계를 선택하세요
+              </h3>
+              <p className="text-gray-500 mb-4">
+                WBS 구조를 확인하고 관리하려면 먼저 단계를 선택해 주세요.
+              </p>
+              <p className="text-sm text-gray-400">
+                또는 상단의 &quot;전체 트리&quot; 또는 &quot;간트 차트&quot;를 선택하여 전체 프로젝트 WBS를 확인할 수 있습니다.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Tab Navigation */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+                <div className="border-b border-gray-200">
+                  <nav className="flex space-x-0">
+                    {tabs.map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                          activeTab === tab.id
+                            ? 'border-blue-600 text-blue-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        }`}
+                      >
+                        <tab.icon size={16} />
+                        {tab.label}
+                      </button>
+                    ))}
+                  </nav>
+                </div>
+
+                {/* Tab Content */}
+                <div className="p-6">
+                  {activeTab === 'wbs' && selectedPhase && (
+                    <WbsTreeView
+                      phaseId={selectedPhaseId}
+                      phaseName={selectedPhase.name}
+                      phaseCode={selectedPhase.code || '1'}
+                      canEdit={canEdit}
+                      onLinkStory={handleLinkStory}
+                    />
+                  )}
+
+                  {activeTab === 'templates' && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-semibold text-gray-900">템플릿 라이브러리</h3>
+                          <p className="text-sm text-gray-500">
+                            WBS 템플릿을 현재 단계에 적용할 수 있습니다.
+                          </p>
+                        </div>
+                      </div>
+                      <TemplateLibrary
+                        templates={templates}
+                        onApply={handleApplyTemplate}
+                        canApply={canEdit}
+                      />
+                    </div>
+                  )}
+
+                  {activeTab === 'integration' && (
+                    <WbsBacklogIntegration
+                      projectId={projectId}
+                      phaseId={selectedPhaseId}
+                      canEdit={canEdit}
+                    />
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </>
       )}
 
