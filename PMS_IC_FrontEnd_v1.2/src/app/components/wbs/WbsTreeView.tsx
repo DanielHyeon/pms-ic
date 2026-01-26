@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   ChevronDown,
   ChevronRight,
@@ -548,6 +548,24 @@ export default function WbsTreeView({
     plannedStartDate: '',
     plannedEndDate: '',
   });
+
+  // Auto-expand all groups and items when data loads
+  useEffect(() => {
+    if (groups && groups.length > 0) {
+      // Expand all groups
+      const allGroupIds = new Set(groups.map((g) => g.id));
+      setExpandedGroups(allGroupIds);
+
+      // Expand all items
+      const allItemIds = new Set<string>();
+      groups.forEach((group) => {
+        group.items.forEach((item) => {
+          allItemIds.add(item.id);
+        });
+      });
+      setExpandedItems(allItemIds);
+    }
+  }, [groups]);
 
   const toggleGroup = (groupId: string) => {
     setExpandedGroups((prev) => {

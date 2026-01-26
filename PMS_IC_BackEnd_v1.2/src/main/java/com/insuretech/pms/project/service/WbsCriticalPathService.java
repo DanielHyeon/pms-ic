@@ -4,8 +4,10 @@ import com.insuretech.pms.project.dto.CriticalPathResponse;
 import com.insuretech.pms.project.dto.WbsDependencyDto;
 import com.insuretech.pms.project.entity.WbsGroup;
 import com.insuretech.pms.project.entity.WbsItem;
+import com.insuretech.pms.project.entity.WbsTask;
 import com.insuretech.pms.project.repository.WbsGroupRepository;
 import com.insuretech.pms.project.repository.WbsItemRepository;
+import com.insuretech.pms.project.repository.WbsTaskRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,6 +31,7 @@ public class WbsCriticalPathService {
     private final WbsDependencyService dependencyService;
     private final WbsGroupRepository groupRepository;
     private final WbsItemRepository itemRepository;
+    private final WbsTaskRepository taskRepository;
     private final WebClient.Builder webClientBuilder;
 
     @Value("${ai.service.url:http://llm-service:8000}")
@@ -117,7 +120,20 @@ public class WbsCriticalPathService {
             items.add(item);
         }
 
-        // Note: WbsTask is excluded from critical path as it doesn't have date fields
+        // Collect WBS Tasks (only those with date fields set)
+        List<WbsTask> tasks = taskRepository.findByProjectIdOrdered(projectId);
+        for (WbsTask task : tasks) {
+            // Only include tasks that have at least one date field set
+            if (task.getPlannedStartDate() != null || task.getPlannedEndDate() != null) {
+                Map<String, Object> item = new HashMap<>();
+                item.put("id", task.getId());
+                item.put("name", task.getName());
+                item.put("type", "TASK");
+                item.put("startDate", task.getPlannedStartDate() != null ? task.getPlannedStartDate().toString() : null);
+                item.put("endDate", task.getPlannedEndDate() != null ? task.getPlannedEndDate().toString() : null);
+                items.add(item);
+            }
+        }
 
         return items;
     }
@@ -153,14 +169,17 @@ public class WbsCriticalPathService {
                 return buildEmptyResponse();
             }
 
-            // Parse response
-            List<String> criticalPath = (List<String>) data.getOrDefault("criticalPath", Collections.emptyList());
-            int projectDuration = data.get("projectDuration") != null
-                    ? ((Number) data.get("projectDuration")).intValue()
-                    : 0;
+            // Parse response (handle both camelCase and snake_case keys)
+            @SuppressWarnings("unchecked")
+            List<String> criticalPath = (List<String>) getOrDefaultAny(data, (Object) Collections.emptyList(), "criticalPath", "critical_path");
+            int projectDuration = 0;
+            Object durationVal = getOrDefaultAny(data, null, "projectDuration", "project_duration");
+            if (durationVal instanceof Number) {
+                projectDuration = ((Number) durationVal).intValue();
+            }
 
             Map<String, CriticalPathResponse.ItemFloatData> itemsWithFloat = new HashMap<>();
-            Map<String, Object> floatData = (Map<String, Object>) data.get("itemsWithFloat");
+            Map<String, Object> floatData = (Map<String, Object>) getOrDefaultAny(data, null, "itemsWithFloat", "items_with_float");
             if (floatData != null) {
                 for (Map.Entry<String, Object> entry : floatData.entrySet()) {
                     Map<String, Object> itemData = (Map<String, Object>) entry.getValue();
@@ -197,6 +216,20 @@ public class WbsCriticalPathService {
             return ((Number) value).intValue();
         }
         return 0;
+    }
+
+    /**
+     * Get value from map trying multiple keys (for camelCase/snake_case compatibility)
+     */
+    @SuppressWarnings("unchecked")
+    private <T> T getOrDefaultAny(Map<String, Object> map, T defaultValue, String... keys) {
+        for (String key : keys) {
+            Object value = map.get(key);
+            if (value != null) {
+                return (T) value;
+            }
+        }
+        return defaultValue;
     }
 
     private CriticalPathResponse buildEmptyResponse() {

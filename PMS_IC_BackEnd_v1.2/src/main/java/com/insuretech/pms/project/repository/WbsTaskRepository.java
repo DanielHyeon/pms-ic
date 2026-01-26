@@ -26,4 +26,7 @@ public interface WbsTaskRepository extends JpaRepository<WbsTask, String> {
     long countByItemId(@Param("itemId") String itemId);
 
     List<WbsTask> findByAssigneeId(String assigneeId);
+
+    @Query("SELECT wt FROM WbsTask wt WHERE wt.phase.project.id = :projectId ORDER BY wt.phase.orderNum, wt.group.orderNum, wt.item.orderNum, wt.orderNum")
+    List<WbsTask> findByProjectIdOrdered(@Param("projectId") String projectId);
 }

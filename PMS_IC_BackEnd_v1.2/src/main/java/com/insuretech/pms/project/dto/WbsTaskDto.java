@@ -4,6 +4,7 @@ import com.insuretech.pms.project.entity.WbsTask;
 import lombok.Builder;
 import lombok.Data;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -24,6 +25,10 @@ public class WbsTaskDto {
     private Integer actualHours;
     private String assigneeId;
     private String linkedTaskId;
+    private LocalDate plannedStartDate;
+    private LocalDate plannedEndDate;
+    private LocalDate actualStartDate;
+    private LocalDate actualEndDate;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -44,6 +49,10 @@ public class WbsTaskDto {
                 .actualHours(entity.getActualHours())
                 .assigneeId(entity.getAssigneeId())
                 .linkedTaskId(entity.getLinkedTaskId())
+                .plannedStartDate(entity.getPlannedStartDate())
+                .plannedEndDate(entity.getPlannedEndDate())
+                .actualStartDate(entity.getActualStartDate())
+                .actualEndDate(entity.getActualEndDate())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();

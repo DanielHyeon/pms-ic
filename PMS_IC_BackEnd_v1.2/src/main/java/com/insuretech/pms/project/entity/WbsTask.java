@@ -4,6 +4,7 @@ import com.insuretech.pms.common.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDate;
 import java.util.UUID;
 
 /**
@@ -72,6 +73,18 @@ public class WbsTask extends BaseEntity {
 
     @Column(name = "linked_task_id", length = 50)
     private String linkedTaskId;
+
+    @Column(name = "planned_start_date")
+    private LocalDate plannedStartDate;
+
+    @Column(name = "planned_end_date")
+    private LocalDate plannedEndDate;
+
+    @Column(name = "actual_start_date")
+    private LocalDate actualStartDate;
+
+    @Column(name = "actual_end_date")
+    private LocalDate actualEndDate;
 
     @PrePersist
     @Override

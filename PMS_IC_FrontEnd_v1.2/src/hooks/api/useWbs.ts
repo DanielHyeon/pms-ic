@@ -248,9 +248,9 @@ export function useDeleteWbsTask() {
 // ============ Aggregated Views ============
 
 export function usePhaseWbs(phaseId: string) {
-  const { data: groups = [] } = useWbsGroups(phaseId);
+  const { data: groups = [], isLoading: isGroupsLoading, isFetching: isGroupsFetching } = useWbsGroups(phaseId);
 
-  return useQuery({
+  const query = useQuery({
     queryKey: wbsKeys.phaseWbs(phaseId),
     queryFn: async (): Promise<WbsGroupWithItems[]> => {
       if (!groups || groups.length === 0) return [];
@@ -303,8 +303,14 @@ export function usePhaseWbs(phaseId: string) {
 
       return result;
     },
-    enabled: !!phaseId && groups.length >= 0,
+    enabled: !!phaseId && groups.length > 0,
   });
+
+  // Combine loading states: loading if groups are loading OR if phaseWbs query is loading
+  return {
+    ...query,
+    isLoading: isGroupsLoading || isGroupsFetching || query.isLoading,
+  };
 }
 
 // ============ Story-WBS Links (via Integration API) ============

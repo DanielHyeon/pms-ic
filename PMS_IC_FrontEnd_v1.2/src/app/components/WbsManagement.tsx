@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   FolderTree,
   Calendar,
@@ -87,6 +87,26 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
   const phasesWithWbs: PhaseWithWbs[] = useMemo(() => {
     return (projectWbsData || []) as PhaseWithWbs[];
   }, [projectWbsData]);
+
+  // Auto-select the first IN_PROGRESS phase when phases data loads
+  useEffect(() => {
+    if (phases.length > 0 && !selectedPhaseId) {
+      // Find the first IN_PROGRESS phase
+      const inProgressPhase = phases.find(p => p.status === 'IN_PROGRESS');
+      if (inProgressPhase) {
+        setSelectedPhaseId(inProgressPhase.id);
+      } else {
+        // If no IN_PROGRESS phase, select the first non-completed phase
+        const pendingPhase = phases.find(p => p.status !== 'COMPLETED');
+        if (pendingPhase) {
+          setSelectedPhaseId(pendingPhase.id);
+        } else {
+          // All phases completed, select the first one
+          setSelectedPhaseId(phases[0].id);
+        }
+      }
+    }
+  }, [phases, selectedPhaseId]);
 
   // Handle phase selection
   const handlePhaseSelect = (phaseId: string) => {

@@ -202,6 +202,10 @@ public class WbsService {
                 .estimatedHours(request.getEstimatedHours())
                 .assigneeId(request.getAssigneeId())
                 .linkedTaskId(request.getLinkedTaskId())
+                .plannedStartDate(request.getPlannedStartDate())
+                .plannedEndDate(request.getPlannedEndDate())
+                .actualStartDate(request.getActualStartDate())
+                .actualEndDate(request.getActualEndDate())
                 .build();
 
         return WbsTaskDto.from(wbsTaskRepository.save(task));
@@ -223,6 +227,10 @@ public class WbsService {
         if (request.getActualHours() != null) task.setActualHours(request.getActualHours());
         if (request.getAssigneeId() != null) task.setAssigneeId(request.getAssigneeId());
         if (request.getLinkedTaskId() != null) task.setLinkedTaskId(request.getLinkedTaskId());
+        if (request.getPlannedStartDate() != null) task.setPlannedStartDate(request.getPlannedStartDate());
+        if (request.getPlannedEndDate() != null) task.setPlannedEndDate(request.getPlannedEndDate());
+        if (request.getActualStartDate() != null) task.setActualStartDate(request.getActualStartDate());
+        if (request.getActualEndDate() != null) task.setActualEndDate(request.getActualEndDate());
 
         return WbsTaskDto.from(wbsTaskRepository.save(task));
     }

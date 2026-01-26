@@ -300,7 +300,145 @@ No schema changes required. Uses existing:
 | 3 | Frontend visualization | Medium |
 | 4 | Testing & polish | Small |
 
-## 9. Future Enhancements
+## 9. WbsTask Date Fields Addition (2026-01-27 Update)
+
+### 9.1 Problem Statement
+
+현재 WbsTask 엔티티에 일정 필드가 없어서:
+- Gantt 차트에서 WbsTask를 표시할 수 없음
+- Critical Path 계산에서 WbsTask가 제외됨
+- 프론트엔드 타입에는 이미 정의되어 있으나 백엔드에서 지원하지 않음
+
+### 9.2 Changes Required
+
+#### 9.2.1 Database Migration
+
+**File**: `V20260205__wbs_task_dates.sql`
+
+```sql
+-- Add date columns to wbs_tasks table
+ALTER TABLE project.wbs_tasks
+ADD COLUMN IF NOT EXISTS planned_start_date DATE;
+
+ALTER TABLE project.wbs_tasks
+ADD COLUMN IF NOT EXISTS planned_end_date DATE;
+
+ALTER TABLE project.wbs_tasks
+ADD COLUMN IF NOT EXISTS actual_start_date DATE;
+
+ALTER TABLE project.wbs_tasks
+ADD COLUMN IF NOT EXISTS actual_end_date DATE;
+
+-- Add indexes for date queries
+CREATE INDEX IF NOT EXISTS idx_wbs_tasks_planned_start
+  ON project.wbs_tasks(planned_start_date);
+CREATE INDEX IF NOT EXISTS idx_wbs_tasks_planned_end
+  ON project.wbs_tasks(planned_end_date);
+
+COMMENT ON COLUMN project.wbs_tasks.planned_start_date IS 'Planned start date for the task';
+COMMENT ON COLUMN project.wbs_tasks.planned_end_date IS 'Planned end date for the task';
+COMMENT ON COLUMN project.wbs_tasks.actual_start_date IS 'Actual start date when task began';
+COMMENT ON COLUMN project.wbs_tasks.actual_end_date IS 'Actual end date when task completed';
+```
+
+#### 9.2.2 Backend Entity Update
+
+**File**: `WbsTask.java`
+
+```java
+// Add date fields
+@Column(name = "planned_start_date")
+private LocalDate plannedStartDate;
+
+@Column(name = "planned_end_date")
+private LocalDate plannedEndDate;
+
+@Column(name = "actual_start_date")
+private LocalDate actualStartDate;
+
+@Column(name = "actual_end_date")
+private LocalDate actualEndDate;
+```
+
+#### 9.2.3 DTO Update
+
+**File**: `WbsTaskDto.java`
+
+```java
+// Add date fields
+private LocalDate plannedStartDate;
+private LocalDate plannedEndDate;
+private LocalDate actualStartDate;
+private LocalDate actualEndDate;
+
+// Update from() method
+.plannedStartDate(entity.getPlannedStartDate())
+.plannedEndDate(entity.getPlannedEndDate())
+.actualStartDate(entity.getActualStartDate())
+.actualEndDate(entity.getActualEndDate())
+```
+
+#### 9.2.4 Critical Path Service Update
+
+**File**: `WbsCriticalPathService.java`
+
+```java
+// Add WbsTask collection in collectWbsItems()
+private List<Map<String, Object>> collectWbsItems(String projectId) {
+    // ... existing Group and Item collection ...
+
+    // Collect WBS Tasks (now with date fields)
+    List<WbsTask> tasks = taskRepository.findByProjectIdOrdered(projectId);
+    for (WbsTask task : tasks) {
+        if (task.getPlannedStartDate() != null || task.getPlannedEndDate() != null) {
+            Map<String, Object> item = new HashMap<>();
+            item.put("id", task.getId());
+            item.put("name", task.getName());
+            item.put("type", "TASK");
+            item.put("startDate", task.getPlannedStartDate() != null
+                ? task.getPlannedStartDate().toString() : null);
+            item.put("endDate", task.getPlannedEndDate() != null
+                ? task.getPlannedEndDate().toString() : null);
+            items.add(item);
+        }
+    }
+    return items;
+}
+```
+
+#### 9.2.5 Frontend (Already Ready)
+
+프론트엔드의 `wbs.ts` 타입 정의에는 이미 날짜 필드가 포함됨:
+- `plannedStartDate?: string`
+- `plannedEndDate?: string`
+- `actualStartDate?: string`
+- `actualEndDate?: string`
+
+UI에서 날짜 입력 필드 활성화 확인 필요.
+
+### 9.3 Implementation Checklist
+
+- [ ] DB migration script (V20260205__wbs_task_dates.sql)
+- [ ] WbsTask.java entity update
+- [ ] WbsTaskDto.java DTO update
+- [ ] WbsTaskService.java create/update methods update
+- [ ] WbsTaskRepository.java findByProjectIdOrdered() method
+- [ ] WbsCriticalPathService.java include WbsTask in CPM
+- [ ] Frontend WbsTask form date inputs
+- [ ] Test Critical Path with WbsTask items
+
+### 9.4 Impact Analysis
+
+| Component | Impact | Action |
+|-----------|--------|--------|
+| Database | Schema change | New migration |
+| WbsTask Entity | New fields | Add 4 LocalDate fields |
+| WbsTaskDto | New fields | Add 4 fields + conversion |
+| Critical Path | Include WbsTask | Update collectWbsItems() |
+| Gantt Chart | Display WbsTask | Already supported |
+| Task Forms | Date inputs | Verify UI enabled |
+
+## 10. Future Enhancements
 
 - [ ] Multiple critical paths detection
 - [ ] What-if analysis (delay simulation)

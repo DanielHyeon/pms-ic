@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -11,6 +11,8 @@ import {
   ArrowRight,
   AlertTriangle,
   User,
+  ChevronsDownUp,
+  ChevronsUpDown,
 } from 'lucide-react';
 import {
   WbsStatus,
@@ -284,6 +286,31 @@ export default function WbsGanttChart({ phases, projectId, isLoading = false }: 
   const [criticalPathData, setCriticalPathData] = useState<CriticalPathResponse | null>(null);
   const [isLoadingCriticalPath, setIsLoadingCriticalPath] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const taskListRef = useRef<HTMLDivElement>(null);
+  const isScrollSyncing = useRef(false);
+
+  // Sync vertical scroll between left panel and right panel
+  const handleTaskListScroll = useCallback(() => {
+    if (isScrollSyncing.current) return;
+    if (!taskListRef.current || !scrollContainerRef.current) return;
+
+    isScrollSyncing.current = true;
+    scrollContainerRef.current.scrollTop = taskListRef.current.scrollTop;
+    requestAnimationFrame(() => {
+      isScrollSyncing.current = false;
+    });
+  }, []);
+
+  const handleTimelineScroll = useCallback(() => {
+    if (isScrollSyncing.current) return;
+    if (!taskListRef.current || !scrollContainerRef.current) return;
+
+    isScrollSyncing.current = true;
+    taskListRef.current.scrollTop = scrollContainerRef.current.scrollTop;
+    requestAnimationFrame(() => {
+      isScrollSyncing.current = false;
+    });
+  }, []);
 
   // Load dependencies from API
   useEffect(() => {
@@ -480,6 +507,26 @@ export default function WbsGanttChart({ phases, projectId, isLoading = false }: 
     });
   };
 
+  // Expand all items
+  const expandAll = () => {
+    const allIds = new Set<string>();
+    phases.forEach(phase => {
+      allIds.add(phase.id);
+      phase.groups.forEach(group => {
+        allIds.add(group.id);
+        group.items.forEach(item => {
+          allIds.add(item.id);
+        });
+      });
+    });
+    setExpandedIds(allIds);
+  };
+
+  // Collapse all items (only keep phases expanded)
+  const collapseAll = () => {
+    setExpandedIds(new Set(phases.map(p => p.id)));
+  };
+
   // Scroll to today
   const scrollToToday = () => {
     if (!scrollContainerRef.current) return;
@@ -532,6 +579,28 @@ export default function WbsGanttChart({ phases, projectId, isLoading = false }: 
               className={`px-3 py-1 text-sm rounded ${zoom === 'month' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
             >
               월
+            </button>
+          </div>
+
+          {/* Expand/Collapse controls */}
+          <div className="flex items-center gap-1 bg-white rounded-lg border border-gray-200 p-1">
+            <button
+              type="button"
+              onClick={expandAll}
+              className="px-2 py-1 text-sm text-gray-600 hover:bg-gray-100 rounded flex items-center gap-1"
+              title="모두 펼치기"
+            >
+              <ChevronsUpDown size={14} />
+              펼치기
+            </button>
+            <button
+              type="button"
+              onClick={collapseAll}
+              className="px-2 py-1 text-sm text-gray-600 hover:bg-gray-100 rounded flex items-center gap-1"
+              title="모두 접기"
+            >
+              <ChevronsDownUp size={14} />
+              접기
             </button>
           </div>
         </div>
@@ -588,7 +657,12 @@ export default function WbsGanttChart({ phases, projectId, isLoading = false }: 
           </div>
 
           {/* Task rows */}
-          <div className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 300px)' }}>
+          <div
+            ref={taskListRef}
+            className="overflow-y-auto"
+            style={{ maxHeight: 'calc(100vh - 300px)' }}
+            onScroll={handleTaskListScroll}
+          >
             {ganttItems.map((item, index) => {
               // Calculate tree line visibility for each level
               const showTreeLines: boolean[] = [];
@@ -711,6 +785,7 @@ export default function WbsGanttChart({ phases, projectId, isLoading = false }: 
           ref={scrollContainerRef}
           className="flex-1 overflow-x-auto overflow-y-auto"
           style={{ maxHeight: 'calc(100vh - 300px)' }}
+          onScroll={handleTimelineScroll}
         >
           {/* Date headers */}
           <div className="sticky top-0 z-10 bg-white border-b border-gray-200" style={{ height: 48 }}>
