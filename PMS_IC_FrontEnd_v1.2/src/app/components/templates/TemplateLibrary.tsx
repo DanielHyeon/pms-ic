@@ -13,6 +13,7 @@ import {
 import {
   TemplateSet,
   TemplateCategory,
+  MethodologyPhase,
   getCategoryLabel,
   getCategoryColor,
 } from '../../../types/templates';
@@ -31,6 +32,9 @@ import TemplateEditor from './TemplateEditor';
 
 interface TemplateLibraryProps {
   projectId?: string;
+  targetPhaseId?: string;  // If provided, add WBS to this phase instead of creating new phases
+  targetPhaseName?: string;
+  methodologyPhases?: MethodologyPhase[];  // All methodology phases for bulk application
   canEdit?: boolean;
   onApplySuccess?: (phaseIds: string[]) => void;
 }
@@ -47,6 +51,9 @@ const CATEGORIES: Array<{ value: TemplateCategory | 'ALL'; label: string }> = [
 
 export default function TemplateLibrary({
   projectId,
+  targetPhaseId,
+  targetPhaseName,
+  methodologyPhases,
   canEdit = true,
   onApplySuccess,
 }: TemplateLibraryProps) {
@@ -322,6 +329,9 @@ export default function TemplateLibrary({
         <ApplyTemplateModal
           template={templateToApply}
           projectId={projectId}
+          targetPhaseId={targetPhaseId}
+          targetPhaseName={targetPhaseName}
+          methodologyPhases={methodologyPhases}
           onClose={() => setTemplateToApply(null)}
           onSuccess={handleApplySuccess}
         />

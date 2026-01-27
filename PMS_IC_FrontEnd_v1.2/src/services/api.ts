@@ -117,6 +117,46 @@ export class ApiService {
     }
   }
 
+  // Strict fetch that throws on failure - use for critical operations like DELETE
+  private async fetchStrict<T>(
+    endpoint: string,
+    options: RequestInit = {},
+    timeoutMs: number = 10000
+  ): Promise<T> {
+    const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+    const headers: HeadersInit = {
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+      ...(this.token && { Authorization: `Bearer ${this.token}` }),
+      ...options.headers,
+    };
+
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      ...options,
+      headers,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error');
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
+    }
+
+    // If successful, mark backend as available
+    if (this.useMockData) {
+      console.log('Backend is now available');
+      this.useMockData = false;
+    }
+
+    const json = await response.json();
+
+    // Extract data from ApiResponse wrapper if present
+    if (json && typeof json === 'object' && 'data' in json && 'success' in json) {
+      return json.data as T;
+    }
+
+    return json;
+  }
+
   async login(email: string, password: string) {
     // Mock user data for fallback - matches LoginScreen demo users
     const mockUsers: Record<string, { id: string; name: string; role: string; department: string }> = {
@@ -1846,9 +1886,10 @@ export class ApiService {
   }
 
   async deleteWbsGroup(groupId: string) {
-    return this.fetchWithFallback(`/wbs/groups/${groupId}`, {
+    // Use strict fetch for DELETE to ensure we know if deletion actually succeeded
+    return this.fetchStrict(`/wbs/groups/${groupId}`, {
       method: 'DELETE',
-    }, { message: 'WBS Group deleted' });
+    });
   }
 
   async getWbsItems(groupId: string) {
@@ -2113,27 +2154,42 @@ export class ApiService {
       throw new Error('Template not found');
     }
 
-    // Get phases for this project to find the matching phase index
-    const phases = await this.getPhases(projectId);
-    const phaseIndex = phases.findIndex((p: any) => p.id === phaseId);
+    if (!template.phases || template.phases.length === 0) {
+      throw new Error('Template has no phases defined');
+    }
 
-    if (phaseIndex === -1) {
+    // Get the current phase to find its order
+    const phases = await this.getPhases(projectId) as any[];
+    const currentPhase = phases.find((p) => p.id === phaseId);
+
+    if (!currentPhase) {
       throw new Error('Phase not found');
     }
 
-    // Find the phase template that matches the phase order
-    const phaseTemplate = template.phases?.[phaseIndex];
+    // Try to match template phase by:
+    // 1. Phase orderNum (0-indexed in template, may be 1-indexed in phase)
+    // 2. Fall back to first template phase if no match
+    const phaseOrder = (currentPhase.orderNum ?? currentPhase.order ?? 0) as number;
+    let phaseTemplate = template.phases.find((p: any) => p.relativeOrder === phaseOrder + 1);
+
+    // If not found by order+1, try exact match
     if (!phaseTemplate) {
-      throw new Error(`No template defined for phase ${phaseIndex + 1}`);
+      phaseTemplate = template.phases.find((p: any) => p.relativeOrder === phaseOrder);
+    }
+
+    // Fall back to first template phase
+    if (!phaseTemplate) {
+      phaseTemplate = template.phases[0];
     }
 
     // Create WBS groups, items, and tasks from the template
     const createdGroups: any[] = [];
+    const phaseCode = (currentPhase.code || `${phaseOrder + 1}`) as string;
 
     for (const groupTemplate of phaseTemplate.wbsGroups || []) {
       // Create group
       const group = await this.createWbsGroup(phaseId, {
-        code: `${phaseIndex + 1}.${groupTemplate.relativeOrder}`,
+        code: `${phaseCode}.${groupTemplate.relativeOrder}`,
         name: groupTemplate.name,
         description: groupTemplate.description,
         weight: groupTemplate.defaultWeight || 100,
@@ -2149,6 +2205,7 @@ export class ApiService {
           description: itemTemplate.description,
           weight: itemTemplate.defaultWeight || 100,
           estimatedHours: itemTemplate.estimatedHours,
+          phaseId: phaseId,
           status: 'NOT_STARTED',
           progress: 0,
         });
@@ -2158,8 +2215,11 @@ export class ApiService {
           await this.createWbsTask(item.id, {
             code: `${item.code}.${taskTemplate.relativeOrder}`,
             name: taskTemplate.name,
+            description: taskTemplate.description || '',
             weight: taskTemplate.defaultWeight || 100,
             estimatedHours: taskTemplate.estimatedHours,
+            groupId: group.id,
+            phaseId: phaseId,
             status: 'NOT_STARTED',
             progress: 0,
           });
@@ -2171,7 +2231,7 @@ export class ApiService {
 
     return {
       success: true,
-      message: `템플릿 "${phaseTemplate.name}"이(가) 적용되었습니다`,
+      message: `템플릿 "${phaseTemplate.name}"이(가) 적용되었습니다. ${createdGroups.length}개 그룹 생성됨.`,
       createdGroups: createdGroups.length,
     };
   }
@@ -2444,6 +2504,70 @@ export class ApiService {
         errorCount: 0,
         errors: [],
       }
+    );
+  }
+
+  // ========== WBS Snapshot (Backup/Restore) API ==========
+
+  /**
+   * Create a WBS snapshot for a phase
+   */
+  async createWbsSnapshot(request: {
+    phaseId: string;
+    snapshotName?: string;
+    description?: string;
+    snapshotType?: 'PRE_TEMPLATE' | 'MANUAL';
+  }) {
+    return this.fetchWithFallback(
+      '/wbs-snapshots',
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      },
+      null
+    );
+  }
+
+  /**
+   * Get all snapshots for a phase
+   */
+  async getWbsSnapshotsByPhase(phaseId: string) {
+    return this.fetchWithFallback(`/wbs-snapshots/phase/${phaseId}`, {}, []);
+  }
+
+  /**
+   * Get all snapshots for a project
+   */
+  async getWbsSnapshotsByProject(projectId: string) {
+    return this.fetchWithFallback(`/wbs-snapshots/project/${projectId}`, {}, []);
+  }
+
+  /**
+   * Get a specific snapshot
+   */
+  async getWbsSnapshot(snapshotId: string) {
+    return this.fetchWithFallback(`/wbs-snapshots/${snapshotId}`, {}, null);
+  }
+
+  /**
+   * Restore WBS data from a snapshot
+   */
+  async restoreWbsSnapshot(snapshotId: string) {
+    return this.fetchWithFallback(
+      `/wbs-snapshots/${snapshotId}/restore`,
+      { method: 'POST' },
+      null
+    );
+  }
+
+  /**
+   * Delete a WBS snapshot (soft delete)
+   */
+  async deleteWbsSnapshot(snapshotId: string) {
+    return this.fetchWithFallback(
+      `/wbs-snapshots/${snapshotId}`,
+      { method: 'DELETE' },
+      null
     );
   }
 }

@@ -10,10 +10,9 @@ import {
   Layers,
 } from 'lucide-react';
 import { WbsTreeView, StoryLinkModal, WbsOverviewTree, WbsGanttChart } from './wbs';
-import { TemplateLibrary, ApplyTemplateModal } from './templates';
+import { TemplateLibrary } from './templates';
 import { WbsBacklogIntegration } from './integration';
 import { useAllPhases } from '../../hooks/api/usePhases';
-import { useTemplateSets, useApplyTemplateToPhase } from '../../hooks/api/useTemplates';
 import { useStories } from '../../hooks/api/useStories';
 import { useProjectWbs } from '../../hooks/api/useWbs';
 import {
@@ -23,7 +22,6 @@ import {
 } from '../../hooks/api/useExcelImportExport';
 import { ExcelImportExportButtons } from './common/ExcelImportExportButtons';
 import { getRolePermissions } from '../../utils/rolePermissions';
-import { TemplateSet } from '../../types/templates';
 import { PhaseWithWbs } from '../../types/wbs';
 import { UserRole } from '../App';
 
@@ -40,16 +38,12 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
   const [activeTab, setActiveTab] = useState<TabType>('wbs');
   const [viewMode, setViewMode] = useState<ViewMode>('phase');
   const [showStoryLinkModal, setShowStoryLinkModal] = useState(false);
-  const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [selectedWbsItemId, setSelectedWbsItemId] = useState<string>('');
   const [selectedWbsItemName, setSelectedWbsItemName] = useState<string>('');
-  const [selectedTemplate, setSelectedTemplate] = useState<TemplateSet | null>(null);
 
   // API hooks
   const { data: phasesData } = useAllPhases();
-  const { data: templates = [] } = useTemplateSets();
   const { data: stories = [] } = useStories(projectId);
-  const applyTemplateMutation = useApplyTemplateToPhase();
 
   // Excel import/export hooks
   const downloadTemplateMutation = useDownloadWbsTemplate();
@@ -120,28 +114,6 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
     setShowStoryLinkModal(true);
   };
 
-  // Handle template apply
-  const handleApplyTemplate = (template: TemplateSet) => {
-    setSelectedTemplate(template);
-    setShowTemplateModal(true);
-  };
-
-  const handleConfirmApplyTemplate = async () => {
-    if (!selectedTemplate || !selectedPhaseId) return;
-
-    try {
-      await applyTemplateMutation.mutateAsync({
-        templateSetId: selectedTemplate.id,
-        phaseId: selectedPhaseId,
-        projectId,
-      });
-      setShowTemplateModal(false);
-      setSelectedTemplate(null);
-    } catch (error) {
-      console.error('Failed to apply template:', error);
-    }
-  };
-
   const tabs = [
     { id: 'wbs' as TabType, label: 'WBS 구조', icon: FolderTree },
     { id: 'templates' as TabType, label: '템플릿', icon: LayoutTemplate },
@@ -149,7 +121,7 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
   ];
 
   const viewModes = [
-    { id: 'phase' as ViewMode, label: 'Phase별', icon: Layers, description: '단계별 WBS 보기' },
+    { id: 'phase' as ViewMode, label: '카테고리별', icon: Layers, description: '카테고리별 WBS 보기' },
     { id: 'overview' as ViewMode, label: '전체 트리', icon: TreeDeciduous, description: '전체 WBS 트리 보기' },
     { id: 'gantt' as ViewMode, label: '간트 차트', icon: GanttChartSquare, description: '타임라인 보기' },
   ];
@@ -198,23 +170,23 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
         </div>
       </div>
 
-      {/* Phase Selector - Only show for 'phase' view mode */}
+      {/* Category Selector - Only show for 'phase' view mode */}
       {viewMode === 'phase' && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <Calendar size={18} className="text-gray-500" />
-              <span className="text-sm font-medium text-gray-700">단계 선택:</span>
+              <span className="text-sm font-medium text-gray-700">카테고리 선택:</span>
             </div>
             <div className="relative flex-1 max-w-md">
               <select
                 value={selectedPhaseId}
                 onChange={(e) => handlePhaseSelect(e.target.value)}
-                title="단계 선택"
-                aria-label="단계 선택"
+                title="카테고리 선택"
+                aria-label="카테고리 선택"
                 className="w-full appearance-none px-4 py-2 pr-10 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">단계를 선택하세요</option>
+                <option value="">카테고리를 선택하세요</option>
                 {phases.map((phase) => (
                   <option key={phase.id} value={phase.id}>
                     {phase.name}
@@ -276,10 +248,10 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
               <FolderTree size={48} className="mx-auto text-gray-300 mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">
-                단계를 선택하세요
+                카테고리를 선택하세요
               </h3>
               <p className="text-gray-500 mb-4">
-                WBS 구조를 확인하고 관리하려면 먼저 단계를 선택해 주세요.
+                WBS 구조를 확인하고 관리하려면 먼저 카테고리를 선택해 주세요.
               </p>
               <p className="text-sm text-gray-400">
                 또는 상단의 &quot;전체 트리&quot; 또는 &quot;간트 차트&quot;를 선택하여 전체 프로젝트 WBS를 확인할 수 있습니다.
@@ -322,21 +294,11 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
                   )}
 
                   {activeTab === 'templates' && (
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="font-semibold text-gray-900">템플릿 라이브러리</h3>
-                          <p className="text-sm text-gray-500">
-                            WBS 템플릿을 현재 단계에 적용할 수 있습니다.
-                          </p>
-                        </div>
-                      </div>
-                      <TemplateLibrary
-                        templates={templates}
-                        onApply={handleApplyTemplate}
-                        canApply={canEdit}
-                      />
-                    </div>
+                    <TemplateLibrary
+                      projectId={projectId}
+                      canEdit={canEdit}
+                      onApplySuccess={() => refetchWbs()}
+                    />
                   )}
 
                   {activeTab === 'integration' && (
@@ -360,20 +322,6 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
           wbsItemName={selectedWbsItemName}
           stories={stories}
           onClose={() => setShowStoryLinkModal(false)}
-        />
-      )}
-
-      {/* Template Apply Modal */}
-      {showTemplateModal && selectedTemplate && (
-        <ApplyTemplateModal
-          template={selectedTemplate}
-          phaseName={selectedPhase?.name || ''}
-          onConfirm={handleConfirmApplyTemplate}
-          onCancel={() => {
-            setShowTemplateModal(false);
-            setSelectedTemplate(null);
-          }}
-          isApplying={applyTemplateMutation.isPending}
         />
       )}
     </div>

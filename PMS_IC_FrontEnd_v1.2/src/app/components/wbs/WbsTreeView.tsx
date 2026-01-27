@@ -621,7 +621,7 @@ export default function WbsTreeView({
 
   const handleSaveGroup = () => {
     if (!groupForm.name.trim()) {
-      alert('그룹 이름을 입력해주세요.');
+      alert('카테고리 이름을 입력해주세요.');
       return;
     }
 
@@ -651,7 +651,7 @@ export default function WbsTreeView({
   };
 
   const handleDeleteGroup = (groupId: string) => {
-    if (!confirm('이 그룹과 하위 항목이 모두 삭제됩니다. 계속하시겠습니까?')) return;
+    if (!confirm('이 카테고리와 하위 항목이 모두 삭제됩니다. 계속하시겠습니까?')) return;
     deleteGroupMutation.mutate(groupId);
   };
 
@@ -822,7 +822,7 @@ export default function WbsTreeView({
         <div>
           <h3 className="font-semibold text-gray-900 flex items-center gap-2">
             <FolderTree className="text-blue-600" size={20} />
-            {phaseName} - WBS
+            WBS 관리
           </h3>
           <p className="text-xs text-gray-500 mt-0.5">
             Work Breakdown Structure (총 진행률: {totalProgress}%)
@@ -839,7 +839,7 @@ export default function WbsTreeView({
               className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
             >
               <Plus size={16} />
-              WBS 그룹 추가
+              카테고리 추가
             </button>
           )}
         </div>
@@ -857,7 +857,7 @@ export default function WbsTreeView({
                 onClick={handleAddGroup}
                 className="text-sm text-blue-600 hover:text-blue-800"
               >
-                첫 번째 WBS 그룹 추가하기
+                첫 번째 카테고리 추가하기
               </button>
             )}
           </div>
@@ -892,11 +892,11 @@ export default function WbsTreeView({
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-md">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              {editingGroup ? 'WBS 그룹 수정' : 'WBS 그룹 추가'}
+              {editingGroup ? '카테고리 수정' : '카테고리 추가'}
             </h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">그룹 이름 *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">카테고리 이름 *</label>
                 <input
                   type="text"
                   value={groupForm.name}

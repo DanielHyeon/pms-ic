@@ -144,16 +144,30 @@ export interface WbsTaskTemplateFormData {
   estimatedHours?: number;
 }
 
+// Methodology phase info for template application
+export interface MethodologyPhase {
+  id: string;
+  name: string;
+  orderNum: number;
+}
+
 // Template Application Options
 export interface ApplyTemplateOptions {
   projectId: string;
   templateSetId: string;
+  template?: TemplateSet; // Full template object for direct application
+  targetPhaseId?: string; // If provided, add WBS to this existing phase instead of creating new phases
+  replaceExisting?: boolean; // If true, delete existing WBS before applying (only when targetPhaseId is set)
+  linkedCategoryId?: string; // Link WBS to a category from WbsManagement (optional)
   startDate: string;
   selectedPhaseIds?: string[]; // If empty, apply all phases
   adjustDates?: boolean; // Auto-calculate dates based on duration
   includeWbs?: boolean;
   includeDeliverables?: boolean;
   includeKpis?: boolean;
+  // Multi-phase application options
+  applyToAllMethodologyPhases?: boolean; // If true, apply each template phase to corresponding methodology phase
+  methodologyPhases?: MethodologyPhase[]; // Array of existing methodology phases to apply WBS to
 }
 
 // Result of applying a template

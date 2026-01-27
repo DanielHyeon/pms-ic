@@ -18,11 +18,15 @@ import {
   ListChecks,
   LayoutTemplate,
   Link2,
+  Layers,
+  ChevronDown,
 } from 'lucide-react';
 import { WbsTreeView, StoryLinkModal } from './wbs';
 import { TemplateLibrary, ApplyTemplateModal } from './templates';
 import { WbsBacklogIntegration } from './integration';
 import { useStories } from '../../hooks/api/useStories';
+import { usePhaseWbs } from '../../hooks/api/useWbs';
+import { WbsGroupWithItems, calculateWeightedProgress } from '../../types/wbs';
 import { useTemplateSets } from '../../hooks/api/useTemplates';
 import { TemplateSet } from '../../types/templates';
 import { UserRole } from '../App';
@@ -175,7 +179,9 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
   const [kpiForm, setKpiForm] = useState({ name: '', target: '', current: '', status: 'onTrack' as KPI['status'] });
   const [showPhaseModal, setShowPhaseModal] = useState(false);
   // Tab state for Phase Detail view
-  const [activeTab, setActiveTab] = useState<'deliverables' | 'wbs' | 'templates' | 'integration'>('deliverables');
+  const [activeTab, setActiveTab] = useState<'deliverables' | 'wbs' | 'integration'>('deliverables');
+  // Settings modal state
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   // Story link modal state
   const [showStoryLinkModal, setShowStoryLinkModal] = useState(false);
   // Template modal state
@@ -184,6 +190,7 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
   const [selectedWbsItemId, setSelectedWbsItemId] = useState<string>('');
   const [selectedWbsItemName, setSelectedWbsItemName] = useState<string>('');
   const [editingPhase, setEditingPhase] = useState<Phase | null>(null);
+  const [pendingSelectPhaseId, setPendingSelectPhaseId] = useState<string | null>(null);
   const [phaseForm, setPhaseForm] = useState({
     name: '',
     description: '',
@@ -192,6 +199,9 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
     endDate: '',
     progress: 0,
   });
+  // WBS category linking - maps methodology phase id to WBS category id
+  const [linkedCategories, setLinkedCategories] = useState<Record<string, string>>({});
+  const [settingsTab, setSettingsTab] = useState<'template' | 'category'>('template');
 
   // TanStack Query hooks
   const { data: phasesData } = useAllPhases();
@@ -210,6 +220,17 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
   const createKpiMutation = useCreatePhaseKpi();
   const updateKpiMutation = useUpdatePhaseKpi();
   const deleteKpiMutation = useDeletePhaseKpi();
+
+  // Fetch WBS groups for current phase (for linked WBS summary)
+  const { data: phaseWbsData, isLoading: isWbsLoading } = usePhaseWbs(
+    isValidApiPhaseId ? selectedPhase.id : ''
+  );
+
+  // Calculate WBS-based progress for the phase
+  const wbsGroups: WbsGroupWithItems[] = phaseWbsData || [];
+  const wbsBasedProgress = wbsGroups.length > 0
+    ? calculateWeightedProgress(wbsGroups.map(g => ({ weight: g.weight, progress: g.calculatedProgress })))
+    : null;
 
   // Stories for WBS linking
   const { data: storiesData = [] } = useStories();
@@ -243,6 +264,18 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
       const phaseData = normalizeResponse(phasesData, []);
       const phasesArray = Array.isArray(phaseData) ? phaseData : [];
       if (phasesArray.length > 0) {
+        // If there's a pending phase to select (after template application), select it
+        if (pendingSelectPhaseId) {
+          const newPhase = phasesArray.find((p: any) => p.id === pendingSelectPhaseId);
+          if (newPhase) {
+            const mappedPhase = ['completed', 'inProgress', 'pending'].includes(newPhase.status)
+              ? newPhase
+              : mapPhaseFromApi(newPhase);
+            setSelectedPhase(mappedPhase);
+            setPendingSelectPhaseId(null);
+            return;
+          }
+        }
         // Find the phase that corresponds to the selected phase (by orderNum or index)
         const currentIndex = phases.findIndex((p) => p.id === selectedPhase.id);
         const apiPhase = phasesArray[currentIndex >= 0 ? currentIndex : 0];
@@ -254,35 +287,54 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
         }
       }
     }
-  }, [phasesData]);
+  }, [phasesData, pendingSelectPhaseId]);
 
-  // Sync phases from query data
+  // Always display 6 methodology phases, merge API data when available
   const syncedPhases = (() => {
-    if (!phasesData) return phases;
-    const phaseData = normalizeResponse(phasesData, initialPhases);
+    // Always use the 6 methodology phases as the base
+    const methodologyPhases = [...initialPhases];
+
+    if (!phasesData) return methodologyPhases;
+
+    const phaseData = normalizeResponse(phasesData, []);
     const phasesArray = Array.isArray(phaseData) ? phaseData : [];
 
-    if (!phasesArray.length) return phases;
+    if (!phasesArray.length) return methodologyPhases;
 
-    return phasesArray.map((phase: any) => {
-      const isUiPhase = ['completed', 'inProgress', 'pending'].includes(phase.status);
-      const basePhase = isUiPhase ? phase : mapPhaseFromApi(phase);
-      const phaseDeliverables = isUiPhase
-        ? phase.deliverables || []
-        : Array.isArray(phase.deliverables)
-        ? phase.deliverables.map(mapDeliverableFromApi)
-        : [];
-      const phaseKpis = isUiPhase
-        ? phase.kpis || []
-        : Array.isArray(phase.kpis)
-        ? phase.kpis.map(mapKpiFromApi)
-        : [];
+    // Merge API data into methodology phases by index/orderNum
+    return methodologyPhases.map((methodologyPhase, index) => {
+      // Find matching API phase by orderNum or index
+      const apiPhase = phasesArray.find(
+        (p: any) => p.orderNum === index + 1
+      ) || phasesArray[index];
 
-      return {
-        ...basePhase,
-        deliverables: phaseDeliverables,
-        kpis: phaseKpis,
-      };
+      if (apiPhase) {
+        const isUiPhase = ['completed', 'inProgress', 'pending'].includes(apiPhase.status);
+        const mappedPhase = isUiPhase ? apiPhase : mapPhaseFromApi(apiPhase);
+        const phaseDeliverables = isUiPhase
+          ? apiPhase.deliverables || []
+          : Array.isArray(apiPhase.deliverables)
+          ? apiPhase.deliverables.map(mapDeliverableFromApi)
+          : [];
+        const phaseKpis = isUiPhase
+          ? apiPhase.kpis || []
+          : Array.isArray(apiPhase.kpis)
+          ? apiPhase.kpis.map(mapKpiFromApi)
+          : [];
+
+        return {
+          ...methodologyPhase, // Keep methodology name and description
+          id: mappedPhase.id, // Use API id for data fetching
+          status: mappedPhase.status || methodologyPhase.status,
+          progress: mappedPhase.progress ?? methodologyPhase.progress,
+          startDate: mappedPhase.startDate || methodologyPhase.startDate,
+          endDate: mappedPhase.endDate || methodologyPhase.endDate,
+          deliverables: phaseDeliverables.length > 0 ? phaseDeliverables : methodologyPhase.deliverables,
+          kpis: phaseKpis.length > 0 ? phaseKpis : methodologyPhase.kpis,
+        };
+      }
+
+      return methodologyPhase;
     });
   })();
 
@@ -509,15 +561,28 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
           <h2 className="text-2xl font-semibold text-gray-900">단계별 프로젝트 관리</h2>
           <p className="text-sm text-gray-500 mt-1">Waterfall 기반 거시적 프로세스 관리</p>
         </div>
-        {canManagePhases && (
-          <button
-            onClick={() => openPhaseModal()}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus size={18} />
-            단계 추가
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {canManagePhases && (
+            <>
+              <button
+                type="button"
+                onClick={() => setShowSettingsModal(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <LayoutTemplate size={18} />
+                템플릿 설정
+              </button>
+              <button
+                type="button"
+                onClick={() => openPhaseModal()}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus size={18} />
+                단계 추가
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -637,18 +702,6 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
               </button>
               <button
                 type="button"
-                onClick={() => setActiveTab('templates')}
-                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
-                  activeTab === 'templates'
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <LayoutTemplate size={18} />
-                템플릿
-              </button>
-              <button
-                type="button"
                 onClick={() => setActiveTab('integration')}
                 className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
                   activeTab === 'integration'
@@ -668,15 +721,6 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
                 phaseName={selectedPhase.name}
                 projectId="proj-001"
                 canEdit={canEdit}
-              />
-            ) : activeTab === 'templates' ? (
-              <TemplateLibrary
-                projectId={selectedPhase.id}
-                canEdit={canEdit}
-                onApplySuccess={(phaseIds) => {
-                  // Refresh phase list after applying template
-                  setActiveTab('wbs');
-                }}
               />
             ) : activeTab === 'wbs' ? (
               <WbsTreeView
@@ -1163,6 +1207,153 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
           onClose={() => setShowStoryLinkModal(false)}
         />
       )}
+
+      {/* Settings Modal - Template Management & Category Linking */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">설정</h3>
+                <p className="text-sm text-gray-500 mt-1">단계별 프로젝트 관리 설정</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSettingsModal(false)}
+                title="닫기"
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Settings Tabs */}
+            <div className="border-b border-gray-200 px-6">
+              <div className="flex gap-4">
+                <button
+                  type="button"
+                  onClick={() => setSettingsTab('template')}
+                  className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                    settingsTab === 'template'
+                      ? 'text-blue-600 border-blue-600'
+                      : 'text-gray-500 border-transparent hover:text-gray-700'
+                  }`}
+                >
+                  <LayoutTemplate size={18} />
+                  템플릿 관리
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSettingsTab('category')}
+                  className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                    settingsTab === 'category'
+                      ? 'text-blue-600 border-blue-600'
+                      : 'text-gray-500 border-transparent hover:text-gray-700'
+                  }`}
+                >
+                  <Layers size={18} />
+                  WBS 카테고리 연결
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {settingsTab === 'template' ? (
+                <TemplateLibrary
+                  projectId="proj-001"
+                  targetPhaseId={selectedPhase.id}
+                  targetPhaseName={selectedPhase.name}
+                  methodologyPhases={syncedPhases.map((phase, index) => ({
+                    id: phase.id,
+                    name: phase.name,
+                    orderNum: index + 1,
+                  }))}
+                  canEdit={canEdit}
+                  onApplySuccess={() => {
+                    setShowSettingsModal(false);
+                    setActiveTab('wbs');
+                  }}
+                />
+              ) : (
+                <div className="space-y-6">
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <Layers size={20} className="text-amber-600 mt-0.5" />
+                      <div>
+                        <h4 className="font-medium text-amber-900">WBS 카테고리 연결</h4>
+                        <p className="text-sm text-amber-700 mt-1">
+                          각 방법론 단계를 일정 관리 페이지의 WBS 카테고리와 연결합니다.
+                          연결된 카테고리의 WBS 구조가 해당 단계에 표시됩니다.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {syncedPhases.map((phase, index) => {
+                      const wbsCategories = normalizeResponse(phasesData, []) as Array<{ id: string; name: string }>;
+                      return (
+                        <div
+                          key={phase.id}
+                          className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg"
+                        >
+                          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-semibold text-sm">
+                            {index + 1}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-gray-900 truncate">{phase.name}</div>
+                            <div className="text-xs text-gray-500">{phase.description}</div>
+                          </div>
+                          <div className="relative w-64">
+                            <select
+                              value={linkedCategories[phase.id] || ''}
+                              onChange={(e) => setLinkedCategories(prev => ({
+                                ...prev,
+                                [phase.id]: e.target.value
+                              }))}
+                              title={`${phase.name} 카테고리 연결`}
+                              className="w-full appearance-none px-3 py-2 pr-10 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                            >
+                              <option value="">연결하지 않음</option>
+                              {wbsCategories.map((category) => (
+                                <option key={category.id} value={category.id}>
+                                  {category.name}
+                                </option>
+                              ))}
+                            </select>
+                            <ChevronDown
+                              size={16}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {Object.keys(linkedCategories).filter(k => linkedCategories[k]).length > 0 && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <h4 className="font-medium text-green-900 mb-2">연결 현황</h4>
+                      <ul className="text-sm text-green-800 space-y-1">
+                        {syncedPhases.filter(p => linkedCategories[p.id]).map(phase => {
+                          const wbsCategories = normalizeResponse(phasesData, []) as Array<{ id: string; name: string }>;
+                          const category = wbsCategories.find(c => c.id === linkedCategories[phase.id]);
+                          return (
+                            <li key={phase.id}>
+                              • {phase.name} → <strong>{category?.name || '알 수 없음'}</strong>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

@@ -250,8 +250,11 @@ export function useDeleteWbsTask() {
 export function usePhaseWbs(phaseId: string) {
   const { data: groups = [], isLoading: isGroupsLoading, isFetching: isGroupsFetching } = useWbsGroups(phaseId);
 
+  // Include group IDs in query key to ensure fresh closure when groups change
+  const groupIds = groups.map((g: WbsGroup) => g.id).sort().join(',');
+
   const query = useQuery({
-    queryKey: wbsKeys.phaseWbs(phaseId),
+    queryKey: [...wbsKeys.phaseWbs(phaseId), { groupIds }],
     queryFn: async (): Promise<WbsGroupWithItems[]> => {
       if (!groups || groups.length === 0) return [];
 
@@ -415,8 +418,11 @@ interface PhaseInfo {
 }
 
 export function useProjectWbs(projectId: string, phases: PhaseInfo[]) {
+  // Include phase IDs in query key to ensure fresh closure when phases change
+  const phaseIds = phases.map(p => p.id).sort().join(',');
+
   return useQuery({
-    queryKey: wbsKeys.projectWbs(projectId),
+    queryKey: [...wbsKeys.projectWbs(projectId), { phaseIds }],
     queryFn: async () => {
       if (!phases || phases.length === 0) return [];
 
