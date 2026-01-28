@@ -65,7 +65,7 @@ public enum LineageEventType {
     TASK_DELETED,
 
     /**
-     * Task status changed (TODO -> IN_PROGRESS -> DONE)
+     * Task status changed (TO_DO -> IN_PROGRESS -> DONE)
      */
     TASK_STATUS_CHANGED,
 

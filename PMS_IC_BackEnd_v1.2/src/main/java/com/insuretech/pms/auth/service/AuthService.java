@@ -24,7 +24,6 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@SuppressWarnings("null")
 public class AuthService {
 
     private static final String REFRESH_TOKEN_KEY_PREFIX = "refresh_token:";

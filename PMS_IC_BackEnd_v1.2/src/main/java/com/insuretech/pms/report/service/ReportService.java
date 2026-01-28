@@ -1,22 +1,34 @@
 package com.insuretech.pms.report.service;
 
-import com.insuretech.pms.report.dto.ReportDto;
-import com.insuretech.pms.report.dto.ReportOptionsDto;
-import com.insuretech.pms.report.entity.*;
-import com.insuretech.pms.report.repository.ReportRepository;
-import com.insuretech.pms.report.repository.ReportTemplateRepository;
-import com.insuretech.pms.report.repository.RoleReportDefaultsRepository;
-import jakarta.persistence.EntityNotFoundException;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.util.*;
-import java.util.stream.Collectors;
+import com.insuretech.pms.report.dto.ReportDto;
+import com.insuretech.pms.report.dto.ReportOptionsDto;
+import com.insuretech.pms.report.entity.Report;
+import com.insuretech.pms.report.entity.ReportScope;
+import com.insuretech.pms.report.entity.ReportStatus;
+import com.insuretech.pms.report.entity.ReportTemplate;
+import com.insuretech.pms.report.entity.ReportType;
+import com.insuretech.pms.report.entity.RoleReportDefaults;
+import com.insuretech.pms.report.repository.ReportRepository;
+import com.insuretech.pms.report.repository.ReportTemplateRepository;
+import com.insuretech.pms.report.repository.RoleReportDefaultsRepository;
+
+import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Service for managing reports
@@ -25,7 +37,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 @Transactional(readOnly = true)
-@SuppressWarnings("null")
 public class ReportService {
 
     private final ReportRepository reportRepository;
@@ -58,7 +69,7 @@ public class ReportService {
 
     private boolean canAccessReport(Report report, String userId, String userRole) {
         // Owner can always access
-        if (report.getCreatedBy() != null && report.getCreatedBy().equals(userId)) {
+        if (Objects.equals(report.getCreatedBy(), userId)) {
             return true;
         }
         // PMO and sponsors can see all project reports
@@ -115,7 +126,7 @@ public class ReportService {
                 .orElseThrow(() -> new EntityNotFoundException("Report not found: " + reportId));
 
         // Verify ownership or permission
-        if (!report.getCreatedBy().equals(userId)) {
+        if (!userId.equals(report.getCreatedBy())) {
             throw new SecurityException("Not authorized to update this report");
         }
 
@@ -139,7 +150,7 @@ public class ReportService {
         Report report = reportRepository.findById(reportId)
                 .orElseThrow(() -> new EntityNotFoundException("Report not found: " + reportId));
 
-        if (!report.getCreatedBy().equals(userId)) {
+        if (!userId.equals(report.getCreatedBy())) {
             throw new SecurityException("Not authorized to publish this report");
         }
 
@@ -178,7 +189,7 @@ public class ReportService {
         Report report = reportRepository.findById(reportId)
                 .orElseThrow(() -> new EntityNotFoundException("Report not found: " + reportId));
 
-        if (!report.getCreatedBy().equals(userId)) {
+        if (!userId.equals(report.getCreatedBy())) {
             throw new SecurityException("Not authorized to delete this report");
         }
 

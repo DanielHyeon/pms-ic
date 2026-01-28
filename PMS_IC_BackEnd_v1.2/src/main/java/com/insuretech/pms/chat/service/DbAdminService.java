@@ -22,7 +22,6 @@ import java.util.Map;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@SuppressWarnings("null")
 public class DbAdminService {
 
     private final WebClient.Builder webClientBuilder;

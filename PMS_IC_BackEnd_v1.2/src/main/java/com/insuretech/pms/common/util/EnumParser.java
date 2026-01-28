@@ -7,7 +7,7 @@ import java.util.function.Supplier;
  * Eliminates duplicate enum parsing patterns across services.
  *
  * Usage:
- *   TaskStatus status = EnumParser.parse(statusString, TaskStatus.class, TaskStatus.TODO);
+ *   TaskStatus status = EnumParser.parse(statusString, TaskStatus.class, TaskStatus.TO_DO);
  *   Priority priority = EnumParser.parse(priorityString, Priority.class, Priority.MEDIUM);
  */
 public final class EnumParser {
