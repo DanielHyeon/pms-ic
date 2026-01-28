@@ -29,4 +29,17 @@ public interface FeatureRepository extends JpaRepository<Feature, String> {
 
     @Query("SELECT COUNT(f) FROM Feature f WHERE f.wbsGroupId IS NOT NULL AND f.epic.projectId = :projectId")
     long countLinkedByProjectId(@Param("projectId") String projectId);
+
+    // Part-based queries
+    @Query("SELECT f FROM Feature f WHERE f.part.id = :partId ORDER BY f.orderNum")
+    List<Feature> findByPartIdOrderByOrderNum(@Param("partId") String partId);
+
+    @Query("SELECT f FROM Feature f WHERE f.part.id = :partId AND f.epic.projectId = :projectId ORDER BY f.orderNum")
+    List<Feature> findByPartIdAndProjectId(@Param("partId") String partId, @Param("projectId") String projectId);
+
+    @Query("SELECT COUNT(f) FROM Feature f WHERE f.part.id = :partId")
+    long countByPartId(@Param("partId") String partId);
+
+    @Query("SELECT COUNT(f) FROM Feature f WHERE f.part.id = :partId AND f.status = :status")
+    long countByPartIdAndStatus(@Param("partId") String partId, @Param("status") Feature.FeatureStatus status);
 }

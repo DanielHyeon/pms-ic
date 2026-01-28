@@ -9,12 +9,13 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Set;
 
-@Tag(name = "Parts", description = "Sub-project (Part) management API")
+@Tag(name = "Parts", description = "Sub-project (Part/Work Area) management API")
 @RestController
 @RequiredArgsConstructor
 @CrossOrigin(origins = "*")
@@ -94,5 +95,49 @@ public class PartController {
             @PathVariable String memberId) {
         PartDto part = partService.removeMember(partId, memberId);
         return ResponseEntity.ok(ApiResponse.success("Member removed successfully", part));
+    }
+
+    // ============================================
+    // Part Dashboard & Metrics APIs (PL Cockpit)
+    // ============================================
+
+    @Operation(summary = "Get Part Dashboard data for PL Cockpit")
+    @GetMapping("/api/projects/{projectId}/parts/{partId}/dashboard")
+    @PreAuthorize("@partSecurity.canReadPart(#projectId, #partId)")
+    public ResponseEntity<ApiResponse<PartDashboardDto>> getPartDashboard(
+            @PathVariable String projectId,
+            @PathVariable String partId) {
+        PartDashboardDto dashboard = partService.getPartDashboard(projectId, partId);
+        return ResponseEntity.ok(ApiResponse.success(dashboard));
+    }
+
+    @Operation(summary = "Get Part Metrics (Story Points, Completion Rate)")
+    @GetMapping("/api/projects/{projectId}/parts/{partId}/metrics")
+    @PreAuthorize("@partSecurity.canReadPart(#projectId, #partId)")
+    public ResponseEntity<ApiResponse<PartMetricsDto>> getPartMetrics(
+            @PathVariable String projectId,
+            @PathVariable String partId) {
+        PartMetricsDto metrics = partService.getPartMetrics(projectId, partId);
+        return ResponseEntity.ok(ApiResponse.success(metrics));
+    }
+
+    @Operation(summary = "Get Features by Part")
+    @GetMapping("/api/projects/{projectId}/parts/{partId}/features")
+    @PreAuthorize("@partSecurity.canReadPart(#projectId, #partId)")
+    public ResponseEntity<ApiResponse<List<FeatureDto>>> getFeaturesByPart(
+            @PathVariable String projectId,
+            @PathVariable String partId) {
+        List<FeatureDto> features = partService.getFeaturesByPart(projectId, partId);
+        return ResponseEntity.ok(ApiResponse.success(features));
+    }
+
+    @Operation(summary = "Get User Stories by Part")
+    @GetMapping("/api/projects/{projectId}/parts/{partId}/stories")
+    @PreAuthorize("@partSecurity.canReadPart(#projectId, #partId)")
+    public ResponseEntity<ApiResponse<List<Object>>> getStoriesByPart(
+            @PathVariable String projectId,
+            @PathVariable String partId) {
+        List<Object> stories = partService.getStoriesByPart(projectId, partId);
+        return ResponseEntity.ok(ApiResponse.success(stories));
     }
 }

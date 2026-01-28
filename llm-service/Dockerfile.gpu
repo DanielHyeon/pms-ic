@@ -34,26 +34,25 @@ RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel \
 # At runtime, use actual CUDA driver libraries first
 ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib/x86_64-linux-gnu
 
-# Application code
-COPY app.py .
-COPY chat_workflow_v2.py .
-COPY document_parser.py .
-COPY pdf_ocr_pipeline.py .
-COPY rag_service_neo4j.py .
-COPY load_ragdata_pdfs_neo4j.py .
-COPY service_state.py .
-COPY response_monitoring.py .
-COPY response_validator.py .
-COPY scrum_workflow_service.py .
-COPY openmetadata_integration.py .
-COPY requirement_extractor.py .
-COPY timeout_retry_handler.py .
+# Application code (all Python files in root)
+COPY *.py ./
 
-# Copy services directory
+# Copy all Python package directories
 COPY services/ ./services/
-
-# Copy routes directory
 COPY routes/ ./routes/
+COPY utils/ ./utils/
+COPY workflows/ ./workflows/
+COPY agents/ ./agents/
+COPY skills/ ./skills/
+COPY schemas/ ./schemas/
+COPY config/ ./config/
+COPY observability/ ./observability/
+COPY mcp/ ./mcp/
+COPY value_metrics/ ./value_metrics/
+COPY lifecycle/ ./lifecycle/
+
+# Copy documentation
+COPY docs/ ./docs/
 
 # Model directories
 RUN mkdir -p /app/models /models /data /output

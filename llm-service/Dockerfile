@@ -42,21 +42,25 @@ RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel \
 # 런타임에서는 실제 CUDA 드라이버 라이브러리를 우선 사용
 ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib/x86_64-linux-gnu
 
-# Copy application code
-COPY app.py .
-COPY chat_workflow_v2.py .
-COPY document_parser.py .
-COPY pdf_ocr_pipeline.py .
-COPY rag_service_neo4j.py .
-COPY load_ragdata_pdfs_neo4j.py .
-COPY service_state.py .
-COPY pg_neo4j_sync.py .
+# Copy application code (all Python files in root)
+COPY *.py ./
 
-# Copy services directory
+# Copy all Python package directories
 COPY services/ ./services/
-
-# Copy routes directory
 COPY routes/ ./routes/
+COPY utils/ ./utils/
+COPY workflows/ ./workflows/
+COPY agents/ ./agents/
+COPY skills/ ./skills/
+COPY schemas/ ./schemas/
+COPY config/ ./config/
+COPY observability/ ./observability/
+COPY mcp/ ./mcp/
+COPY value_metrics/ ./value_metrics/
+COPY lifecycle/ ./lifecycle/
+
+# Copy documentation
+COPY docs/ ./docs/
 
 # 모델 및 백업 디렉토리 생성 (볼륨 마운트로 모델 제공)
 RUN mkdir -p /app/models /models /data /output /app/backups

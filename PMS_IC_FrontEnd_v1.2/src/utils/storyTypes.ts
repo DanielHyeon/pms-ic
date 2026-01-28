@@ -1,9 +1,52 @@
 /**
  * User story related types and utilities
  * Extracted to reduce data clumps in BacklogManagement.tsx
+ *
+ * Status flow based on Scrum design document:
+ * IDEA -> REFINED -> READY -> IN_SPRINT -> IN_PROGRESS -> REVIEW -> DONE
  */
 
-export type StoryStatus = 'BACKLOG' | 'SELECTED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+// New enhanced status type
+export type StoryStatus =
+  | 'IDEA'
+  | 'REFINED'
+  | 'READY'
+  | 'IN_SPRINT'
+  | 'IN_PROGRESS'
+  | 'REVIEW'
+  | 'DONE'
+  | 'CANCELLED';
+
+// Legacy status type for backward compatibility
+export type LegacyStoryStatus = 'BACKLOG' | 'SELECTED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+
+/**
+ * Maps legacy status values to new status values
+ * Used for backward compatibility with existing data
+ */
+export const mapLegacyStatus = (status: string): StoryStatus => {
+  const mapping: Record<string, StoryStatus> = {
+    BACKLOG: 'READY',
+    SELECTED: 'IN_SPRINT',
+    COMPLETED: 'DONE',
+  };
+  return mapping[status] || (status as StoryStatus);
+};
+
+/**
+ * Maps new status values back to legacy values (for API compatibility if needed)
+ */
+export const mapToLegacyStatus = (status: StoryStatus): LegacyStoryStatus => {
+  const mapping: Record<string, LegacyStoryStatus> = {
+    IDEA: 'BACKLOG',
+    REFINED: 'BACKLOG',
+    READY: 'BACKLOG',
+    IN_SPRINT: 'SELECTED',
+    REVIEW: 'IN_PROGRESS',
+    DONE: 'COMPLETED',
+  };
+  return mapping[status] || (status as LegacyStoryStatus);
+};
 
 export interface UserStory {
   id: number;

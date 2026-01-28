@@ -38,4 +38,32 @@ public interface TaskRepository extends JpaRepository<Task, String> {
 
     @Query("SELECT COUNT(t) FROM Task t WHERE t.column.projectId IN :projectIds AND t.status = :status")
     long countByProjectIdInAndStatus(@Param("projectIds") List<String> projectIds, @Param("status") Task.TaskStatus status);
+
+    // ===== Part-based queries =====
+
+    @Query("SELECT COUNT(t) FROM Task t WHERE t.partId = :partId")
+    int countByPartId(@Param("partId") String partId);
+
+    @Query("SELECT COUNT(t) FROM Task t WHERE t.partId = :partId AND t.status = :status")
+    int countByPartIdAndStatus(@Param("partId") String partId, @Param("status") String status);
+
+    List<Task> findByPartId(String partId);
+
+    // ===== Track-based queries for weighted progress calculation =====
+
+    // Count tasks by project and track type
+    @Query("SELECT COUNT(t) FROM Task t WHERE t.column.projectId = :projectId AND t.trackType = :trackType")
+    long countByProjectIdAndTrackType(@Param("projectId") String projectId, @Param("trackType") Task.TrackType trackType);
+
+    // Count completed tasks (DONE status) by project and track type
+    @Query("SELECT COUNT(t) FROM Task t WHERE t.column.projectId = :projectId AND t.trackType = :trackType AND t.status = 'DONE'")
+    long countCompletedByProjectIdAndTrackType(@Param("projectId") String projectId, @Param("trackType") Task.TrackType trackType);
+
+    // Calculate completion rate by track type for a project
+    // Returns 0.0 if no tasks exist for the track type
+    @Query("SELECT COALESCE(" +
+           "CAST(SUM(CASE WHEN t.status = 'DONE' THEN 1 ELSE 0 END) AS double) * 100.0 / " +
+           "NULLIF(CAST(COUNT(*) AS double), 0), 0.0) " +
+           "FROM Task t WHERE t.column.projectId = :projectId AND t.trackType = :trackType")
+    Double calculateCompletionRateByTrackType(@Param("projectId") String projectId, @Param("trackType") Task.TrackType trackType);
 }

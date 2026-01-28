@@ -45,3 +45,6 @@ pdfminer.six>=20231228
 # Note: Install paddlepaddle-gpu separately based on CUDA version
 # pip install paddlepaddle-gpu==3.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu118/
 paddleocr>=2.9.0
+
+# Testing
+pytest>=8.0.0

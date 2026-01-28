@@ -25,6 +25,21 @@ from failure_taxonomy import get_failure_handler, FailureCode, classify_error
 from evidence_service import get_evidence_service, EvidenceItem
 from schemas.ai_response import AIResponse, Evidence, ResponseStatus, create_error_response
 
+# Status Query Engine imports
+from answer_type_classifier import (
+    get_answer_type_classifier, classify_answer_type, is_status_query,
+    AnswerType, AnswerTypeResult
+)
+from status_query_plan import (
+    StatusQueryPlan, create_default_plan, validate_plan,
+    get_plan_generation_prompt, parse_llm_plan_response
+)
+from status_query_executor import get_status_query_executor, StatusQueryResult
+from source_policy_gate import get_source_policy_gate, get_status_summarization_prompt
+from status_response_contract import (
+    build_status_response, create_no_data_response, StatusResponseContract
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -91,6 +106,14 @@ class TwoTrackState(TypedDict):
     # Monitoring
     metrics: dict
     debug_info: dict
+
+    # Status Query Engine (Phase 2)
+    answer_type: str  # "status_metric", "status_list", "howto_policy", etc.
+    answer_type_confidence: float
+    status_query_plan: Optional[dict]
+    status_query_result: Optional[dict]
+    status_response_contract: Optional[dict]
+    use_status_workflow: bool
 
 
 # =============================================================================
@@ -209,10 +232,10 @@ class TwoTrackWorkflow:
         logger.info(f"  L2 model: {model_path_l2}")
 
     def _build_graph(self) -> StateGraph:
-        """Build two-track workflow graph with Phase 1 gates"""
+        """Build two-track workflow graph with Phase 1 gates and Status Query Engine"""
         workflow = StateGraph(TwoTrackState)
 
-        # Add nodes
+        # Add nodes - Original workflow
         workflow.add_node("classify_track", self._classify_track_node)
         workflow.add_node("policy_check", self._policy_check_node)
         workflow.add_node("rag_search", self._rag_search_node)
@@ -226,21 +249,42 @@ class TwoTrackWorkflow:
         workflow.add_node("verify_response", self._verify_response_node)
         workflow.add_node("monitor", self._monitor_node)
 
+        # Add nodes - Status Query Engine (Phase 2)
+        workflow.add_node("classify_answer_type", self._classify_answer_type_node)
+        workflow.add_node("execute_status_query", self._execute_status_query_node)
+        workflow.add_node("build_status_response", self._build_status_response_node)
+        workflow.add_node("summarize_status", self._summarize_status_node)
+
         # Entry point
         workflow.set_entry_point("classify_track")
 
         # classify_track -> policy_check
         workflow.add_edge("classify_track", "policy_check")
 
-        # policy_check -> conditional routing based on policy result
+        # policy_check -> classify_answer_type (NEW: determine if status query)
         workflow.add_conditional_edges(
             "policy_check",
             self._route_after_policy,
             {
                 "blocked": "monitor",  # Policy blocked -> end
-                "continue": "rag_search"  # Policy passed -> RAG search
+                "continue": "classify_answer_type"  # Policy passed -> classify answer type
             }
         )
+
+        # classify_answer_type -> conditional routing based on answer type
+        workflow.add_conditional_edges(
+            "classify_answer_type",
+            self._route_after_answer_type,
+            {
+                "status_query": "execute_status_query",  # Status queries -> direct DB
+                "document_query": "rag_search",  # Document queries -> RAG
+            }
+        )
+
+        # Status Query workflow
+        workflow.add_edge("execute_status_query", "build_status_response")
+        workflow.add_edge("build_status_response", "summarize_status")
+        workflow.add_edge("summarize_status", "monitor")
 
         # rag_search -> extract_evidence (Phase 1)
         workflow.add_edge("rag_search", "extract_evidence")
@@ -364,6 +408,205 @@ class TwoTrackWorkflow:
         if not state.get("policy_passed", True):
             return "blocked"
         return "continue"
+
+    # =========================================================================
+    # Status Query Engine Nodes (Phase 2)
+    # =========================================================================
+
+    def _classify_answer_type_node(self, state: TwoTrackState) -> TwoTrackState:
+        """Node: Classify answer type to determine if status query or document query"""
+        start_time = time.time()
+        message = state["message"]
+
+        # Classify answer type
+        classifier = get_answer_type_classifier()
+        result = classifier.classify(message)
+
+        state["answer_type"] = result.answer_type.value
+        state["answer_type_confidence"] = result.confidence
+        state["use_status_workflow"] = classifier.is_status_query(result.answer_type)
+
+        state["debug_info"]["answer_type"] = {
+            "type": result.answer_type.value,
+            "confidence": result.confidence,
+            "matched_patterns": result.matched_patterns,
+            "metrics_requested": result.metrics_requested,
+            "time_context": result.time_context,
+            "reasoning": result.reasoning,
+        }
+        state["metrics"]["answer_type_time_ms"] = (time.time() - start_time) * 1000
+
+        logger.info(
+            f"Answer type: {result.answer_type.value} "
+            f"(confidence={result.confidence:.2f}, use_status={state['use_status_workflow']})"
+        )
+
+        return state
+
+    def _route_after_answer_type(self, state: TwoTrackState) -> Literal["status_query", "document_query"]:
+        """Route based on answer type classification"""
+        if state.get("use_status_workflow", False):
+            return "status_query"
+        return "document_query"
+
+    def _execute_status_query_node(self, state: TwoTrackState) -> TwoTrackState:
+        """Node: Execute status query against database"""
+        start_time = time.time()
+
+        project_id = state.get("project_id")
+        user_access_level = state.get("user_access_level", 6)
+
+        if not project_id:
+            logger.warning("No project_id for status query, using default")
+            project_id = "proj-001"  # fallback
+
+        # Create a default plan (in future, can use LLM to generate plan)
+        plan = create_default_plan(project_id, user_access_level)
+
+        # Add metrics based on answer type classification
+        answer_type_info = state.get("debug_info", {}).get("answer_type", {})
+        metrics_requested = answer_type_info.get("metrics_requested", [])
+
+        if metrics_requested:
+            plan.metrics = list(set(plan.metrics + metrics_requested))
+
+        # Always include these core metrics for status queries
+        core_metrics = ["story_counts_by_status", "completion_rate", "active_sprint", "project_summary"]
+        plan.metrics = list(set(plan.metrics + core_metrics))
+
+        # Validate the plan
+        plan = validate_plan(plan, user_access_level, project_id)
+
+        # Execute the query
+        executor = get_status_query_executor()
+        try:
+            query_result = executor.execute(plan)
+            state["status_query_result"] = query_result.to_dict()
+            state["status_query_plan"] = plan.to_dict()
+
+            logger.info(
+                f"Status query executed: {len(plan.metrics)} metrics, "
+                f"{query_result.total_query_time_ms:.1f}ms"
+            )
+
+        except Exception as e:
+            logger.error(f"Status query execution failed: {e}")
+            state["status_query_result"] = {"errors": [str(e)]}
+            state["status_query_plan"] = plan.to_dict()
+
+        state["metrics"]["status_query_time_ms"] = (time.time() - start_time) * 1000
+
+        return state
+
+    def _build_status_response_node(self, state: TwoTrackState) -> TwoTrackState:
+        """Node: Build structured status response from query results"""
+        start_time = time.time()
+
+        project_id = state.get("project_id", "unknown")
+        query_result_dict = state.get("status_query_result", {})
+
+        # Check if we have valid results
+        if query_result_dict.get("errors") and not query_result_dict.get("metrics"):
+            # No data available
+            contract = create_no_data_response(
+                project_id,
+                reason="데이터베이스 조회 실패: " + ", ".join(query_result_dict.get("errors", []))
+            )
+        else:
+            # Build response from query result
+            # Reconstruct StatusQueryResult from dict
+            from status_query_executor import StatusQueryResult, MetricResult
+            from status_query_plan import StatusQueryPlan
+
+            plan_dict = state.get("status_query_plan", {})
+            plan = StatusQueryPlan.from_dict(plan_dict) if plan_dict else create_default_plan(project_id)
+
+            # Create a minimal StatusQueryResult
+            query_result = StatusQueryResult(plan=plan)
+            query_result.generated_at = query_result_dict.get("generated_at", "")
+
+            # Populate metrics from dict
+            metrics_dict = query_result_dict.get("metrics", {})
+            for metric_name, metric_data in metrics_dict.items():
+                query_result.metrics[metric_name] = MetricResult(
+                    metric_name=metric_name,
+                    data=metric_data.get("data"),
+                    count=metric_data.get("count", 0),
+                    error=metric_data.get("error"),
+                )
+
+            contract = build_status_response(query_result, project_id)
+
+        state["status_response_contract"] = contract.to_dict()
+        state["debug_info"]["status_contract"] = {
+            "has_data": contract.has_data(),
+            "data_gaps": contract.data_gaps,
+            "total_stories": contract.total_stories,
+            "completion_rate": contract.completion_rate,
+        }
+        state["metrics"]["build_response_time_ms"] = (time.time() - start_time) * 1000
+
+        return state
+
+    def _summarize_status_node(self, state: TwoTrackState) -> TwoTrackState:
+        """Node: Generate final status response (using contract text or LLM summary)"""
+        start_time = time.time()
+
+        contract_dict = state.get("status_response_contract", {})
+
+        # Reconstruct contract for text generation
+        contract = StatusResponseContract()
+        contract.reference_time = contract_dict.get("reference_time", "")
+        contract.scope = contract_dict.get("scope", "")
+        contract.data_source = contract_dict.get("data_source", "")
+
+        project_info = contract_dict.get("project", {})
+        contract.project_name = project_info.get("name")
+        contract.project_status = project_info.get("status")
+        contract.project_progress = project_info.get("progress")
+
+        sprint_info = contract_dict.get("sprint", {})
+        contract.sprint_name = sprint_info.get("name")
+        contract.sprint_status = sprint_info.get("status")
+        contract.sprint_days_remaining = sprint_info.get("days_remaining")
+
+        metrics_info = contract_dict.get("metrics", {})
+        contract.completion_rate = metrics_info.get("completion_rate")
+        contract.total_stories = metrics_info.get("total_stories", 0)
+        contract.done_stories = metrics_info.get("done_stories", 0)
+        contract.in_progress_stories = metrics_info.get("in_progress_stories", 0)
+        contract.story_counts_by_status = metrics_info.get("story_counts_by_status", {})
+        contract.wip_count = metrics_info.get("wip_count", 0)
+        contract.wip_limit = metrics_info.get("wip_limit", 5)
+
+        lists_info = contract_dict.get("lists", {})
+        contract.blocked_items = lists_info.get("blocked_items", [])
+        contract.overdue_items = lists_info.get("overdue_items", [])
+        contract.recent_activity = lists_info.get("recent_activity", [])
+
+        contract.data_gaps = contract_dict.get("data_gaps", [])
+
+        # Generate response text from contract
+        if contract.has_data():
+            response_text = contract.to_text()
+            confidence = 0.95  # High confidence when data-backed
+        else:
+            response_text = (
+                "현재 조회 가능한 프로젝트 데이터가 부족합니다.\n\n"
+                f"📍 {contract.scope}\n"
+                f"⚠️ {', '.join(contract.data_gaps) if contract.data_gaps else '데이터 없음'}\n\n"
+                "프로젝트에 스토리나 스프린트가 등록되어 있는지 확인해주세요."
+            )
+            confidence = 0.7
+
+        state["response"] = response_text
+        state["confidence"] = confidence
+        state["intent"] = "status_query"
+        state["metrics"]["summarize_time_ms"] = (time.time() - start_time) * 1000
+
+        logger.info(f"Status response generated: {len(response_text)} chars, confidence={confidence}")
+
+        return state
 
     def _extract_evidence_node(self, state: TwoTrackState) -> TwoTrackState:
         """Node: Extract evidence from RAG results (Phase 1)"""
@@ -1232,6 +1475,13 @@ class TwoTrackWorkflow:
             # Monitoring
             "metrics": {},
             "debug_info": {},
+            # Status Query Engine (Phase 2)
+            "answer_type": "",
+            "answer_type_confidence": 0.0,
+            "status_query_plan": None,
+            "status_query_result": None,
+            "status_response_contract": None,
+            "use_status_workflow": False,
         }
 
         logger.info(f"Starting two-track workflow (trace={trace_id}): {message[:50]}...")
@@ -1271,6 +1521,9 @@ class TwoTrackWorkflow:
             # Metrics
             "metrics": final_state.get("metrics", {}),
             "debug_info": final_state.get("debug_info", {}),
+            # Status Query Engine (Phase 2)
+            "answer_type": final_state.get("answer_type", ""),
+            "used_status_workflow": final_state.get("use_status_workflow", False),
         }
 
         return response

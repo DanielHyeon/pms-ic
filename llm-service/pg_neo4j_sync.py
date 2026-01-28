@@ -20,6 +20,13 @@ import time
 
 logger = logging.getLogger(__name__)
 
+# =============================================================================
+# Global Part ID constant - used for entities visible to all project members
+# Instead of using NULL (which risks accidental data exposure),
+# we explicitly mark global entities with this ID.
+# =============================================================================
+GLOBAL_PART_ID = "GLOBAL"
+
 
 # =============================================================================
 # Configuration
@@ -55,6 +62,8 @@ class SyncConfig:
 class EntityType(Enum):
     """Entity types to sync"""
     PROJECT = "Project"
+    PART = "Part"  # Work Area managed by Part Leader (PL)
+    PART_CHANGE_HISTORY = "PartChangeHistory"  # Part assignment audit trail
     SPRINT = "Sprint"
     TASK = "Task"
     USER_STORY = "UserStory"
@@ -84,6 +93,11 @@ class RelationType(Enum):
     HAS_DELIVERABLE = "HAS_DELIVERABLE"
     HAS_EPIC = "HAS_EPIC"
     HAS_FEATURE = "HAS_FEATURE"
+    HAS_PART = "HAS_PART"  # Project -> Part relationship
+    BELONGS_TO_PART = "BELONGS_TO_PART"  # Feature/Story/Task -> Part relationship
+    # Part-to-Part relationships for cross-Part collaboration
+    DEPENDS_ON_PART = "DEPENDS_ON_PART"  # Part -> Part dependency (upstream/downstream)
+    COLLABORATES_WITH = "COLLABORATES_WITH"  # Part <-> Part collaboration (bidirectional)
     HAS_WBS_GROUP = "HAS_WBS_GROUP"
     HAS_WBS_ITEM = "HAS_WBS_ITEM"
     BELONGS_TO_PHASE = "BELONGS_TO_PHASE"
@@ -151,6 +165,7 @@ class PGQueries:
         SELECT t.id, t.title, t.description, t.status, t.priority,
                t.sprint_id, t.assignee_id, t.phase_id, t.due_date,
                t.track_type, t.tags, t.order_num,
+               COALESCE(t.part_id, 'GLOBAL') AS part_id,  -- Default NULL to GLOBAL for safety
                t.created_at, t.updated_at
         FROM task.tasks t
         WHERE t.updated_at > %s OR %s IS NULL
@@ -162,6 +177,7 @@ class PGQueries:
         SELECT us.id, us.title, us.description, us.status, us.priority,
                us.story_points, us.sprint_id, us.project_id,
                us.epic, us.acceptance_criteria, us.assignee_id,
+               COALESCE(us.part_id, 'GLOBAL') AS part_id,  -- Default NULL to GLOBAL for safety
                us.created_at, us.updated_at
         FROM task.user_stories us
         WHERE us.updated_at > %s OR %s IS NULL
@@ -227,10 +243,22 @@ class PGQueries:
     FEATURES = """
         SELECT f.id, f.name, f.description, f.status, f.priority,
                f.epic_id, f.wbs_group_id, f.order_num,
+               COALESCE(f.part_id, 'GLOBAL') AS part_id,  -- Default NULL to GLOBAL for safety
                f.created_at, f.updated_at
         FROM project.features f
         WHERE f.updated_at > %s OR %s IS NULL
         ORDER BY f.id
+        LIMIT %s OFFSET %s
+    """
+
+    PARTS = """
+        SELECT p.id, p.name, p.description, p.status,
+               p.project_id, p.leader_id, p.leader_name,
+               p.start_date, p.end_date, p.progress,
+               p.created_at, p.updated_at
+        FROM project.parts p
+        WHERE p.updated_at > %s OR %s IS NULL
+        ORDER BY p.id
         LIMIT %s OFFSET %s
     """
 
@@ -257,6 +285,34 @@ class PGQueries:
         FROM project.wbs_items wi
         WHERE wi.updated_at > %s OR %s IS NULL
         ORDER BY wi.id
+        LIMIT %s OFFSET %s
+    """
+
+    # Part-to-Part Relationships for cross-Part collaboration
+    PART_RELATIONSHIPS = """
+        SELECT pr.id, pr.source_part_id, pr.target_part_id,
+               pr.relationship_type, pr.description, pr.dependency_description,
+               pr.strength, pr.active,
+               pr.created_at, pr.updated_at
+        FROM project.part_relationships pr
+        WHERE pr.active = TRUE
+          AND (pr.updated_at > %s OR %s IS NULL)
+        ORDER BY pr.id
+        LIMIT %s OFFSET %s
+    """
+
+    # Part Change History for audit trail and time-sliced queries
+    PART_CHANGE_HISTORY = """
+        SELECT pch.id, pch.entity_type, pch.entity_id, pch.entity_name,
+               pch.previous_part_id, pch.previous_part_name,
+               pch.new_part_id, pch.new_part_name,
+               pch.project_id, pch.change_reason,
+               pch.changed_by_user_id, pch.changed_by_user_name,
+               pch.effective_from, pch.effective_to,
+               pch.created_at
+        FROM project.part_change_history pch
+        WHERE pch.created_at > %s OR %s IS NULL
+        ORDER BY pch.id
         LIMIT %s OFFSET %s
     """
 
@@ -382,6 +438,8 @@ class Neo4jQueries:
     # Create constraints (run once)
     CREATE_CONSTRAINTS = [
         "CREATE CONSTRAINT IF NOT EXISTS FOR (p:Project) REQUIRE p.id IS UNIQUE",
+        "CREATE CONSTRAINT IF NOT EXISTS FOR (pt:Part) REQUIRE pt.id IS UNIQUE",
+        "CREATE CONSTRAINT IF NOT EXISTS FOR (pch:PartChangeHistory) REQUIRE pch.id IS UNIQUE",
         "CREATE CONSTRAINT IF NOT EXISTS FOR (s:Sprint) REQUIRE s.id IS UNIQUE",
         "CREATE CONSTRAINT IF NOT EXISTS FOR (t:Task) REQUIRE t.id IS UNIQUE",
         "CREATE CONSTRAINT IF NOT EXISTS FOR (us:UserStory) REQUIRE us.id IS UNIQUE",
@@ -399,15 +457,34 @@ class Neo4jQueries:
     # Create indexes for better query performance
     CREATE_INDEXES = [
         "CREATE INDEX IF NOT EXISTS FOR (p:Project) ON (p.status)",
+        "CREATE INDEX IF NOT EXISTS FOR (pt:Part) ON (pt.status)",
+        "CREATE INDEX IF NOT EXISTS FOR (pt:Part) ON (pt.project_id)",
+        # Part Change History indexes for time-sliced queries
+        "CREATE INDEX IF NOT EXISTS FOR (pch:PartChangeHistory) ON (pch.entity_type, pch.entity_id)",
+        "CREATE INDEX IF NOT EXISTS FOR (pch:PartChangeHistory) ON (pch.new_part_id)",
+        "CREATE INDEX IF NOT EXISTS FOR (pch:PartChangeHistory) ON (pch.effective_from)",
+        "CREATE INDEX IF NOT EXISTS FOR (pch:PartChangeHistory) ON (pch.project_id)",
         "CREATE INDEX IF NOT EXISTS FOR (s:Sprint) ON (s.status)",
         "CREATE INDEX IF NOT EXISTS FOR (t:Task) ON (t.status)",
         "CREATE INDEX IF NOT EXISTS FOR (t:Task) ON (t.priority)",
+        "CREATE INDEX IF NOT EXISTS FOR (t:Task) ON (t.part_id)",
         "CREATE INDEX IF NOT EXISTS FOR (us:UserStory) ON (us.status)",
+        "CREATE INDEX IF NOT EXISTS FOR (us:UserStory) ON (us.part_id)",
         "CREATE INDEX IF NOT EXISTS FOR (i:Issue) ON (i.status)",
         "CREATE INDEX IF NOT EXISTS FOR (e:Epic) ON (e.status)",
         "CREATE INDEX IF NOT EXISTS FOR (f:Feature) ON (f.status)",
+        "CREATE INDEX IF NOT EXISTS FOR (f:Feature) ON (f.part_id)",
         "CREATE INDEX IF NOT EXISTS FOR (wg:WbsGroup) ON (wg.status)",
         "CREATE INDEX IF NOT EXISTS FOR (wi:WbsItem) ON (wi.status)",
+    ]
+
+    # Migration: Convert NULL part_ids to GLOBAL for safety
+    # This prevents accidental data exposure from forgotten part_id assignments
+    MIGRATE_NULL_PART_IDS = [
+        "MATCH (t:Task) WHERE t.part_id IS NULL SET t.part_id = 'GLOBAL'",
+        "MATCH (us:UserStory) WHERE us.part_id IS NULL SET us.part_id = 'GLOBAL'",
+        "MATCH (f:Feature) WHERE f.part_id IS NULL SET f.part_id = 'GLOBAL'",
+        "MATCH (c:Chunk) WHERE c.part_id IS NULL SET c.part_id = 'GLOBAL'",
     ]
 
     # Merge queries (upsert) - aligned with actual PMS schema
@@ -441,6 +518,29 @@ class Neo4jQueries:
         MERGE (p)-[:HAS_SPRINT]->(s)
     """
 
+    MERGE_PART = """
+        UNWIND $batch AS row
+        MERGE (pt:Part {id: row.id})
+        SET pt.name = row.name,
+            pt.description = row.description,
+            pt.status = row.status,
+            pt.project_id = row.project_id,
+            pt.leader_id = row.leader_id,
+            pt.leader_name = row.leader_name,
+            pt.start_date = row.start_date,
+            pt.end_date = row.end_date,
+            pt.progress = row.progress,
+            pt.synced_at = datetime()
+        WITH pt, row
+        WHERE row.project_id IS NOT NULL
+        MATCH (p:Project {id: row.project_id})
+        MERGE (p)-[:HAS_PART]->(pt)
+        WITH pt, row
+        WHERE row.leader_id IS NOT NULL
+        MATCH (u:User {id: row.leader_id})
+        MERGE (pt)-[:LED_BY]->(u)
+    """
+
     MERGE_TASK = """
         UNWIND $batch AS row
         MERGE (t:Task {id: row.id})
@@ -452,11 +552,17 @@ class Neo4jQueries:
             t.track_type = row.track_type,
             t.tags = row.tags,
             t.order_num = row.order_num,
+            t.part_id = row.part_id,
             t.synced_at = datetime()
         WITH t, row
         WHERE row.sprint_id IS NOT NULL
         MATCH (s:Sprint {id: row.sprint_id})
         MERGE (s)-[:HAS_TASK]->(t)
+        WITH t, row
+        // GLOBAL part_id is a marker, not an actual Part entity - skip relationship
+        WHERE row.part_id IS NOT NULL AND row.part_id <> 'GLOBAL'
+        MATCH (pt:Part {id: row.part_id})
+        MERGE (t)-[:BELONGS_TO_PART]->(pt)
     """
 
     MERGE_USER_STORY = """
@@ -469,6 +575,7 @@ class Neo4jQueries:
             us.story_points = row.story_points,
             us.epic = row.epic,
             us.acceptance_criteria = row.acceptance_criteria,
+            us.part_id = row.part_id,
             us.synced_at = datetime()
         WITH us, row
         WHERE row.sprint_id IS NOT NULL
@@ -478,6 +585,11 @@ class Neo4jQueries:
         WHERE row.project_id IS NOT NULL
         MATCH (p:Project {id: row.project_id})
         MERGE (p)-[:HAS_STORY]->(us)
+        WITH us, row
+        // GLOBAL part_id is a marker, not an actual Part entity - skip relationship
+        WHERE row.part_id IS NOT NULL AND row.part_id <> 'GLOBAL'
+        MATCH (pt:Part {id: row.part_id})
+        MERGE (us)-[:BELONGS_TO_PART]->(pt)
     """
 
     MERGE_PHASE = """
@@ -600,6 +712,7 @@ class Neo4jQueries:
             f.status = row.status,
             f.priority = row.priority,
             f.order_num = row.order_num,
+            f.part_id = row.part_id,
             f.synced_at = datetime()
         WITH f, row
         WHERE row.epic_id IS NOT NULL
@@ -609,6 +722,11 @@ class Neo4jQueries:
         WHERE row.wbs_group_id IS NOT NULL
         MATCH (wg:WbsGroup {id: row.wbs_group_id})
         MERGE (f)-[:LINKED_TO_WBS_GROUP]->(wg)
+        WITH f, row
+        // GLOBAL part_id is a marker, not an actual Part entity - skip relationship
+        WHERE row.part_id IS NOT NULL AND row.part_id <> 'GLOBAL'
+        MATCH (pt:Part {id: row.part_id})
+        MERGE (f)-[:BELONGS_TO_PART]->(pt)
     """
 
     MERGE_WBS_GROUP = """
@@ -655,6 +773,62 @@ class Neo4jQueries:
         WHERE row.group_id IS NOT NULL
         MATCH (wg:WbsGroup {id: row.group_id})
         MERGE (wg)-[:HAS_WBS_ITEM]->(wi)
+    """
+
+    # Part-to-Part Relationship merge (DEPENDS_ON_PART, COLLABORATES_WITH)
+    MERGE_PART_RELATIONSHIP = """
+        UNWIND $batch AS row
+        MATCH (source:Part {id: row.source_part_id})
+        MATCH (target:Part {id: row.target_part_id})
+        // Create appropriate relationship based on type
+        FOREACH (x IN CASE WHEN row.relationship_type = 'DEPENDS_ON' THEN [1] ELSE [] END |
+            MERGE (source)-[r:DEPENDS_ON_PART]->(target)
+            SET r.description = row.description,
+                r.dependency_description = row.dependency_description,
+                r.strength = row.strength,
+                r.synced_at = datetime()
+        )
+        FOREACH (x IN CASE WHEN row.relationship_type = 'COLLABORATES_WITH' THEN [1] ELSE [] END |
+            MERGE (source)-[r:COLLABORATES_WITH]->(target)
+            SET r.description = row.description,
+                r.strength = row.strength,
+                r.synced_at = datetime()
+        )
+    """
+
+    # Part Change History for audit trail and time-sliced RAG queries
+    MERGE_PART_CHANGE_HISTORY = """
+        UNWIND $batch AS row
+        MERGE (pch:PartChangeHistory {id: row.id})
+        SET pch.entity_type = row.entity_type,
+            pch.entity_id = row.entity_id,
+            pch.entity_name = row.entity_name,
+            pch.previous_part_id = row.previous_part_id,
+            pch.previous_part_name = row.previous_part_name,
+            pch.new_part_id = row.new_part_id,
+            pch.new_part_name = row.new_part_name,
+            pch.project_id = row.project_id,
+            pch.change_reason = row.change_reason,
+            pch.changed_by_user_id = row.changed_by_user_id,
+            pch.changed_by_user_name = row.changed_by_user_name,
+            pch.effective_from = row.effective_from,
+            pch.effective_to = row.effective_to,
+            pch.synced_at = datetime()
+        // Link to Project
+        WITH pch, row
+        WHERE row.project_id IS NOT NULL
+        MATCH (p:Project {id: row.project_id})
+        MERGE (p)-[:HAS_PART_CHANGE]->(pch)
+        // Link to new Part (if not GLOBAL)
+        WITH pch, row
+        WHERE row.new_part_id IS NOT NULL AND row.new_part_id <> 'GLOBAL'
+        MATCH (pt:Part {id: row.new_part_id})
+        MERGE (pch)-[:CHANGED_TO]->(pt)
+        // Link to previous Part (if exists)
+        WITH pch, row
+        WHERE row.previous_part_id IS NOT NULL
+        MATCH (prev_pt:Part {id: row.previous_part_id})
+        MERGE (pch)-[:CHANGED_FROM]->(prev_pt)
     """
 
     # Dashboard KPI node for RAG queries about project metrics
@@ -782,6 +956,16 @@ class PGNeo4jSyncService:
                         session.run(query)
                     except Exception as e:
                         logger.warning(f"Index creation warning: {e}")
+
+                # Migration: Convert NULL part_ids to GLOBAL for safety
+                for query in Neo4jQueries.MIGRATE_NULL_PART_IDS:
+                    try:
+                        result = session.run(query)
+                        summary = result.consume()
+                        if summary.counters.properties_set > 0:
+                            logger.info(f"Migrated {summary.counters.properties_set} NULL part_ids to GLOBAL")
+                    except Exception as e:
+                        logger.warning(f"Part ID migration warning: {e}")
 
             self._initialized = True
             logger.info("Neo4j schema initialized successfully")
@@ -958,6 +1142,67 @@ class PGNeo4jSyncService:
                 duration_ms=(time.time() - start_time) * 1000,
             )
 
+    def _sync_part_relationships(
+        self,
+        since: Optional[datetime] = None,
+    ) -> SyncResult:
+        """Sync Part-to-Part relationships (DEPENDS_ON_PART, COLLABORATES_WITH)"""
+        start_time = time.time()
+
+        try:
+            # Fetch Part relationships from PostgreSQL
+            relationships = self._fetch_entities(
+                PGQueries.PART_RELATIONSHIPS,
+                since=since,
+            )
+
+            if not relationships:
+                return SyncResult(
+                    success=True,
+                    entity_type="PART_RELATIONSHIPS",
+                    records_synced=0,
+                    duration_ms=(time.time() - start_time) * 1000,
+                )
+
+            # Sync to Neo4j
+            driver = self._get_neo4j_driver()
+            batch_size = self.config.batch_size
+            records_synced = 0
+            records_failed = 0
+
+            for i in range(0, len(relationships), batch_size):
+                batch = relationships[i:i + batch_size]
+
+                with driver.session() as session:
+                    try:
+                        session.run(Neo4jQueries.MERGE_PART_RELATIONSHIP, batch=batch)
+                        records_synced += len(batch)
+                    except Exception as e:
+                        logger.error(f"Failed to sync Part relationship batch: {e}")
+                        records_failed += len(batch)
+
+            duration_ms = (time.time() - start_time) * 1000
+            logger.info(
+                f"Synced PART_RELATIONSHIPS: {records_synced} records in {duration_ms:.2f}ms"
+            )
+
+            return SyncResult(
+                success=records_failed == 0,
+                entity_type="PART_RELATIONSHIPS",
+                records_synced=records_synced,
+                records_failed=records_failed,
+                duration_ms=duration_ms,
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to sync PART_RELATIONSHIPS: {e}")
+            return SyncResult(
+                success=False,
+                entity_type="PART_RELATIONSHIPS",
+                error=str(e),
+                duration_ms=(time.time() - start_time) * 1000,
+            )
+
     def full_sync(self) -> FullSyncResult:
         """Perform full sync of all entities and relationships"""
         start_time = time.time()
@@ -971,9 +1216,11 @@ class PGNeo4jSyncService:
             self.initialize()
 
         # Sync entities (order matters for relationships)
+        # Part must come after Project but before Feature/Task/UserStory
         entity_mappings = [
             (EntityType.USER, PGQueries.USERS, Neo4jQueries.MERGE_USER),
             (EntityType.PROJECT, PGQueries.PROJECTS, Neo4jQueries.MERGE_PROJECT),
+            (EntityType.PART, PGQueries.PARTS, Neo4jQueries.MERGE_PART),  # Part after Project
             (EntityType.SPRINT, PGQueries.SPRINTS, Neo4jQueries.MERGE_SPRINT),
             (EntityType.PHASE, PGQueries.PHASES, Neo4jQueries.MERGE_PHASE),
             (EntityType.EPIC, PGQueries.EPICS, Neo4jQueries.MERGE_EPIC),
@@ -984,6 +1231,8 @@ class PGNeo4jSyncService:
             (EntityType.USER_STORY, PGQueries.USER_STORIES, Neo4jQueries.MERGE_USER_STORY),
             (EntityType.DELIVERABLE, PGQueries.DELIVERABLES, Neo4jQueries.MERGE_DELIVERABLE),
             (EntityType.ISSUE, PGQueries.ISSUES, Neo4jQueries.MERGE_ISSUE),
+            # Part change history for audit trail and time-sliced queries
+            (EntityType.PART_CHANGE_HISTORY, PGQueries.PART_CHANGE_HISTORY, Neo4jQueries.MERGE_PART_CHANGE_HISTORY),
             # Dashboard KPI aggregates - sync last after all entities are synced
             (EntityType.DASHBOARD_KPI, PGQueries.DASHBOARD_KPI, Neo4jQueries.MERGE_DASHBOARD_KPI),
         ]
@@ -1001,6 +1250,10 @@ class PGNeo4jSyncService:
         for rel_type, pg_query, neo4j_query in relationship_mappings:
             result = self._sync_relationships(rel_type, pg_query, neo4j_query, since=None)
             relationship_results[rel_type.value] = result
+
+        # Sync Part-to-Part relationships (DEPENDS_ON_PART, COLLABORATES_WITH)
+        part_rel_result = self._sync_part_relationships(since=None)
+        relationship_results["PART_RELATIONSHIPS"] = part_rel_result
 
         # Update last sync time
         self._last_sync_time = datetime.now()
@@ -1034,9 +1287,11 @@ class PGNeo4jSyncService:
         logger.info(f"Starting incremental sync since {since}")
 
         # Same mappings as full sync but with since parameter
+        # Part must come after Project but before Feature/Task/UserStory
         entity_mappings = [
             (EntityType.USER, PGQueries.USERS, Neo4jQueries.MERGE_USER),
             (EntityType.PROJECT, PGQueries.PROJECTS, Neo4jQueries.MERGE_PROJECT),
+            (EntityType.PART, PGQueries.PARTS, Neo4jQueries.MERGE_PART),  # Part after Project
             (EntityType.SPRINT, PGQueries.SPRINTS, Neo4jQueries.MERGE_SPRINT),
             (EntityType.PHASE, PGQueries.PHASES, Neo4jQueries.MERGE_PHASE),
             (EntityType.EPIC, PGQueries.EPICS, Neo4jQueries.MERGE_EPIC),
@@ -1047,6 +1302,8 @@ class PGNeo4jSyncService:
             (EntityType.USER_STORY, PGQueries.USER_STORIES, Neo4jQueries.MERGE_USER_STORY),
             (EntityType.DELIVERABLE, PGQueries.DELIVERABLES, Neo4jQueries.MERGE_DELIVERABLE),
             (EntityType.ISSUE, PGQueries.ISSUES, Neo4jQueries.MERGE_ISSUE),
+            # Part change history for audit trail and time-sliced queries
+            (EntityType.PART_CHANGE_HISTORY, PGQueries.PART_CHANGE_HISTORY, Neo4jQueries.MERGE_PART_CHANGE_HISTORY),
             # Dashboard KPI aggregates - always sync on incremental to get fresh calculations
             (EntityType.DASHBOARD_KPI, PGQueries.DASHBOARD_KPI, Neo4jQueries.MERGE_DASHBOARD_KPI),
         ]
@@ -1064,6 +1321,10 @@ class PGNeo4jSyncService:
         for rel_type, pg_query, neo4j_query in relationship_mappings:
             result = self._sync_relationships(rel_type, pg_query, neo4j_query, since=since)
             relationship_results[rel_type.value] = result
+
+        # Sync Part-to-Part relationships (DEPENDS_ON_PART, COLLABORATES_WITH)
+        part_rel_result = self._sync_part_relationships(since=since)
+        relationship_results["PART_RELATIONSHIPS"] = part_rel_result
 
         # Update last sync time
         self._last_sync_time = datetime.now()

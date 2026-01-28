@@ -248,6 +248,26 @@ export class ApiService {
     ]);
   }
 
+  async getWeightedProgress(projectId: string) {
+    return this.fetchWithFallback(`/projects/${projectId}/dashboard/weighted-progress`, {}, {
+      aiProgress: 45.5,
+      siProgress: 60.0,
+      commonProgress: 30.0,
+      weightedProgress: 49.85,
+      aiWeight: 0.70,
+      siWeight: 0.30,
+      commonWeight: 0.00,
+      aiTotalTasks: 22,
+      aiCompletedTasks: 10,
+      siTotalTasks: 15,
+      siCompletedTasks: 9,
+      commonTotalTasks: 10,
+      commonCompletedTasks: 3,
+      totalTasks: 47,
+      completedTasks: 22,
+    });
+  }
+
   // ========== Legacy Dashboard API (backward compatibility) ==========
 
   /** @deprecated Use getPortfolioDashboardStats() instead */
@@ -391,6 +411,22 @@ export class ApiService {
     return this.fetchWithFallback(`/parts/${partId}/members/${memberId}`, {
       method: 'DELETE',
     }, { success: true });
+  }
+
+  async getPartDashboard(projectId: string, partId: string) {
+    return this.fetchWithFallback(`/projects/${projectId}/parts/${partId}/dashboard`, {}, null);
+  }
+
+  async getPartMetrics(projectId: string, partId: string) {
+    return this.fetchWithFallback(`/projects/${projectId}/parts/${partId}/metrics`, {}, null);
+  }
+
+  async getPartFeatures(projectId: string, partId: string) {
+    return this.fetchWithFallback(`/projects/${projectId}/parts/${partId}/features`, {}, []);
+  }
+
+  async getPartStories(projectId: string, partId: string) {
+    return this.fetchWithFallback(`/projects/${projectId}/parts/${partId}/stories`, {}, []);
   }
 
   // ========== Project Members API ==========

@@ -11,11 +11,18 @@ import {
   RotateCcw,
   Pencil,
   Trash2,
+  Link2,
+  Filter,
+  Layers,
 } from 'lucide-react';
 import { UserRole } from '../App';
 import { useStories, useCreateStory, useUpdateStory, useUpdateStoryPriority } from '../../hooks/api/useStories';
 import { useActiveSprint, useAssignToSprint } from '../../hooks/api/useSprints';
+import { useCreateEpic, useUpdateEpic } from '../../hooks/api/useEpics';
+import { useCreateFeature, useUpdateFeature } from '../../hooks/api/useFeatures';
+import { useParts } from '../../hooks/api/useParts';
 import { canEdit as checkCanEdit, canPrioritize as checkCanPrioritize } from '../../utils/rolePermissions';
+import { Part, PART_STATUS_INFO } from '../../types/part';
 import {
   UserStory,
   StoryFormData,
@@ -24,8 +31,8 @@ import {
   validateStoryForm,
   getPriorityColor,
 } from '../../utils/storyTypes';
-import { SprintPanel, EpicTreeView } from './backlog';
-import { UserStory as BacklogStory } from '../../types/backlog';
+import { SprintPanel, EpicTreeView, EpicFormModal, FeatureFormModal, WbsConnectionPanel } from './backlog';
+import { UserStory as BacklogStory, Epic, EpicFormData, Feature, FeatureFormData } from '../../types/backlog';
 
 interface BacklogManagementProps {
   userRole: UserRole;
@@ -35,12 +42,18 @@ interface BacklogManagementProps {
 export default function BacklogManagement({ userRole, projectId = 'proj-001' }: BacklogManagementProps) {
   const { data: stories = [], isLoading: isLoadingStories } = useStories();
   const { data: activeSprint } = useActiveSprint(projectId);
+  const { data: parts = [] } = useParts(projectId);
   const createStoryMutation = useCreateStory();
   const updateStoryMutation = useUpdateStory();
   const updatePriorityMutation = useUpdateStoryPriority();
   const assignToSprintMutation = useAssignToSprint();
+  const createEpicMutation = useCreateEpic();
+  const updateEpicMutation = useUpdateEpic();
+  const createFeatureMutation = useCreateFeature();
+  const updateFeatureMutation = useUpdateFeature();
 
   const [expandedStory, setExpandedStory] = useState<number | null>(null);
+  const [selectedPartFilter, setSelectedPartFilter] = useState<string>('');
   const [showPlanningPoker, setShowPlanningPoker] = useState(false);
   const [selectedStoryForPoker, setSelectedStoryForPoker] = useState<number | null>(null);
   const [selectedPokerCard, setSelectedPokerCard] = useState<number | null>(null);
@@ -51,6 +64,18 @@ export default function BacklogManagement({ userRole, projectId = 'proj-001' }: 
   const [storyForm, setStoryForm] = useState<StoryFormData>(createEmptyStoryForm());
   const [selectedSprintId, setSelectedSprintId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'tree'>('tree');
+
+  // Epic modal state
+  const [showEpicModal, setShowEpicModal] = useState(false);
+  const [editingEpic, setEditingEpic] = useState<Epic | null>(null);
+
+  // Feature modal state
+  const [showFeatureModal, setShowFeatureModal] = useState(false);
+  const [editingFeature, setEditingFeature] = useState<Feature | null>(null);
+  const [targetEpicId, setTargetEpicId] = useState<string>('');
+
+  // WBS Connection panel state
+  const [showWbsPanel, setShowWbsPanel] = useState(false);
 
   // Use centralized role permissions
   const canEdit = checkCanEdit(userRole);
@@ -90,12 +115,12 @@ export default function BacklogManagement({ userRole, projectId = 'proj-001' }: 
 
   const moveToSprint = (storyId: number) => {
     if (!canEdit) return;
-    updateStoryMutation.mutate({ id: storyId, data: { status: 'SELECTED' } });
+    updateStoryMutation.mutate({ id: storyId, data: { status: 'IN_SPRINT' } });
   };
 
   const removeFromSprint = (storyId: number) => {
     if (!canEdit) return;
-    updateStoryMutation.mutate({ id: storyId, data: { status: 'BACKLOG' } });
+    updateStoryMutation.mutate({ id: storyId, data: { status: 'READY' } });
   };
 
   const openEditModal = (story: UserStory) => {
@@ -159,7 +184,7 @@ export default function BacklogManagement({ userRole, projectId = 'proj-001' }: 
       description: story.description || '',
       epic: story.epicId || '',
       priority: story.priority === 'CRITICAL' ? 1 : story.priority === 'HIGH' ? 2 : story.priority === 'MEDIUM' ? 3 : 4,
-      status: story.status === 'DONE' ? 'COMPLETED' : story.status === 'IN_SPRINT' ? 'SELECTED' : 'BACKLOG',
+      status: story.status === 'DONE' ? 'DONE' : story.status === 'IN_SPRINT' ? 'IN_SPRINT' : 'READY',
       storyPoints: story.storyPoints,
       acceptanceCriteria: story.acceptanceCriteria || [],
     };
@@ -172,13 +197,56 @@ export default function BacklogManagement({ userRole, projectId = 'proj-001' }: 
   };
 
   const handleAddEpic = () => {
-    // TODO: Open Epic creation modal
-    alert('Epic 추가 기능은 다음 단계에서 구현됩니다.');
+    setEditingEpic(null);
+    setShowEpicModal(true);
+  };
+
+  const handleEpicSubmit = (data: EpicFormData & { projectId: string }) => {
+    if (editingEpic) {
+      updateEpicMutation.mutate(
+        { id: editingEpic.id, data },
+        {
+          onSuccess: () => {
+            setShowEpicModal(false);
+            setEditingEpic(null);
+          },
+        }
+      );
+    } else {
+      createEpicMutation.mutate(data, {
+        onSuccess: () => {
+          setShowEpicModal(false);
+        },
+      });
+    }
   };
 
   const handleAddFeature = (epicId: string) => {
-    // TODO: Open Feature creation modal
-    alert('Feature 추가 기능은 다음 단계에서 구현됩니다.');
+    setEditingFeature(null);
+    setTargetEpicId(epicId);
+    setShowFeatureModal(true);
+  };
+
+  const handleFeatureSubmit = (data: FeatureFormData) => {
+    if (editingFeature) {
+      updateFeatureMutation.mutate(
+        { id: editingFeature.id, data },
+        {
+          onSuccess: () => {
+            setShowFeatureModal(false);
+            setEditingFeature(null);
+            setTargetEpicId('');
+          },
+        }
+      );
+    } else {
+      createFeatureMutation.mutate(data, {
+        onSuccess: () => {
+          setShowFeatureModal(false);
+          setTargetEpicId('');
+        },
+      });
+    }
   };
 
   const handleMoveToSprint = (storyId: string) => {
@@ -190,13 +258,22 @@ export default function BacklogManagement({ userRole, projectId = 'proj-001' }: 
   };
 
   // Convert stories to BacklogStory format for EpicTreeView
-  const backlogStories: BacklogStory[] = stories.map((s) => ({
+  // Maps legacy statuses to new status model
+  const mapStatus = (status: string) => {
+    if (status === 'COMPLETED') return 'DONE';
+    if (status === 'SELECTED') return 'IN_SPRINT';
+    if (status === 'BACKLOG') return 'READY';
+    return status;
+  };
+
+  const allBacklogStories: BacklogStory[] = stories.map((s) => ({
     id: `story-${s.id}`,
     title: s.title,
     description: s.description,
     epicId: s.epic,
+    partId: (s as any).partId, // Part ID for filtering
     priority: s.priority <= 1 ? 'CRITICAL' : s.priority === 2 ? 'HIGH' : s.priority === 3 ? 'MEDIUM' : 'LOW',
-    status: s.status === 'COMPLETED' ? 'DONE' : s.status === 'SELECTED' ? 'IN_SPRINT' : 'BACKLOG',
+    status: mapStatus(s.status) as BacklogStory['status'],
     storyPoints: s.storyPoints,
     acceptanceCriteria: s.acceptanceCriteria,
     order: s.priority,
@@ -204,9 +281,25 @@ export default function BacklogManagement({ userRole, projectId = 'proj-001' }: 
     updatedAt: new Date().toISOString(),
   }));
 
-  const backlogStoriesOnly = stories.filter((s) => s.status === 'BACKLOG').sort((a, b) => a.priority - b.priority);
-  const sprintStories = stories.filter((s) => s.status === 'SELECTED');
-  const doneStories = stories.filter((s) => s.status === 'COMPLETED');
+  // Filter backlog stories by part if selected
+  const backlogStories = selectedPartFilter
+    ? allBacklogStories.filter((s) => s.partId === selectedPartFilter)
+    : allBacklogStories;
+
+  // Filter stories by status (handle both legacy and new statuses)
+  const isBacklogStatus = (status: string) => ['BACKLOG', 'IDEA', 'REFINED', 'READY'].includes(status);
+  const isSprintStatus = (status: string) => ['SELECTED', 'IN_SPRINT', 'IN_PROGRESS', 'REVIEW'].includes(status);
+  const isDoneStatus = (status: string) => ['COMPLETED', 'DONE'].includes(status);
+
+  // Filter by Part if selected
+  const filterByPart = <T extends { partId?: string }>(items: T[]): T[] => {
+    if (!selectedPartFilter) return items;
+    return items.filter((item) => item.partId === selectedPartFilter);
+  };
+
+  const backlogStoriesOnly = filterByPart(stories.filter((s) => isBacklogStatus(s.status))).sort((a, b) => a.priority - b.priority);
+  const sprintStories = filterByPart(stories.filter((s) => isSprintStatus(s.status)));
+  const doneStories = filterByPart(stories.filter((s) => isDoneStatus(s.status)));
 
   return (
     <div className="p-6">
@@ -218,6 +311,37 @@ export default function BacklogManagement({ userRole, projectId = 'proj-001' }: 
             <p className="text-sm text-gray-500 mt-1">Epic → Feature → User Story 계층 구조 관리</p>
           </div>
           <div className="flex gap-3">
+            {/* Part Filter */}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 text-gray-500">
+                <Layers size={16} />
+                <span className="text-sm">Part:</span>
+              </div>
+              <select
+                value={selectedPartFilter}
+                onChange={(e) => setSelectedPartFilter(e.target.value)}
+                aria-label="Part 필터 선택"
+                title="Part 필터 선택"
+                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">전체 Part</option>
+                {parts.map((part: Part) => (
+                  <option key={part.id} value={part.id}>
+                    {part.name} ({part.leaderName || 'PL 미지정'})
+                  </option>
+                ))}
+              </select>
+              {selectedPartFilter && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedPartFilter('')}
+                  className="p-1 text-gray-400 hover:text-gray-600 rounded"
+                  title="필터 초기화"
+                >
+                  <Filter size={16} />
+                </button>
+              )}
+            </div>
             <div className="flex bg-gray-100 rounded-lg p-1">
               <button
                 type="button"
@@ -238,6 +362,18 @@ export default function BacklogManagement({ userRole, projectId = 'proj-001' }: 
                 목록 보기
               </button>
             </div>
+            <button
+              type="button"
+              onClick={() => setShowWbsPanel(!showWbsPanel)}
+              className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                showWbsPanel
+                  ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                  : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
+              }`}
+            >
+              <Link2 size={18} />
+              <span>WBS 연결</span>
+            </button>
             <button
               type="button"
               onClick={() => setShowPlanningPoker(!showPlanningPoker)}
@@ -269,6 +405,33 @@ export default function BacklogManagement({ userRole, projectId = 'proj-001' }: 
         canEdit={canEdit}
       />
 
+      {/* Part Filter Banner */}
+      {selectedPartFilter && (() => {
+        const selectedPart = parts.find((p: Part) => p.id === selectedPartFilter);
+        return selectedPart ? (
+          <div className="mb-4 bg-indigo-50 border border-indigo-200 rounded-lg p-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Layers className="text-indigo-600" size={20} />
+              <div>
+                <span className="text-sm text-indigo-900 font-medium">
+                  {selectedPart.name} 필터링 중
+                </span>
+                <span className="text-xs text-indigo-600 ml-2">
+                  PL: {selectedPart.leaderName || '미지정'}
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedPartFilter('')}
+              className="text-sm text-indigo-600 hover:text-indigo-800 underline"
+            >
+              필터 해제
+            </button>
+          </div>
+        ) : null;
+      })()}
+
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-lg border border-gray-200 p-4">
@@ -286,8 +449,11 @@ export default function BacklogManagement({ userRole, projectId = 'proj-001' }: 
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <p className="text-sm text-gray-500">총 Story Points</p>
           <p className="text-2xl font-semibold text-purple-600 mt-1">
-            {stories.reduce((sum, s) => sum + (s.storyPoints || 0), 0)}
+            {[...backlogStoriesOnly, ...sprintStories, ...doneStories].reduce((sum, s) => sum + (s.storyPoints || 0), 0)}
           </p>
+          {selectedPartFilter && (
+            <p className="text-xs text-gray-400 mt-1">Part 필터 적용됨</p>
+          )}
         </div>
       </div>
 
@@ -735,6 +901,35 @@ export default function BacklogManagement({ userRole, projectId = 'proj-001' }: 
         </div>
       )}
 
+      {/* Epic Form Modal */}
+      <EpicFormModal
+        isOpen={showEpicModal}
+        onClose={() => {
+          setShowEpicModal(false);
+          setEditingEpic(null);
+        }}
+        epic={editingEpic}
+        onSubmit={handleEpicSubmit}
+        projectId={projectId}
+        isEditMode={!!editingEpic}
+        isLoading={createEpicMutation.isPending || updateEpicMutation.isPending}
+      />
+
+      {/* Feature Form Modal */}
+      <FeatureFormModal
+        isOpen={showFeatureModal}
+        onClose={() => {
+          setShowFeatureModal(false);
+          setEditingFeature(null);
+          setTargetEpicId('');
+        }}
+        feature={editingFeature}
+        onSubmit={handleFeatureSubmit}
+        epicId={targetEpicId}
+        isEditMode={!!editingFeature}
+        isLoading={createFeatureMutation.isPending || updateFeatureMutation.isPending}
+      />
+
       {/* Main Content - Tree View or List View */}
       {viewMode === 'tree' ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -946,6 +1141,14 @@ export default function BacklogManagement({ userRole, projectId = 'proj-001' }: 
           </div>
         </div>
       )}
+
+      {/* WBS Connection Panel */}
+      <WbsConnectionPanel
+        projectId={projectId}
+        isOpen={showWbsPanel}
+        onClose={() => setShowWbsPanel(false)}
+        canEdit={canEdit}
+      />
     </div>
   );
 }

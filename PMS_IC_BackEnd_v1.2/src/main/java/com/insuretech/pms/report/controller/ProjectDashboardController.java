@@ -3,6 +3,7 @@ package com.insuretech.pms.report.controller;
 import com.insuretech.pms.common.dto.ApiResponse;
 import com.insuretech.pms.report.dto.ActivityDto;
 import com.insuretech.pms.report.dto.DashboardStats;
+import com.insuretech.pms.report.dto.WeightedProgressDto;
 import com.insuretech.pms.report.service.DashboardService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -48,5 +49,15 @@ public class ProjectDashboardController {
             @Parameter(description = "프로젝트 ID") @PathVariable String projectId) {
         List<ActivityDto> activities = dashboardService.getProjectActivities(projectId);
         return ResponseEntity.ok(ApiResponse.success(activities));
+    }
+
+    @Operation(summary = "프로젝트 가중치 기반 진척율 조회",
+               description = "AI/SI/Common 트랙별 가중치를 적용한 통합 진척율을 반환합니다. 프로젝트 멤버만 접근 가능합니다.")
+    @GetMapping("/weighted-progress")
+    @PreAuthorize("@projectSecurity.isProjectMember(#projectId)")
+    public ResponseEntity<ApiResponse<WeightedProgressDto>> getWeightedProgress(
+            @Parameter(description = "프로젝트 ID") @PathVariable String projectId) {
+        WeightedProgressDto progress = dashboardService.getWeightedProgress(projectId);
+        return ResponseEntity.ok(ApiResponse.success(progress));
     }
 }

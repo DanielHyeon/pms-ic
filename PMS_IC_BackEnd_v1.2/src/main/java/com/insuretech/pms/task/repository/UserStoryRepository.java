@@ -31,4 +31,20 @@ public interface UserStoryRepository extends JpaRepository<UserStory, String> {
 
     @Query("SELECT us FROM UserStory us WHERE us.featureId = :featureId AND us.wbsItemId IS NULL")
     List<UserStory> findByFeatureIdAndWbsItemIdIsNull(String featureId);
+
+    // ===== Part-based queries =====
+
+    List<UserStory> findByPartId(String partId);
+
+    @Query("SELECT COUNT(us) FROM UserStory us WHERE us.partId = :partId")
+    int countByPartId(@Param("partId") String partId);
+
+    @Query("SELECT COUNT(us) FROM UserStory us WHERE us.partId = :partId AND us.status = :status")
+    int countByPartIdAndStatus(@Param("partId") String partId, @Param("status") String status);
+
+    @Query("SELECT COALESCE(SUM(us.storyPoints), 0) FROM UserStory us WHERE us.partId = :partId")
+    Integer sumStoryPointsByPartId(@Param("partId") String partId);
+
+    @Query("SELECT COALESCE(SUM(us.storyPoints), 0) FROM UserStory us WHERE us.partId = :partId AND us.status = :status")
+    Integer sumStoryPointsByPartIdAndStatus(@Param("partId") String partId, @Param("status") String status);
 }

@@ -48,7 +48,7 @@ public class UserStory extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 50)
     @Builder.Default
-    private StoryStatus status = StoryStatus.BACKLOG;
+    private StoryStatus status = StoryStatus.IDEA;
 
     @Column(name = "assignee_id", length = 50)
     private String assigneeId;
@@ -71,6 +71,13 @@ public class UserStory extends BaseEntity {
     @Column(name = "wbs_item_id", length = 36)
     private String wbsItemId;
 
+    /**
+     * Part (Work Area) ID - denormalized from Feature for query performance.
+     * Derived from feature.part_id when feature is assigned.
+     */
+    @Column(name = "part_id", length = 50)
+    private String partId;
+
     @ElementCollection
     @CollectionTable(name = "user_story_requirement_links", schema = "task",
             joinColumns = @JoinColumn(name = "user_story_id"))
@@ -90,7 +97,18 @@ public class UserStory extends BaseEntity {
         LOW, MEDIUM, HIGH, CRITICAL
     }
 
+    /**
+     * Story status flow based on Scrum design document:
+     * IDEA -> REFINED -> READY -> IN_SPRINT -> IN_PROGRESS -> REVIEW -> DONE
+     */
     public enum StoryStatus {
-        BACKLOG, SELECTED, IN_PROGRESS, COMPLETED, CANCELLED
+        IDEA,           // Initial concept, not yet refined
+        REFINED,        // Refined with acceptance criteria defined
+        READY,          // Ready for sprint planning (was BACKLOG)
+        IN_SPRINT,      // Committed to sprint (was SELECTED)
+        IN_PROGRESS,    // Active development
+        REVIEW,         // Code review / QA
+        DONE,           // Completed (was COMPLETED)
+        CANCELLED       // Removed from backlog
     }
 }

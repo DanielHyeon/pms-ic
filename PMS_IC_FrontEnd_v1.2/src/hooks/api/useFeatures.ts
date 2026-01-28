@@ -71,11 +71,16 @@ export function useCreateFeature() {
         name: data.name,
         description: data.description,
         priority: data.priority,
+        partId: data.partId,
       });
     },
     onSuccess: (newFeature) => {
       queryClient.invalidateQueries({ queryKey: featureKeys.all });
       queryClient.invalidateQueries({ queryKey: featureKeys.byEpic(newFeature.epicId) });
+      // Invalidate part-related queries if part is assigned
+      if (newFeature.partId) {
+        queryClient.invalidateQueries({ queryKey: ['parts'] });
+      }
     },
   });
 }
@@ -97,6 +102,8 @@ export function useUpdateFeature() {
       queryClient.invalidateQueries({ queryKey: featureKeys.all });
       queryClient.invalidateQueries({ queryKey: featureKeys.byEpic(updated.epicId) });
       queryClient.invalidateQueries({ queryKey: featureKeys.detail(updated.id) });
+      // Invalidate part-related queries when part assignment changes
+      queryClient.invalidateQueries({ queryKey: ['parts'] });
     },
   });
 }

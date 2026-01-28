@@ -7,7 +7,8 @@ import {
   Target,
   Layers,
   FileText,
-  GripVertical,
+  Link2,
+  Users,
 } from 'lucide-react';
 import {
   Epic,
@@ -77,6 +78,12 @@ function StoryItem({ story, onSelect, onMoveToSprint, canEdit }: StoryItemProps)
           <span className={`px-1.5 py-0.5 text-xs rounded ${getStoryStatusColor(story.status)}`}>
             {getStoryStatusLabel(story.status)}
           </span>
+          {story.wbsItemId && (
+            <span className="px-1.5 py-0.5 bg-teal-100 text-teal-700 rounded text-xs flex items-center gap-0.5">
+              <Link2 size={10} />
+              WBS Item
+            </span>
+          )}
         </div>
       </div>
       <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -136,7 +143,20 @@ function FeatureItem({
           )}
         </button>
         <Layers size={16} className="text-amber-500" />
-        <span className="font-medium text-gray-800 flex-1">{feature.name}</span>
+        <span className="font-medium text-gray-800">{feature.name}</span>
+        {feature.partName && (
+          <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs flex items-center gap-0.5">
+            <Users size={10} />
+            {feature.partName}
+          </span>
+        )}
+        {feature.wbsGroupId && (
+          <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs flex items-center gap-0.5">
+            <Link2 size={10} />
+            WBS
+          </span>
+        )}
+        <span className="flex-1" />
         <span className="text-xs text-gray-500">
           {completedStories}/{featureStories.length} 완료
         </span>
@@ -235,6 +255,12 @@ function EpicItem({
             <span className={`px-1.5 py-0.5 text-xs rounded ${getPriorityColor(epic.priority)}`}>
               {getPriorityLabel(epic.priority)}
             </span>
+            {epic.phaseId && (
+              <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs flex items-center gap-0.5">
+                <Link2 size={10} />
+                Phase
+              </span>
+            )}
           </div>
           {epic.description && (
             <p className="text-xs text-gray-500 truncate">{epic.description}</p>

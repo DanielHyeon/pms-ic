@@ -26,6 +26,7 @@ import {
   LucideIcon,
   ChevronDown,
   ChevronRight,
+  Gauge,
 } from 'lucide-react';
 import { UserRole } from '../stores/authStore';
 
@@ -244,6 +245,12 @@ export const menuConfig: MenuConfig = {
       defaultExpanded: false,
       items: [
         {
+          id: 'pmo-console',
+          path: '/pmo-console',
+          label: 'PMO 대시보드',
+          icon: Gauge,
+        },
+        {
           id: 'lineage',
           path: '/lineage',
           label: 'Lineage & History',
@@ -335,6 +342,7 @@ export const menuAccessByRole: Record<UserRole, string[]> = {
     'announcements',
     'ai-assistant',
     'education',
+    'pmo-console',
     'lineage',
     'reports',
     'statistics',
@@ -360,6 +368,7 @@ export const menuAccessByRole: Record<UserRole, string[]> = {
     'announcements',
     'ai-assistant',
     'education',
+    'pmo-console',
     'lineage',
     'reports',
     'statistics',
@@ -437,6 +446,7 @@ export const menuAccessByRole: Record<UserRole, string[]> = {
     'announcements',
     'ai-assistant',
     'education',
+    'pmo-console',
     'lineage',
     'reports',
     'statistics',

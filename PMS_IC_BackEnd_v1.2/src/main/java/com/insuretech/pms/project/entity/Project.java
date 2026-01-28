@@ -41,6 +41,15 @@ public class Project extends BaseEntity {
     @Column(name = "budget", precision = 15, scale = 2)
     private java.math.BigDecimal budget;
 
+    // Track weights for weighted progress calculation (AI/SI/Common)
+    @Column(name = "ai_weight", precision = 5, scale = 2)
+    @Builder.Default
+    private java.math.BigDecimal aiWeight = new java.math.BigDecimal("0.70"); // Default 70%
+
+    @Column(name = "si_weight", precision = 5, scale = 2)
+    @Builder.Default
+    private java.math.BigDecimal siWeight = new java.math.BigDecimal("0.30"); // Default 30%
+
     @Column(name = "progress", nullable = false)
     @Builder.Default
     private Integer progress = 0;

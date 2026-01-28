@@ -37,6 +37,7 @@ const AnnouncementsPage = lazy(() => import('../app/components/AnnouncementsPage
 // Placeholder pages for features under development
 const AiAssistant = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.AiAssistantPage })));
 const ReportManagement = lazy(() => import('../app/components/ReportManagement'));
+const PmoConsolePage = lazy(() => import('../app/components/PmoConsolePage'));
 
 // Wrapper component to inject userRole from store
 function withUserRole<P extends { userRole: UserRole }>(
@@ -75,6 +76,7 @@ const StatisticsPageWithRole = withUserRole(StatisticsPage);
 const UserManagementPageWithRole = withUserRole(UserManagementPage);
 const AuditLogsPageWithRole = withUserRole(AuditLogsPage);
 const AnnouncementsPageWithRole = withUserRole(AnnouncementsPage);
+const PmoConsolePageWithRole = withUserRole(PmoConsolePage);
 
 function Loading() {
   return (
@@ -267,6 +269,14 @@ export const router = createBrowserRouter([
       },
 
       // Analytics & Reports Zone
+      {
+        path: 'pmo-console',
+        element: (
+          <SuspenseWrapper>
+            <PmoConsolePageWithRole />
+          </SuspenseWrapper>
+        ),
+      },
       {
         path: 'lineage',
         element: (

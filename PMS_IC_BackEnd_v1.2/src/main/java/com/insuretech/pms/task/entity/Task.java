@@ -64,6 +64,14 @@ public class Task extends BaseEntity {
     @Column(name = "requirement_id", length = 50)
     private String requirementId;
 
+    /**
+     * Part (Work Area) ID for part-based task assignment.
+     * Nullable - derived from user_story.part_id by default,
+     * can be set directly for operational tasks outside stories.
+     */
+    @Column(name = "part_id", length = 50)
+    private String partId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "track_type", length = 20)
     @Builder.Default

@@ -63,3 +63,40 @@ export const PART_STATUS_INFO: Record<PartStatus, { label: string; color: string
   COMPLETED: { label: '완료', color: 'text-blue-700', bgColor: 'bg-blue-100' },
   ON_HOLD: { label: '보류', color: 'text-yellow-700', bgColor: 'bg-yellow-100' },
 };
+
+// Part Dashboard for PL Cockpit
+export interface PartDashboard {
+  partId: string;
+  partName: string;
+  plUserId: string;
+  plName: string;
+  // Story Points metrics (calculated from user stories)
+  totalStoryPoints: number;
+  completedStoryPoints: number;
+  inProgressStoryPoints: number;
+  plannedStoryPoints: number;
+  // Count metrics
+  featureCount: number;
+  storyCount: number;
+  completedStoryCount: number;
+  inProgressStoryCount: number;
+  taskCount: number;
+  completedTaskCount: number;
+  blockedTaskCount: number;
+  // Issues
+  openIssueCount: number;
+  highPriorityIssueCount: number;
+}
+
+// Part Metrics for detailed analysis
+export interface PartMetrics {
+  partId: string;
+  completionRate: number;       // (completedStoryPoints / totalStoryPoints) * 100
+  storyCompletionRate: number;  // (completedStoryCount / storyCount) * 100
+  taskCompletionRate: number;   // (completedTaskCount / taskCount) * 100
+  velocity: number;             // Story points completed per sprint (average)
+  wipCount: number;             // Work In Progress (in_progress stories + tasks)
+  blockerCount: number;         // Blocked tasks count
+  avgCycleTime: number;         // Average days from IN_PROGRESS to DONE
+  avgLeadTime: number;          // Average days from TODO to DONE
+}

@@ -10,9 +10,12 @@ import {
   Activity,
   Calendar,
   PieChart,
+  Gauge,
+  LayoutGrid,
 } from 'lucide-react';
 import { getRolePermissions } from '../../utils/rolePermissions';
 import { UserRole } from '../App';
+import { PartComparisonView, WeightedProgressView } from './statistics';
 
 interface StatisticsPageProps {
   userRole: UserRole;
@@ -20,9 +23,17 @@ interface StatisticsPageProps {
 }
 
 type TimeRange = 'week' | 'month' | 'quarter' | 'year';
+type StatisticsTab = 'overview' | 'parts' | 'weighted';
+
+const TABS: { id: StatisticsTab; label: string; icon: React.ElementType }[] = [
+  { id: 'overview', label: '개요', icon: LayoutGrid },
+  { id: 'parts', label: 'Part별 진척', icon: Users },
+  { id: 'weighted', label: '통합 진척율', icon: Gauge },
+];
 
 export default function StatisticsPage({ userRole, projectId = 'proj-001' }: StatisticsPageProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>('month');
+  const [activeTab, setActiveTab] = useState<StatisticsTab>('overview');
 
   // Mock statistics data
   const projectStats = {
@@ -92,6 +103,7 @@ export default function StatisticsPage({ userRole, projectId = 'proj-001' }: Sta
           <select
             value={timeRange}
             onChange={(e) => setTimeRange(e.target.value as TimeRange)}
+            aria-label="기간 선택"
             className="px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="week">최근 1주</option>
@@ -102,6 +114,42 @@ export default function StatisticsPage({ userRole, projectId = 'proj-001' }: Sta
         </div>
       </div>
 
+      {/* Tab Navigation */}
+      <div className="border-b border-gray-200">
+        <nav className="-mb-px flex gap-6">
+          {TABS.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 py-3 px-1 border-b-2 text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <Icon size={18} />
+                {tab.label}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'parts' && (
+        <PartComparisonView projectId={projectId} />
+      )}
+
+      {activeTab === 'weighted' && (
+        <WeightedProgressView projectId={projectId} />
+      )}
+
+      {activeTab === 'overview' && (
+        <>
       {/* Key Metrics */}
       <div className="grid grid-cols-4 gap-4">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
@@ -349,6 +397,8 @@ export default function StatisticsPage({ userRole, projectId = 'proj-001' }: Sta
           </div>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

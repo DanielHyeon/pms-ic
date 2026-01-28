@@ -46,6 +46,8 @@ export interface EpicFormData {
 export interface Feature {
   id: string;
   epicId: string;
+  partId?: string; // Part (Work Area) assignment for Part-based ownership
+  partName?: string; // Part name for display
   wbsGroupId?: string; // Link to WBS Group
   name: string;
   description?: string;
@@ -60,17 +62,29 @@ export interface FeatureFormData {
   name: string;
   description: string;
   epicId: string;
+  partId?: string; // Part assignment
   wbsGroupId?: string;
   priority: Priority;
 }
 
 // User Story (Level 3) - Enhanced version
-export type StoryStatus = 'BACKLOG' | 'READY' | 'IN_SPRINT' | 'IN_PROGRESS' | 'REVIEW' | 'DONE' | 'CANCELLED';
+// Status flow based on Scrum design document:
+// IDEA -> REFINED -> READY -> IN_SPRINT -> IN_PROGRESS -> REVIEW -> DONE
+export type StoryStatus =
+  | 'IDEA'        // Initial concept, not yet refined
+  | 'REFINED'     // Refined with acceptance criteria defined
+  | 'READY'       // Ready for sprint planning
+  | 'IN_SPRINT'   // Committed to sprint (Sprint Backlog)
+  | 'IN_PROGRESS' // Active development
+  | 'REVIEW'      // Code review / QA
+  | 'DONE'        // Completed
+  | 'CANCELLED';  // Removed from backlog
 
 export interface UserStory {
   id: string;
   featureId?: string; // Optional for backward compatibility
   epicId: string; // Direct reference to epic
+  partId?: string; // Part (Work Area) assignment - denormalized from Feature for query performance
   wbsItemId?: string; // Link to WBS Item
   sprintId?: string;
   title: string;
@@ -109,6 +123,7 @@ export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'DONE' | 'BLOCKE
 export interface Task {
   id: string;
   userStoryId: string;
+  partId?: string; // Part assignment - derived from user_story.part_id or set directly
   sprintId?: string;
   title: string;
   description?: string;
@@ -267,7 +282,8 @@ export const getPriorityLabel = (priority: Priority): string => {
 // Status utilities
 export const getStoryStatusColor = (status: StoryStatus): string => {
   const colors: Record<StoryStatus, string> = {
-    BACKLOG: 'text-gray-700 bg-gray-100',
+    IDEA: 'text-gray-600 bg-gray-50',
+    REFINED: 'text-sky-700 bg-sky-100',
     READY: 'text-blue-700 bg-blue-100',
     IN_SPRINT: 'text-indigo-700 bg-indigo-100',
     IN_PROGRESS: 'text-yellow-700 bg-yellow-100',
@@ -280,7 +296,8 @@ export const getStoryStatusColor = (status: StoryStatus): string => {
 
 export const getStoryStatusLabel = (status: StoryStatus): string => {
   const labels: Record<StoryStatus, string> = {
-    BACKLOG: '백로그',
+    IDEA: '아이디어',
+    REFINED: '정제됨',
     READY: '준비됨',
     IN_SPRINT: 'Sprint 진행',
     IN_PROGRESS: '진행 중',
@@ -289,6 +306,33 @@ export const getStoryStatusLabel = (status: StoryStatus): string => {
     CANCELLED: '취소됨',
   };
   return labels[status];
+};
+
+// Status order for sorting and progression
+export const storyStatusOrder: Record<StoryStatus, number> = {
+  IDEA: 0,
+  REFINED: 1,
+  READY: 2,
+  IN_SPRINT: 3,
+  IN_PROGRESS: 4,
+  REVIEW: 5,
+  DONE: 6,
+  CANCELLED: 7,
+};
+
+// Get valid next statuses for a given status
+export const getNextStoryStatuses = (status: StoryStatus): StoryStatus[] => {
+  const transitions: Record<StoryStatus, StoryStatus[]> = {
+    IDEA: ['REFINED', 'CANCELLED'],
+    REFINED: ['READY', 'IDEA', 'CANCELLED'],
+    READY: ['IN_SPRINT', 'REFINED', 'CANCELLED'],
+    IN_SPRINT: ['IN_PROGRESS', 'READY', 'CANCELLED'],
+    IN_PROGRESS: ['REVIEW', 'IN_SPRINT', 'CANCELLED'],
+    REVIEW: ['DONE', 'IN_PROGRESS', 'CANCELLED'],
+    DONE: ['REVIEW'], // Can reopen for fixes
+    CANCELLED: ['IDEA'], // Can be revived
+  };
+  return transitions[status];
 };
 
 export const getTaskStatusColor = (status: TaskStatus): string => {

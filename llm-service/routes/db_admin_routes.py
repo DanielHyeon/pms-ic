@@ -18,6 +18,7 @@ from dataclasses import asdict
 from . import db_admin_bp
 from pg_neo4j_sync import PGNeo4jSyncService, SyncConfig, get_sync_service
 from services.backup_service import get_backup_service, BackupConfig
+from entity_chunk_service import get_entity_chunk_service
 
 logger = logging.getLogger(__name__)
 
@@ -628,3 +629,255 @@ def get_db_stats():
         stats["neo4j"]["error"] = str(e)
 
     return jsonify(stats)
+
+
+# ============================================
+# Entity Chunk Sync Endpoints
+# ============================================
+
+_entity_sync_status = {
+    "is_syncing": False,
+    "current_project": None,
+    "progress": 0,
+    "started_at": None,
+    "error": None,
+    "results": None,
+}
+_entity_sync_lock = threading.Lock()
+
+
+def _update_entity_sync_status(**kwargs):
+    """Update entity sync status safely."""
+    with _entity_sync_lock:
+        _entity_sync_status.update(kwargs)
+
+
+def _reset_entity_sync_status():
+    """Reset entity sync status."""
+    with _entity_sync_lock:
+        _entity_sync_status.update({
+            "is_syncing": False,
+            "current_project": None,
+            "progress": 0,
+            "started_at": None,
+            "error": None,
+            "results": None,
+        })
+
+
+@db_admin_bp.route("/api/admin/db/entity-chunks/sync", methods=["POST"])
+def trigger_entity_chunk_sync():
+    """
+    Trigger Entity to Chunk synchronization for RAG.
+
+    Converts PMS entities (Project, Sprint, Task, etc.) to searchable chunks
+    with proper access control levels.
+
+    Request body:
+        {
+            "project_id": "proj-001" (optional, sync all if not provided),
+            "triggered_by": "username"
+        }
+
+    Returns:
+        {
+            "message": "Entity chunk sync started",
+            "project_id": "proj-001" | "all"
+        }
+    """
+    data = request.json or {}
+    project_id = data.get("project_id")
+    triggered_by = data.get("triggered_by", "admin")
+
+    with _entity_sync_lock:
+        if _entity_sync_status["is_syncing"]:
+            return jsonify({"error": "An entity sync is already in progress"}), 409
+
+    # Start sync in background thread
+    _update_entity_sync_status(
+        is_syncing=True,
+        current_project=project_id or "all",
+        progress=0,
+        started_at=datetime.now().isoformat(),
+        error=None,
+        results=None,
+    )
+
+    thread = threading.Thread(
+        target=_run_entity_sync_async,
+        args=(project_id, triggered_by),
+        daemon=True
+    )
+    thread.start()
+
+    return jsonify({
+        "message": "Entity chunk sync started",
+        "project_id": project_id or "all",
+    })
+
+
+def _run_entity_sync_async(project_id: Optional[str], triggered_by: str):
+    """Run entity chunk sync in background thread."""
+    try:
+        service = get_entity_chunk_service()
+
+        if not service.initialize():
+            raise RuntimeError("Failed to initialize EntityChunkService")
+
+        if project_id:
+            _update_entity_sync_status(current_project=project_id, progress=50)
+            results = {project_id: service.sync_project_entities(project_id)}
+        else:
+            results = service.sync_all_entities()
+
+        _update_entity_sync_status(progress=100, results=results)
+        logger.info(f"Entity chunk sync completed: {results}")
+
+    except Exception as e:
+        logger.error(f"Entity chunk sync failed: {e}")
+        _update_entity_sync_status(error=str(e))
+
+    finally:
+        _update_entity_sync_status(is_syncing=False)
+
+
+@db_admin_bp.route("/api/admin/db/entity-chunks/sync/status", methods=["GET"])
+def get_entity_chunk_sync_status():
+    """
+    Get current entity chunk sync status.
+
+    Returns:
+        {
+            "is_syncing": bool,
+            "current_project": string | null,
+            "progress": 0-100,
+            "started_at": ISO timestamp | null,
+            "error": string | null,
+            "results": {...} | null
+        }
+    """
+    with _entity_sync_lock:
+        return jsonify(_entity_sync_status.copy())
+
+
+@db_admin_bp.route("/api/admin/db/entity-chunks/stats", methods=["GET"])
+def get_entity_chunk_stats():
+    """
+    Get entity chunk statistics.
+
+    Returns:
+        {
+            "initialized": bool,
+            "chunk_stats": [
+                {
+                    "entity_type": "project_status",
+                    "project_id": "proj-001",
+                    "count": 1,
+                    "last_synced": ISO timestamp
+                }
+            ],
+            "total_chunks": int
+        }
+    """
+    try:
+        service = get_entity_chunk_service()
+
+        if not service._initialized:
+            service.initialize()
+
+        status = service.get_sync_status()
+
+        # Calculate total chunks
+        total = sum(stat.get("count", 0) for stat in status.get("chunk_stats", []))
+        status["total_chunks"] = total
+
+        return jsonify(status)
+
+    except Exception as e:
+        logger.error(f"Failed to get entity chunk stats: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@db_admin_bp.route("/api/admin/db/entity-chunks/project/<project_id>", methods=["POST"])
+def sync_project_entity_chunks(project_id: str):
+    """
+    Sync entity chunks for a specific project.
+
+    This is a synchronous endpoint (waits for completion).
+
+    Returns:
+        {
+            "message": "Sync completed",
+            "project_id": "proj-001",
+            "results": {
+                "project_status": 1,
+                "sprint_statuses": 3,
+                "task_summaries": 3,
+                ...
+            }
+        }
+    """
+    try:
+        service = get_entity_chunk_service()
+
+        if not service.initialize():
+            return jsonify({"error": "Failed to initialize service"}), 500
+
+        results = service.sync_project_entities(project_id)
+
+        return jsonify({
+            "message": "Sync completed",
+            "project_id": project_id,
+            "results": results,
+            "total_chunks": sum(results.values()),
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to sync project entity chunks: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@db_admin_bp.route("/api/admin/db/entity-chunks/project/<project_id>", methods=["DELETE"])
+def delete_project_entity_chunks(project_id: str):
+    """
+    Delete all entity chunks for a specific project.
+
+    Returns:
+        {
+            "message": "Entity chunks deleted",
+            "project_id": "proj-001"
+        }
+    """
+    from neo4j import GraphDatabase
+
+    try:
+        neo4j_uri = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
+        neo4j_user = os.getenv("NEO4J_USER", "neo4j")
+        neo4j_password = os.getenv("NEO4J_PASSWORD", "pmspassword123")
+
+        driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
+
+        with driver.session() as session:
+            result = session.run("""
+                MATCH (c:Chunk)
+                WHERE c.project_id = $project_id
+                  AND c.structure_type = 'entity'
+                WITH c, count(*) as cnt
+                DETACH DELETE c
+                RETURN cnt
+            """, project_id=project_id)
+
+            deleted_count = result.single()
+            deleted = deleted_count["cnt"] if deleted_count else 0
+
+        driver.close()
+
+        return jsonify({
+            "message": "Entity chunks deleted",
+            "project_id": project_id,
+            "deleted_count": deleted,
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to delete entity chunks: {e}")
+        return jsonify({"error": str(e)}), 500

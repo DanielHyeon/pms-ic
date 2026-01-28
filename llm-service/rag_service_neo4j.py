@@ -17,6 +17,13 @@ from document_parser import DocumentParser, LayoutAwareChunker
 
 logger = logging.getLogger(__name__)
 
+# =============================================================================
+# Global Part ID constant - used for chunks visible to all project members
+# Instead of using NULL (which risks accidental data exposure),
+# we explicitly mark global chunks with this ID.
+# =============================================================================
+GLOBAL_PART_ID = "GLOBAL"
+
 # Role-based access levels (higher = more access privileges)
 ROLE_ACCESS_LEVELS = {
     "ADMIN": 6,
@@ -164,6 +171,7 @@ class RAGServiceNeo4j:
                 indexes = [
                     "CREATE INDEX IF NOT EXISTS FOR (c:Chunk) ON (c.project_id)",
                     "CREATE INDEX IF NOT EXISTS FOR (c:Chunk) ON (c.access_level)",
+                    "CREATE INDEX IF NOT EXISTS FOR (c:Chunk) ON (c.part_id)",  # Part-based filtering
                     "CREATE INDEX IF NOT EXISTS FOR (d:Document) ON (d.project_id)",
                     "CREATE INDEX IF NOT EXISTS FOR (d:Document) ON (d.access_level)",
                 ]
@@ -172,6 +180,19 @@ class RAGServiceNeo4j:
                         session.run(index)
                     except Exception as e:
                         logger.debug(f"Index already exists or error: {e}")
+
+                # Migration: Convert NULL part_ids to GLOBAL for safety
+                # This prevents accidental data exposure from forgotten part_id assignments
+                try:
+                    result = session.run(
+                        "MATCH (c:Chunk) WHERE c.part_id IS NULL SET c.part_id = $global_part_id",
+                        global_part_id=GLOBAL_PART_ID
+                    )
+                    summary = result.consume()
+                    if summary.counters.properties_set > 0:
+                        logger.info(f"Migrated {summary.counters.properties_set} Chunk nodes with NULL part_id to GLOBAL")
+                except Exception as e:
+                    logger.debug(f"Part ID migration: {e}")
 
                 # 2. 벡터 인덱스 생성
                 try:
@@ -290,6 +311,11 @@ class RAGServiceNeo4j:
                 """, category=category, doc_id=doc_id)
 
                 # 5. Chunk 노드들 생성 및 관계 설정
+                # Get part_id from metadata, default to GLOBAL for project-wide visibility
+                part_id = metadata.get("part_id", GLOBAL_PART_ID)
+                if part_id is None:
+                    part_id = GLOBAL_PART_ID  # Never use NULL for safety
+
                 chunk_ids = []
                 for i, chunk_data in enumerate(chunks):
                     chunk_id = str(uuid.uuid4())
@@ -301,6 +327,7 @@ class RAGServiceNeo4j:
                     embedding = self.embedding_model.encode(embedding_text).tolist()
 
                     # Chunk 노드 생성 (권한 정보 포함 for faster filtering)
+                    # part_id defaults to GLOBAL for project-wide visibility (never NULL for safety)
                     session.run("""
                         MERGE (c:Chunk {chunk_id: $chunk_id})
                         SET c.content = $content,
@@ -314,7 +341,8 @@ class RAGServiceNeo4j:
                             c.page_number = $page_number,
                             c.embedding = $embedding,
                             c.project_id = $project_id,
-                            c.access_level = $access_level
+                            c.access_level = $access_level,
+                            c.part_id = $part_id
                     """, chunk_id=chunk_id, content=chunk_content,
                                chunk_index=i, title=title, doc_id=doc_id,
                                structure_type=chunk_metadata.get("structure_type", "paragraph"),
@@ -324,7 +352,8 @@ class RAGServiceNeo4j:
                                page_number=int(chunk_metadata.get("page_number", 0)),
                                embedding=embedding,
                                project_id=project_id,
-                               access_level=access_level)
+                               access_level=access_level,
+                               part_id=part_id)  # GLOBAL or specific Part ID (never NULL)
 
                     # Document -> Chunk 관계 생성
                     session.run("""
@@ -419,26 +448,32 @@ class RAGServiceNeo4j:
             # Extract access control filters
             project_id = filter_metadata.get("project_id") if filter_metadata else None
             user_access_level = int(filter_metadata.get("user_access_level", 6)) if filter_metadata else 6
-            logger.info(f"  - Access control: project_id={project_id}, user_access_level={user_access_level}")
+            # Part-based filtering for PL (Part Leader) scope
+            allowed_part_ids = filter_metadata.get("allowed_part_ids") if filter_metadata else None
+            logger.info(f"  - Access control: project_id={project_id}, user_access_level={user_access_level}, allowed_part_ids={allowed_part_ids}")
 
             with self.driver.session() as session:
                 if use_graph_expansion:
-                    # GraphRAG: 벡터 검색 + 순차 컨텍스트 확장 + 권한 필터
+                    # GraphRAG: 벡터 검색 + 순차 컨텍스트 확장 + 권한 필터 + Part 필터
                     cypher_query = """
                         CALL db.index.vector.queryNodes('chunk_embeddings', $top_k_fetch, $embedding)
                         YIELD node AS c, score
 
                         // Access control filter: project + role level + global 'default' docs
+                        // Part filter: for PL scope (allowed_part_ids)
+                        // - GLOBAL part_id means visible to all project members (explicit, not NULL)
+                        // - allowed_part_ids=NULL means no Part filtering (user sees all Parts)
                         WHERE ($project_id IS NULL OR c.project_id = $project_id OR c.project_id = 'default')
                           AND c.access_level <= $user_access_level
+                          AND ($allowed_part_ids IS NULL OR c.part_id = $global_part_id OR c.part_id IN $allowed_part_ids)
 
                         // 순차 컨텍스트 확장
                         OPTIONAL MATCH (prev:Chunk)-[:NEXT_CHUNK]->(c)
                         OPTIONAL MATCH (c)-[:NEXT_CHUNK]->(next:Chunk)
 
                         // 문서 및 카테고리 정보
-                        MATCH (d:Document)-[:HAS_CHUNK]->(c)
-                        WHERE d.access_level <= $user_access_level
+                        OPTIONAL MATCH (d:Document)-[:HAS_CHUNK]->(c)
+                        WHERE d IS NULL OR d.access_level <= $user_access_level
                         OPTIONAL MATCH (d)-[:BELONGS_TO]->(cat:Category)
 
                         // 같은 카테고리의 다른 최신 문서 (권한 필터 적용)
@@ -456,6 +491,7 @@ class RAGServiceNeo4j:
                             c.has_table AS has_table,
                             c.has_list AS has_list,
                             c.project_id AS chunk_project_id,
+                            c.part_id AS chunk_part_id,
                             c.access_level AS chunk_access_level,
                             score,
                             prev.content AS prev_context,
@@ -475,17 +511,19 @@ class RAGServiceNeo4j:
                         LIMIT $top_k
                     """
                 else:
-                    # 단순 벡터 검색 + 권한 필터
+                    # 단순 벡터 검색 + 권한 필터 + Part 필터
                     cypher_query = """
                         CALL db.index.vector.queryNodes('chunk_embeddings', $top_k_fetch, $embedding)
                         YIELD node AS c, score
 
-                        // Access control filter + global 'default' docs
+                        // Access control filter + global 'default' docs + Part filter
+                        // GLOBAL part_id = visible to all project members (no NULL check for safety)
                         WHERE ($project_id IS NULL OR c.project_id = $project_id OR c.project_id = 'default')
                           AND c.access_level <= $user_access_level
+                          AND ($allowed_part_ids IS NULL OR c.part_id = $global_part_id OR c.part_id IN $allowed_part_ids)
 
-                        MATCH (d:Document)-[:HAS_CHUNK]->(c)
-                        WHERE d.access_level <= $user_access_level
+                        OPTIONAL MATCH (d:Document)-[:HAS_CHUNK]->(c)
+                        WHERE d IS NULL OR d.access_level <= $user_access_level
                         OPTIONAL MATCH (d)-[:BELONGS_TO]->(cat:Category)
 
                         RETURN
@@ -494,6 +532,7 @@ class RAGServiceNeo4j:
                             c.title AS title,
                             c.structure_type AS structure_type,
                             c.project_id AS chunk_project_id,
+                            c.part_id AS chunk_part_id,
                             c.access_level AS chunk_access_level,
                             score,
                             d.doc_id AS doc_id,
@@ -512,7 +551,9 @@ class RAGServiceNeo4j:
                     top_k=top_k,
                     top_k_fetch=top_k * 3,  # Fetch more to account for filtered results
                     project_id=project_id,
-                    user_access_level=user_access_level
+                    user_access_level=user_access_level,
+                    allowed_part_ids=allowed_part_ids,
+                    global_part_id=GLOBAL_PART_ID,  # Explicit GLOBAL marker (no NULL risk)
                 )
 
                 # 결과 포맷팅
@@ -534,6 +575,7 @@ class RAGServiceNeo4j:
                             "category": record.get("category"),
                             "file_path": record.get("file_path"),
                             "project_id": record.get("doc_project_id") or record.get("chunk_project_id"),
+                            "part_id": record.get("chunk_part_id"),  # Part ID for PL scope
                             "access_level": record.get("doc_access_level") or record.get("chunk_access_level"),
                         },
                         "distance": 1 - record.get("score", 0),  # 유사도 -> 거리 변환
@@ -564,7 +606,7 @@ class RAGServiceNeo4j:
                 # Hybrid search: Add keyword search results
                 if use_hybrid and query.strip():
                     keyword_results = self._keyword_search(
-                        session, query, top_k * 2, project_id, user_access_level
+                        session, query, top_k * 2, project_id, user_access_level, allowed_part_ids
                     )
                     logger.info(f"  - Keyword search returned {len(keyword_results)} results")
 
@@ -619,7 +661,8 @@ class RAGServiceNeo4j:
         query: str,
         top_k: int,
         project_id: Optional[str],
-        user_access_level: int
+        user_access_level: int,
+        allowed_part_ids: Optional[List[str]] = None
     ) -> List[Dict]:
         """Perform keyword-based fulltext search with title boost and definition detection."""
         try:
@@ -639,11 +682,13 @@ class RAGServiceNeo4j:
                 CALL db.index.fulltext.queryNodes('chunk_fulltext', $query)
                 YIELD node AS c, score
 
+                // Part filter uses explicit GLOBAL marker (no NULL for safety)
                 WHERE ($project_id IS NULL OR c.project_id = $project_id OR c.project_id = 'default')
                   AND c.access_level <= $user_access_level
+                  AND ($allowed_part_ids IS NULL OR c.part_id = $global_part_id OR c.part_id IN $allowed_part_ids)
 
-                MATCH (d:Document)-[:HAS_CHUNK]->(c)
-                WHERE d.access_level <= $user_access_level
+                OPTIONAL MATCH (d:Document)-[:HAS_CHUNK]->(c)
+                WHERE d IS NULL OR d.access_level <= $user_access_level
                 OPTIONAL MATCH (d)-[:BELONGS_TO]->(cat:Category)
 
                 RETURN
@@ -652,6 +697,7 @@ class RAGServiceNeo4j:
                     c.title AS title,
                     c.structure_type AS structure_type,
                     c.project_id AS chunk_project_id,
+                    c.part_id AS chunk_part_id,
                     c.access_level AS chunk_access_level,
                     score,
                     d.doc_id AS doc_id,
@@ -669,7 +715,9 @@ class RAGServiceNeo4j:
                     "query": escaped_query,
                     "top_k": top_k,
                     "project_id": project_id,
-                    "user_access_level": user_access_level
+                    "user_access_level": user_access_level,
+                    "allowed_part_ids": allowed_part_ids,
+                    "global_part_id": GLOBAL_PART_ID,  # Explicit GLOBAL marker
                 }
             )
 
@@ -722,6 +770,7 @@ class RAGServiceNeo4j:
                         "structure_type": record.get("structure_type"),
                         "category": record.get("category"),
                         "project_id": record.get("doc_project_id") or record.get("chunk_project_id"),
+                        "part_id": record.get("chunk_part_id"),  # Part ID for PL scope
                         "access_level": record.get("doc_access_level") or record.get("chunk_access_level"),
                     },
                     "keyword_score": boosted_score,

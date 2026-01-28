@@ -11,6 +11,8 @@ import java.time.LocalDateTime;
 public class FeatureDto {
     private String id;
     private String epicId;
+    private String partId;
+    private String partName;
     private String wbsGroupId;
     private String name;
     private String description;
@@ -24,6 +26,8 @@ public class FeatureDto {
         return FeatureDto.builder()
                 .id(entity.getId())
                 .epicId(entity.getEpic() != null ? entity.getEpic().getId() : null)
+                .partId(entity.getPart() != null ? entity.getPart().getId() : null)
+                .partName(entity.getPart() != null ? entity.getPart().getName() : null)
                 .wbsGroupId(entity.getWbsGroupId())
                 .name(entity.getName())
                 .description(entity.getDescription())

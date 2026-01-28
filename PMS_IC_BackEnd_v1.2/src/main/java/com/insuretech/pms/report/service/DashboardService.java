@@ -11,6 +11,7 @@ import com.insuretech.pms.project.repository.ProjectMemberRepository;
 import com.insuretech.pms.project.repository.ProjectRepository;
 import com.insuretech.pms.report.dto.ActivityDto;
 import com.insuretech.pms.report.dto.DashboardStats;
+import com.insuretech.pms.report.dto.WeightedProgressDto;
 import com.insuretech.pms.task.entity.Task;
 import com.insuretech.pms.task.repository.TaskRepository;
 import lombok.RequiredArgsConstructor;
@@ -113,6 +114,73 @@ public class DashboardService {
         return recentEvents.getContent().stream()
                 .map(this::convertToActivityDto)
                 .collect(Collectors.toList());
+    }
+
+    // ========== Weighted Progress Methods ==========
+
+    /**
+     * Get weighted progress for a specific project based on AI/SI/Common track weights.
+     * Authorization check should be done at controller level via @PreAuthorize.
+     */
+    @Cacheable(value = "dashboard", key = "'weighted-progress-' + #projectId")
+    @Transactional(readOnly = true)
+    public WeightedProgressDto getWeightedProgress(String projectId) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> CustomException.notFound("Project not found: " + projectId));
+
+        log.debug("Calculating weighted progress for project {}", projectId);
+
+        // Get completion rates for each track type
+        Double aiProgress = taskRepository.calculateCompletionRateByTrackType(projectId, Task.TrackType.AI);
+        Double siProgress = taskRepository.calculateCompletionRateByTrackType(projectId, Task.TrackType.SI);
+        Double commonProgress = taskRepository.calculateCompletionRateByTrackType(projectId, Task.TrackType.COMMON);
+
+        // Handle null values
+        aiProgress = aiProgress != null ? aiProgress : 0.0;
+        siProgress = siProgress != null ? siProgress : 0.0;
+        commonProgress = commonProgress != null ? commonProgress : 0.0;
+
+        // Get weights from project
+        java.math.BigDecimal aiWeight = project.getAiWeight();
+        java.math.BigDecimal siWeight = project.getSiWeight();
+        java.math.BigDecimal commonWeight = java.math.BigDecimal.ONE.subtract(aiWeight).subtract(siWeight);
+
+        // Ensure common weight is not negative
+        if (commonWeight.compareTo(java.math.BigDecimal.ZERO) < 0) {
+            commonWeight = java.math.BigDecimal.ZERO;
+        }
+
+        // Calculate weighted progress
+        double weightedProgress =
+                aiProgress * aiWeight.doubleValue() +
+                siProgress * siWeight.doubleValue() +
+                commonProgress * commonWeight.doubleValue();
+
+        // Get task counts for each track type
+        long aiTotalTasks = taskRepository.countByProjectIdAndTrackType(projectId, Task.TrackType.AI);
+        long aiCompletedTasks = taskRepository.countCompletedByProjectIdAndTrackType(projectId, Task.TrackType.AI);
+        long siTotalTasks = taskRepository.countByProjectIdAndTrackType(projectId, Task.TrackType.SI);
+        long siCompletedTasks = taskRepository.countCompletedByProjectIdAndTrackType(projectId, Task.TrackType.SI);
+        long commonTotalTasks = taskRepository.countByProjectIdAndTrackType(projectId, Task.TrackType.COMMON);
+        long commonCompletedTasks = taskRepository.countCompletedByProjectIdAndTrackType(projectId, Task.TrackType.COMMON);
+
+        return WeightedProgressDto.builder()
+                .aiProgress(aiProgress)
+                .siProgress(siProgress)
+                .commonProgress(commonProgress)
+                .weightedProgress(weightedProgress)
+                .aiWeight(aiWeight)
+                .siWeight(siWeight)
+                .commonWeight(commonWeight)
+                .aiTotalTasks(aiTotalTasks)
+                .aiCompletedTasks(aiCompletedTasks)
+                .siTotalTasks(siTotalTasks)
+                .siCompletedTasks(siCompletedTasks)
+                .commonTotalTasks(commonTotalTasks)
+                .commonCompletedTasks(commonCompletedTasks)
+                .totalTasks(aiTotalTasks + siTotalTasks + commonTotalTasks)
+                .completedTasks(aiCompletedTasks + siCompletedTasks + commonCompletedTasks)
+                .build();
     }
 
     // ========== Project-Specific Methods ==========

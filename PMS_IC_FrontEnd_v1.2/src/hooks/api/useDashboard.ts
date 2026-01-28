@@ -9,6 +9,8 @@ export const dashboardKeys = {
   // Project-specific view
   projectStats: (projectId: string) => [...dashboardKeys.all, 'project', projectId, 'stats'] as const,
   projectActivities: (projectId: string) => [...dashboardKeys.all, 'project', projectId, 'activities'] as const,
+  // Weighted progress (track-based)
+  weightedProgress: (projectId: string) => [...dashboardKeys.all, 'project', projectId, 'weighted-progress'] as const,
   // Legacy keys (for backward compatibility)
   stats: () => dashboardKeys.portfolioStats(),
   activities: () => dashboardKeys.portfolioActivities(),
@@ -72,4 +74,36 @@ export function useActivities(projectId: string | null, isPortfolioView: boolean
   const projectQuery = useProjectActivities(projectId);
 
   return isPortfolioView ? portfolioQuery : projectQuery;
+}
+
+// ========== Weighted Progress Hooks ==========
+
+export interface WeightedProgressDto {
+  aiProgress: number;
+  siProgress: number;
+  commonProgress: number;
+  weightedProgress: number;
+  aiWeight: number;
+  siWeight: number;
+  commonWeight: number;
+  aiTotalTasks: number;
+  aiCompletedTasks: number;
+  siTotalTasks: number;
+  siCompletedTasks: number;
+  commonTotalTasks: number;
+  commonCompletedTasks: number;
+  totalTasks: number;
+  completedTasks: number;
+}
+
+/**
+ * Hook for fetching weighted progress based on AI/SI/Common track weights.
+ * @param projectId - Project ID to fetch weighted progress for
+ */
+export function useWeightedProgress(projectId: string | null) {
+  return useQuery<WeightedProgressDto>({
+    queryKey: dashboardKeys.weightedProgress(projectId!),
+    queryFn: () => apiService.getWeightedProgress(projectId!),
+    enabled: !!projectId,
+  });
 }

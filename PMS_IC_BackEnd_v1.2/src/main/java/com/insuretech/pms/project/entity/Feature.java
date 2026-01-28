@@ -27,6 +27,14 @@ public class Feature extends BaseEntity {
     @JoinColumn(name = "epic_id", nullable = false)
     private Epic epic;
 
+    /**
+     * Part (Work Area) that owns this Feature.
+     * Part Leader (PL) is responsible for all features in their part.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "part_id")
+    private Part part;
+
     @Column(name = "wbs_group_id", length = 36)
     private String wbsGroupId;
 
