@@ -24,6 +24,7 @@ public class RfpService {
 
     private final RfpRepository rfpRepository;
     private final FileStorageService fileStorageService;
+    private final RfpLlmService rfpLlmService;
 
     public List<RfpDto> getRfpsByProject(String projectId) {
         return rfpRepository.findByProjectIdOrderByCreatedAtDesc(projectId)
@@ -135,7 +136,9 @@ public class RfpService {
         Rfp saved = rfpRepository.save(rfp);
         log.info("Started extraction for RFP: {}", rfpId);
 
-        // TODO: Trigger async extraction via LLM service
+        // Trigger async extraction via LLM service
+        String documentText = rfp.getContent() != null ? rfp.getContent() : "";
+        rfpLlmService.extractRequirementsAsync(rfpId, projectId, documentText);
 
         return RfpDto.fromEntity(saved);
     }
@@ -152,17 +155,10 @@ public class RfpService {
         Rfp rfp = rfpRepository.findByIdAndProjectId(rfpId, projectId)
                 .orElseThrow(() -> new RuntimeException("RFP not found: " + rfpId));
 
-        // TODO: Implement actual AI classification via LLM service
-        // For now, return placeholder classification counts
         log.info("Classification requested for RFP: {}", rfpId);
 
-        return ClassifyRfpResponse.builder()
-                .rfpId(rfpId)
-                .aiCount(0)
-                .siCount(0)
-                .commonCount(0)
-                .nonFunctionalCount(0)
-                .message("Requirements classified successfully")
-                .build();
+        // Use LLM service for AI classification
+        String documentText = rfp.getContent() != null ? rfp.getContent() : "";
+        return rfpLlmService.classifyRequirements(rfpId, projectId, documentText);
     }
 }

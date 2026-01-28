@@ -10,7 +10,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.*;
 
 /**
@@ -25,7 +24,6 @@ public class ReportGenerationService {
     private final ReportTemplateRepository templateRepository;
     private final RoleReportDefaultsRepository roleDefaultsRepository;
     private final ReportGenerationLogRepository generationLogRepository;
-    private final ReportMetricsRepository metricsRepository;
     private final LlmServiceClient llmClient;
     private final ReportDataCollectorService dataCollector;
 
@@ -184,7 +182,7 @@ public class ReportGenerationService {
 
         return switch (sectionType) {
             case "AI_GENERATED" -> {
-                if (Boolean.TRUE.equals(useAiSummary)) {
+                if (Boolean.TRUE.equals(useAiSummary) && sectionConfig != null) {
                     @SuppressWarnings("unchecked")
                     Map<String, Object> config = (Map<String, Object>) sectionConfig.get("config");
                     String prompt = config != null ? (String) config.get("prompt") : "";

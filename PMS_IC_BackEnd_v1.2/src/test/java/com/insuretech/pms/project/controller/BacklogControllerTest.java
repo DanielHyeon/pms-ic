@@ -1,11 +1,7 @@
 package com.insuretech.pms.project.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.insuretech.pms.common.dto.ApiResponse;
-import com.insuretech.pms.project.dto.BacklogDto;
-import com.insuretech.pms.project.dto.BacklogItemDto;
 import com.insuretech.pms.project.dto.ReorderBacklogItemsRequest;
-import com.insuretech.pms.project.dto.SprintPlanningCapacityDto;
 import com.insuretech.pms.project.entity.Backlog;
 import com.insuretech.pms.project.entity.BacklogItem;
 import com.insuretech.pms.project.service.BacklogService;
@@ -14,14 +10,13 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Arrays;
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -34,7 +29,7 @@ class BacklogControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @MockBean
+    @MockitoBean
     private BacklogService backlogService;
 
     @Autowired

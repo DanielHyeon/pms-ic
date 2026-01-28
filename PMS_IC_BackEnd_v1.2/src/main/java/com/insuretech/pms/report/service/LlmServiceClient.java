@@ -14,6 +14,7 @@ import java.util.Map;
  */
 @Service
 @Slf4j
+@SuppressWarnings("unchecked")
 public class LlmServiceClient {
 
     private final WebClient webClient;
@@ -49,7 +50,6 @@ public class LlmServiceClient {
                     .block();
 
             if (response != null && response.containsKey("data")) {
-                @SuppressWarnings("unchecked")
                 Map<String, Object> data = (Map<String, Object>) response.get("data");
                 return (String) data.getOrDefault("content", "");
             }
@@ -80,7 +80,6 @@ public class LlmServiceClient {
             request.put("user_role", userRole);
             request.put("user_id", userId);
 
-            @SuppressWarnings("unchecked")
             Map<String, Object> response = webClient.post()
                     .uri("/api/report/text-to-sql")
                     .contentType(MediaType.APPLICATION_JSON)

@@ -17,6 +17,7 @@ import java.util.Map;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("unchecked")
 public class AIChatClient {
 
     private final WebClient.Builder webClientBuilder;
@@ -154,29 +155,6 @@ public class AIChatClient {
                 .confidence(confidence)
                 .suggestions(suggestions)
                 .build();
-    }
-
-    private String extractOllamaReply(Map<String, Object> response) {
-        // This method is no longer needed but kept for backward compatibility
-        Object replyObj = response.get("reply");
-        if (replyObj instanceof String && !((String) replyObj).isBlank()) {
-            return (String) replyObj;
-        }
-
-        Object messageObj = response.get("message");
-        if (messageObj instanceof Map) {
-            Object contentObj = ((Map<?, ?>) messageObj).get("content");
-            if (contentObj instanceof String && !((String) contentObj).isBlank()) {
-                return (String) contentObj;
-            }
-        }
-
-        Object responseText = response.get("response");
-        if (responseText instanceof String && !((String) responseText).isBlank()) {
-            return (String) responseText;
-        }
-
-        throw new IllegalStateException("AI response missing message content");
     }
 
     private ChatResponse callMock(String userId, String message, List<ChatMessage> context) {

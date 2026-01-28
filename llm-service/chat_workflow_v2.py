@@ -408,7 +408,7 @@ class TwoTrackWorkflow:
 
     def _route_after_policy(self, state: TwoTrackState) -> Literal["blocked", "continue"]:
         """Route after policy check"""
-        return "blocked" if not state.get("policy_passed", True) else "continue"
+        return "continue" if state.get("policy_passed", True) else "blocked"
 
     # =========================================================================
     # Status Query Engine Nodes (Phase 2)
@@ -784,8 +784,8 @@ class TwoTrackWorkflow:
         if retrieved_docs:
             keywords = self._extract_keywords(current_query)
             matched = sum(
-                1 for doc in retrieved_docs
-                if any(kw.lower() in doc.lower() for kw in keywords)
+                any(kw.lower() in doc.lower() for kw in keywords)
+                for doc in retrieved_docs
             )
 
             if matched / len(retrieved_docs) >= 0.5:

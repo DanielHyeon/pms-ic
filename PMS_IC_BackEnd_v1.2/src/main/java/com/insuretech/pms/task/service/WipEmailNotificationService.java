@@ -39,7 +39,6 @@ public class WipEmailNotificationService {
 
     private final UserRepository userRepository;
 
-    @Autowired
     public WipEmailNotificationService(UserRepository userRepository) {
         this.userRepository = userRepository;
     }

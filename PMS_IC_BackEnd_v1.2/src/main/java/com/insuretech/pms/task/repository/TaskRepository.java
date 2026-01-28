@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Repository
@@ -48,6 +49,9 @@ public interface TaskRepository extends JpaRepository<Task, String> {
     int countByPartIdAndStatus(@Param("partId") String partId, @Param("status") String status);
 
     List<Task> findByPartId(String partId);
+
+    @Query("SELECT COUNT(t) FROM Task t WHERE t.partId = :partId AND t.dueDate < :today AND t.status <> 'DONE'")
+    int countOverdueByPartId(@Param("partId") String partId, @Param("today") LocalDate today);
 
     // ===== Track-based queries for weighted progress calculation =====
 

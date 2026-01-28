@@ -8,7 +8,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import java.util.HashMap;
@@ -25,10 +25,10 @@ class WipWebSocketControllerTest {
     @Autowired
     private WipWebSocketController webSocketController;
 
-    @MockBean
+    @MockitoBean
     private WipValidationService wipValidationService;
 
-    @MockBean
+    @MockitoBean
     private SimpMessagingTemplate messagingTemplate;
 
     @BeforeEach

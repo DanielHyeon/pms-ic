@@ -3,9 +3,12 @@ package com.insuretech.pms.project.service;
 import com.insuretech.pms.common.exception.CustomException;
 import com.insuretech.pms.project.dto.*;
 import com.insuretech.pms.project.entity.Feature;
+import com.insuretech.pms.project.entity.Issue.IssuePriority;
+import com.insuretech.pms.project.entity.Issue.IssueStatus;
 import com.insuretech.pms.project.entity.Part;
 import com.insuretech.pms.project.entity.Project;
 import com.insuretech.pms.project.repository.FeatureRepository;
+import com.insuretech.pms.project.repository.IssueRepository;
 import com.insuretech.pms.project.repository.PartRepository;
 import com.insuretech.pms.project.repository.ProjectRepository;
 import com.insuretech.pms.task.repository.UserStoryRepository;
@@ -25,11 +28,13 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("null")
 public class PartService {
 
     private final PartRepository partRepository;
     private final ProjectRepository projectRepository;
     private final FeatureRepository featureRepository;
+    private final IssueRepository issueRepository;
     private final UserStoryRepository userStoryRepository;
     private final TaskRepository taskRepository;
 
@@ -194,6 +199,13 @@ public class PartService {
         int completedTasks = taskRepository.countByPartIdAndStatus(partId, "DONE");
         int inProgressTasks = taskRepository.countByPartIdAndStatus(partId, "IN_PROGRESS");
         int blockedTasks = taskRepository.countByPartIdAndStatus(partId, "BLOCKED");
+        int overdueTasks = taskRepository.countOverdueByPartId(partId, LocalDate.now());
+
+        // Issue counts (project-level as issues don't have part association)
+        List<IssueStatus> openStatuses = List.of(IssueStatus.OPEN, IssueStatus.IN_PROGRESS, IssueStatus.REOPENED);
+        List<IssuePriority> highPriorities = List.of(IssuePriority.CRITICAL, IssuePriority.HIGH);
+        int openIssues = issueRepository.countByProjectIdAndStatusIn(projectId, openStatuses);
+        int highPriorityIssues = issueRepository.countByProjectIdAndStatusInAndPriorityIn(projectId, openStatuses, highPriorities);
 
         // Calculate completion rate
         double completionRate = 0.0;
@@ -219,12 +231,12 @@ public class PartService {
                 .completedTasks(completedTasks)
                 .inProgressTasks(inProgressTasks)
                 .blockedTasks(blockedTasks)
-                .overdueTasks(0) // TODO: Calculate based on due date
+                .overdueTasks(overdueTasks)
                 .totalFeatures((int) totalFeatures)
                 .completedFeatures((int) completedFeatures)
                 .inProgressFeatures((int) inProgressFeatures)
-                .openIssues(0) // TODO: Add issue repository integration
-                .highPriorityIssues(0)
+                .openIssues(openIssues)
+                .highPriorityIssues(highPriorityIssues)
                 .recentCompletedItems(new ArrayList<>())
                 .currentBlockers(new ArrayList<>())
                 .upcomingDeadlines(new ArrayList<>())

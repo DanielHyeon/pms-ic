@@ -547,13 +547,6 @@ public class LineageQueryService {
         return "";
     }
 
-    private String getStringProperty(Relationship rel, String key) {
-        if (rel.containsKey(key) && !rel.get(key).isNull()) {
-            return rel.get(key).asString();
-        }
-        return "";
-    }
-
     private LocalDateTime getDateTimeProperty(Relationship rel, String key) {
         if (rel.containsKey(key) && !rel.get(key).isNull()) {
             try {

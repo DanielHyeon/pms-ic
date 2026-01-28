@@ -12,7 +12,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDate;
 import java.util.*;
@@ -25,7 +24,6 @@ public class WeeklyReportService {
     private final WeeklyReportRepository weeklyReportRepository;
     private final TaskRepository taskRepository;
     private final SprintRepository sprintRepository;
-    private final RestTemplate restTemplate;
 
     @Value("${ai-service.url:http://llm-service:8000}")
     private String aiServiceUrl;

@@ -16,6 +16,7 @@ import java.util.List;
 @Component
 @Order(2)
 @RequiredArgsConstructor
+@SuppressWarnings("null")
 public class PermissionDataInitializer implements CommandLineRunner {
 
     private final PermissionRepository permissionRepository;

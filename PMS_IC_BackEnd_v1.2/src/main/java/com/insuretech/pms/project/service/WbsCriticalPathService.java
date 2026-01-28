@@ -170,7 +170,6 @@ public class WbsCriticalPathService {
             }
 
             // Parse response (handle both camelCase and snake_case keys)
-            @SuppressWarnings("unchecked")
             List<String> criticalPath = (List<String>) getOrDefaultAny(data, (Object) Collections.emptyList(), "criticalPath", "critical_path");
             int projectDuration = 0;
             Object durationVal = getOrDefaultAny(data, null, "projectDuration", "project_duration");

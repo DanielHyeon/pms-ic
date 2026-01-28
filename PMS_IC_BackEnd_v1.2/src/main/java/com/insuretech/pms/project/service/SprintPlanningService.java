@@ -26,6 +26,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 @Slf4j
 @Transactional
+@SuppressWarnings("null")
 public class SprintPlanningService {
 
     private final BacklogItemRepository backlogItemRepository;

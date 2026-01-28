@@ -13,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.logging.Logger;
 
 /**
  * Service for Product Backlog management
@@ -27,8 +26,6 @@ import java.util.logging.Logger;
 @Service
 @RequiredArgsConstructor
 public class BacklogService {
-
-    private static final Logger logger = Logger.getLogger(BacklogService.class.getName());
 
     private final BacklogRepository backlogRepository;
     private final BacklogItemRepository backlogItemRepository;

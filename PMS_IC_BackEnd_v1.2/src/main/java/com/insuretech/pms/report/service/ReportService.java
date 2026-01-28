@@ -25,6 +25,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 @Transactional(readOnly = true)
+@SuppressWarnings("null")
 public class ReportService {
 
     private final ReportRepository reportRepository;

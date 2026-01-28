@@ -15,7 +15,6 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import org.springframework.core.ParameterizedTypeReference;
 
 @Slf4j
 @Service
@@ -32,6 +31,7 @@ public class LlmService {
     /**
      * 현재 사용 중인 모델 정보 조회
      */
+    @SuppressWarnings({"unchecked", "null"})
     public ModelInfoResponse getCurrentModel() {
         try {
             WebClient webClient = webClientBuilder.baseUrl(aiServiceUrl).build();
@@ -45,7 +45,7 @@ public class LlmService {
             if (response != null) {
                 return ModelInfoResponse.builder()
                         .currentModel(normalizeModelName((String) response.get("currentModel")))
-                        .status((String) response.getOrDefault("status", "active"))
+                        .status(Objects.toString(response.getOrDefault("status", "active"), "active"))
                         .timestamp(System.currentTimeMillis())
                         .build();
             }
@@ -60,6 +60,7 @@ public class LlmService {
     /**
      * LLM 모델 변경
      */
+    @SuppressWarnings({"unchecked", "null"})
     public ModelInfoResponse changeModel(String modelPath) {
         try {
             String resolvedModelPath = resolveModelPath(modelPath);
@@ -110,6 +111,7 @@ public class LlmService {
     /**
      * LLM 서비스 헬스 체크
      */
+    @SuppressWarnings("null")
     public Object checkHealth() {
         try {
             WebClient webClient = webClientBuilder.baseUrl(aiServiceUrl).build();
@@ -133,6 +135,7 @@ public class LlmService {
     /**
      * 경량 모델 정보 조회
      */
+    @SuppressWarnings({"unchecked", "null"})
     public ModelInfoResponse getLightweightModel() {
         try {
             WebClient webClient = webClientBuilder.baseUrl(aiServiceUrl).build();
@@ -161,6 +164,7 @@ public class LlmService {
     /**
      * 경량 모델 변경
      */
+    @SuppressWarnings({"unchecked", "null"})
     public ModelInfoResponse changeLightweightModel(String modelPath) {
         try {
             String resolvedModelPath = resolveModelPath(modelPath);
@@ -201,6 +205,7 @@ public class LlmService {
     /**
      * 중형 모델 정보 조회
      */
+    @SuppressWarnings({"unchecked", "null"})
     public ModelInfoResponse getMediumModel() {
         try {
             WebClient webClient = webClientBuilder.baseUrl(aiServiceUrl).build();
@@ -229,6 +234,7 @@ public class LlmService {
     /**
      * 중형 모델 변경
      */
+    @SuppressWarnings({"unchecked", "null"})
     public ModelInfoResponse changeMediumModel(String modelPath) {
         try {
             String resolvedModelPath = resolveModelPath(modelPath);
@@ -271,6 +277,7 @@ public class LlmService {
     /**
      * 현재 OCR 엔진 설정 조회
      */
+    @SuppressWarnings({"unchecked", "null"})
     public OcrConfigResponse getCurrentOcrEngine() {
         try {
             WebClient webClient = webClientBuilder.baseUrl(aiServiceUrl).build();
@@ -299,6 +306,7 @@ public class LlmService {
     /**
      * OCR 엔진 변경
      */
+    @SuppressWarnings({"unchecked", "null"})
     public OcrConfigResponse changeOcrEngine(String ocrEngine) {
         try {
             if (ocrEngine == null || !VALID_OCR_ENGINES.contains(ocrEngine.toLowerCase())) {

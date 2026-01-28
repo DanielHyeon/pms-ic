@@ -2,6 +2,7 @@ package com.insuretech.pms.project.controller;
 
 import com.insuretech.pms.common.dto.ApiResponse;
 import com.insuretech.pms.project.dto.DeliverableDto;
+import com.insuretech.pms.project.dto.DeliverableUploadRequest;
 import com.insuretech.pms.project.service.DeliverableService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -40,15 +41,14 @@ public class DeliverableController {
             @RequestParam(value = "type", defaultValue = "DOCUMENT") String type,
             Authentication authentication
     ) {
-        DeliverableDto dto = deliverableService.uploadDeliverable(
-                phaseId,
-                null,
-                file,
-                name,
-                description,
-                type,
-                authentication != null ? authentication.getName() : null
-        );
+        DeliverableUploadRequest request = DeliverableUploadRequest.builder()
+                .deliverableId(null)
+                .name(name)
+                .description(description)
+                .type(type)
+                .uploadedBy(authentication != null ? authentication.getName() : null)
+                .build();
+        DeliverableDto dto = deliverableService.uploadDeliverable(phaseId, file, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("산출물이 업로드되었습니다", dto));
     }
 
@@ -82,15 +82,14 @@ public class DeliverableController {
             @RequestParam(value = "type", defaultValue = "DOCUMENT") String type,
             Authentication authentication
     ) {
-        DeliverableDto dto = deliverableService.uploadDeliverable(
-                phaseId,
-                deliverableId,
-                file,
-                name,
-                description,
-                type,
-                authentication != null ? authentication.getName() : null
-        );
+        DeliverableUploadRequest request = DeliverableUploadRequest.builder()
+                .deliverableId(deliverableId)
+                .name(name)
+                .description(description)
+                .type(type)
+                .uploadedBy(authentication != null ? authentication.getName() : null)
+                .build();
+        DeliverableDto dto = deliverableService.uploadDeliverable(phaseId, file, request);
         return ResponseEntity.ok(ApiResponse.success("산출물이 업로드되었습니다", dto));
     }
 }

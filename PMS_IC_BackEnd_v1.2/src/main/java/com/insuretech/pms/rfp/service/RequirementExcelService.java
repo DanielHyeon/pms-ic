@@ -28,7 +28,6 @@ import java.util.Optional;
 public class RequirementExcelService {
 
     private final RequirementRepository requirementRepository;
-    private final RequirementService requirementService;
     private final ExcelService excelService;
 
     // Column headers for the Excel template

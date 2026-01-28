@@ -76,7 +76,7 @@ public class TemplateService {
 
     @Transactional
     public void applyTemplateToProject(String templateSetId, String projectId, LocalDate startDate) {
-        TemplateSet templateSet = templateSetRepository.findById(templateSetId)
+        templateSetRepository.findById(templateSetId)
                 .orElseThrow(() -> CustomException.notFound("Template Set not found: " + templateSetId));
 
         Project project = projectRepository.findById(projectId)
