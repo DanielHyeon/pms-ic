@@ -3,6 +3,7 @@ package com.insuretech.pms.auth.entity;
 import com.insuretech.pms.common.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
+import org.springframework.lang.Nullable;
 
 @Entity
 @Table(name = "users", schema = "auth")
@@ -30,6 +31,7 @@ public class User extends BaseEntity {
     @Column(name = "role", nullable = false, length = 50)
     private UserRole role;
 
+    @Nullable
     @Column(name = "department", length = 100)
     private String department;
 
@@ -37,6 +39,7 @@ public class User extends BaseEntity {
     @Builder.Default
     private Boolean active = true;
 
+    @Nullable
     @Column(name = "last_login_at")
     private java.time.LocalDateTime lastLoginAt;
 

@@ -3,6 +3,7 @@ package com.insuretech.pms.task.entity;
 import com.insuretech.pms.common.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
+import org.springframework.lang.Nullable;
 
 import java.time.LocalDate;
 
@@ -24,15 +25,18 @@ public class Task extends BaseEntity {
     @JoinColumn(name = "column_id", nullable = false)
     private KanbanColumn column;
 
+    @Nullable
     @Column(name = "phase_id", length = 50)
     private String phaseId;
 
     @Column(name = "title", nullable = false, length = 200)
     private String title;
 
+    @Nullable
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
+    @Nullable
     @Column(name = "assignee_id", length = 50)
     private String assigneeId;
 
@@ -46,21 +50,27 @@ public class Task extends BaseEntity {
     @Builder.Default
     private TaskStatus status = TaskStatus.TODO;
 
+    @Nullable
     @Column(name = "due_date")
     private LocalDate dueDate;
 
+    @Nullable
     @Column(name = "order_num")
     private Integer orderNum;
 
+    @Nullable
     @Column(name = "tags", length = 500)
     private String tags;
 
+    @Nullable
     @Column(name = "sprint_id", length = 50)
     private String sprintId;
 
+    @Nullable
     @Column(name = "user_story_id", length = 50)
     private String userStoryId;
 
+    @Nullable
     @Column(name = "requirement_id", length = 50)
     private String requirementId;
 
@@ -69,6 +79,7 @@ public class Task extends BaseEntity {
      * Nullable - derived from user_story.part_id by default,
      * can be set directly for operational tasks outside stories.
      */
+    @Nullable
     @Column(name = "part_id", length = 50)
     private String partId;
 

@@ -3,6 +3,7 @@ package com.insuretech.pms.chat.entity;
 import com.insuretech.pms.common.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
+import org.springframework.lang.Nullable;
 
 @Entity
 @Table(name = "chat_sessions", schema = "chat")
@@ -21,6 +22,7 @@ public class ChatSession extends BaseEntity {
     @Column(name = "user_id", nullable = false, length = 50)
     private String userId;
 
+    @Nullable
     @Column(name = "title", length = 200)
     private String title;
 

@@ -163,6 +163,9 @@ def classify_track(message: str) -> str:
     Track A: Fast responses for simple questions, definitions, explanations
     Track B: High-value outputs requiring project data compilation or detailed explanations
     """
+    if not message:
+        return "track_a"
+
     message_lower = message.lower()
 
     # First, check for high-value keywords (detailed explanation, reports, analysis)
@@ -341,7 +344,7 @@ class TwoTrackWorkflow:
     def _classify_track_node(self, state: TwoTrackState) -> TwoTrackState:
         """Node: Classify into Track A or Track B"""
         start_time = time.time()
-        message = state["message"]
+        message = state.get("message") or ""
 
         track = classify_track(message)
 
@@ -359,7 +362,7 @@ class TwoTrackWorkflow:
         """Node: L0 Policy enforcement using PolicyEngine"""
         start_time = time.time()
 
-        message = state["message"]
+        message = state.get("message") or ""
         user_id = state.get("user_id")
         project_id = state.get("project_id")
         user_role = state.get("user_role")
@@ -405,9 +408,7 @@ class TwoTrackWorkflow:
 
     def _route_after_policy(self, state: TwoTrackState) -> Literal["blocked", "continue"]:
         """Route after policy check"""
-        if not state.get("policy_passed", True):
-            return "blocked"
-        return "continue"
+        return "blocked" if not state.get("policy_passed", True) else "continue"
 
     # =========================================================================
     # Status Query Engine Nodes (Phase 2)
@@ -416,7 +417,7 @@ class TwoTrackWorkflow:
     def _classify_answer_type_node(self, state: TwoTrackState) -> TwoTrackState:
         """Node: Classify answer type to determine if status query or document query"""
         start_time = time.time()
-        message = state["message"]
+        message = state.get("message") or ""
 
         # Classify answer type
         classifier = get_answer_type_classifier()
@@ -465,9 +466,8 @@ class TwoTrackWorkflow:
 
         # Add metrics based on answer type classification
         answer_type_info = state.get("debug_info", {}).get("answer_type", {})
-        metrics_requested = answer_type_info.get("metrics_requested", [])
 
-        if metrics_requested:
+        if metrics_requested := answer_type_info.get("metrics_requested", []):
             plan.metrics = list(set(plan.metrics + metrics_requested))
 
         # Always include these core metrics for status queries
@@ -618,7 +618,7 @@ class TwoTrackWorkflow:
         evidence_service = get_evidence_service()
         evidence_result = evidence_service.extract_from_rag(
             rag_results,
-            query=state.get("current_query", state["message"])
+            query=state.get("current_query") or state.get("message") or ""
         )
 
         # Convert to dict format for state
@@ -697,7 +697,7 @@ class TwoTrackWorkflow:
         """Node: RAG search with access control filtering"""
         start_time = time.time()
 
-        search_query = state.get("current_query", state["message"])
+        search_query = state.get("current_query") or state.get("message") or ""
         retry_count = state.get("retry_count", 0)
 
         # Access control parameters
@@ -732,10 +732,7 @@ class TwoTrackWorkflow:
                 # Filter by relevance score
                 # RRF scores are much lower (max ~0.033) than weighted scores (0-1)
                 merge_method = os.getenv("HYBRID_MERGE_METHOD", "rrf").lower()
-                if merge_method in ("rrf", "rrf_rerank"):
-                    MIN_RELEVANCE_SCORE = 0.005  # RRF: k=60, max score ~0.033
-                else:
-                    MIN_RELEVANCE_SCORE = 0.3    # Weighted: scores 0-1
+                MIN_RELEVANCE_SCORE = 0.005 if merge_method in ("rrf", "rrf_rerank") else 0.3
                 filtered = [
                     doc for doc in results
                     if doc.get('relevance_score', 0) >= MIN_RELEVANCE_SCORE
@@ -773,7 +770,7 @@ class TwoTrackWorkflow:
     def _verify_rag_quality_node(self, state: TwoTrackState) -> TwoTrackState:
         """Node: Verify RAG quality"""
         retrieved_docs = state.get("retrieved_docs", [])
-        current_query = state.get("current_query", state["message"])
+        current_query = state.get("current_query") or state.get("message") or ""
 
         quality_score = 0.0
 
@@ -786,10 +783,10 @@ class TwoTrackWorkflow:
         # Score based on keyword matching
         if retrieved_docs:
             keywords = self._extract_keywords(current_query)
-            matched = 0
-            for doc in retrieved_docs:
-                if any(kw.lower() in doc.lower() for kw in keywords):
-                    matched += 1
+            matched = sum(
+                1 for doc in retrieved_docs
+                if any(kw.lower() in doc.lower() for kw in keywords)
+            )
 
             if matched / len(retrieved_docs) >= 0.5:
                 quality_score += 0.6
@@ -822,7 +819,7 @@ class TwoTrackWorkflow:
 
     def _refine_query_node(self, state: TwoTrackState) -> TwoTrackState:
         """Node: Refine query for better RAG results"""
-        original_query = state["message"]
+        original_query = state.get("message") or ""
         retry_count = state.get("retry_count", 0)
 
         # Extract keywords and rebuild query
@@ -858,24 +855,24 @@ class TwoTrackWorkflow:
             now_snapshot = {
                 "description": "Current sprint state",
                 "data": snapshot.now.to_text() if snapshot.now else "",
-                "active_sprint": snapshot.now.active_sprint,
-                "wip_count": snapshot.now.wip_count,
-                "wip_limit": snapshot.now.wip_limit,
-                "completion_rate": snapshot.now.sprint_completion_rate,
+                "active_sprint": snapshot.now.active_sprint if snapshot.now else None,
+                "wip_count": snapshot.now.wip_count if snapshot.now else 0,
+                "wip_limit": snapshot.now.wip_limit if snapshot.now else 5,
+                "completion_rate": snapshot.now.sprint_completion_rate if snapshot.now else 0.0,
             }
 
             next_snapshot = {
                 "description": "Upcoming milestones",
                 "data": snapshot.next.to_text() if snapshot.next else "",
-                "milestones": snapshot.next.upcoming_milestones,
-                "pending_reviews": snapshot.next.pending_reviews,
+                "milestones": snapshot.next.upcoming_milestones if snapshot.next else [],
+                "pending_reviews": snapshot.next.pending_reviews if snapshot.next else [],
             }
 
             why_snapshot = {
                 "description": "Recent decisions and changes",
                 "data": snapshot.why.to_text() if snapshot.why else "",
-                "recent_changes": snapshot.why.recent_changes,
-                "recent_decisions": snapshot.why.recent_decisions,
+                "recent_changes": snapshot.why.recent_changes if snapshot.why else [],
+                "recent_decisions": snapshot.why.recent_decisions if snapshot.why else [],
             }
 
             # Build compiled context with snapshot data
@@ -924,7 +921,7 @@ class TwoTrackWorkflow:
         """Generate response using specified model tier"""
         start_time = time.time()
 
-        message = state["message"]
+        message = state.get("message") or ""
         context = state.get("context", [])
         retrieved_docs = state.get("retrieved_docs", [])
         compiled_context = state.get("compiled_context", "")
@@ -968,7 +965,6 @@ class TwoTrackWorkflow:
                 # Generation parameters
                 temperature = float(os.getenv("TEMPERATURE", "0.35"))
                 top_p = float(os.getenv("TOP_P", "0.90"))
-                base_max_tokens = int(os.getenv("MAX_TOKENS", "1800"))
 
                 # Dynamic max_tokens based on track and question type
                 if use_l2:
@@ -976,6 +972,7 @@ class TwoTrackWorkflow:
                     max_tokens = int(os.getenv("L2_MAX_TOKENS", "3000"))
                 else:
                     # Track A: optimize for simple questions
+                    base_max_tokens = int(os.getenv("MAX_TOKENS", "1800"))
                     message_lower = message.lower()
                     is_simple_question = any(kw in message_lower for kw in [
                         "무엇", "뭐야", "뭔가요", "이란", "정의", "설명해", "알려줘", "대해"
@@ -997,7 +994,14 @@ class TwoTrackWorkflow:
                     echo=False,
                 )
 
-                reply = response["choices"][0]["text"].strip()
+                choices = response.get("choices") if response else None
+                if choices and len(choices) > 0:
+                    text = choices[0].get("text")
+                    reply = text.strip() if text else ""
+                else:
+                    reply = ""
+                    logger.warning("LLM response has no choices")
+
                 reply = self._clean_response(reply, model_path)
             else:
                 reply = "LLM not available."
@@ -1076,14 +1080,12 @@ class TwoTrackWorkflow:
 
         # 4. Check for fabricated statistics/numbers not in source
         number_pattern = r'\b\d{2,}%|\b\d+\.\d+%'
-        response_numbers = set(re.findall(number_pattern, response))
-        if response_numbers:
+        if response_numbers := set(re.findall(number_pattern, response)):
             doc_numbers = set()
             for doc in retrieved_docs:
                 doc_numbers.update(re.findall(number_pattern, doc))
 
-            fabricated = response_numbers - doc_numbers
-            if fabricated:
+            if fabricated := response_numbers - doc_numbers:
                 verification["issues"].append(
                     f"Potentially fabricated statistics: {list(fabricated)[:3]}"
                 )
@@ -1104,7 +1106,7 @@ class TwoTrackWorkflow:
 
         # Determine pass/fail
         critical_issues = [i for i in verification["issues"] if "hallucination" in i.lower() or "fabricated" in i.lower()]
-        verification["passed"] = len(critical_issues) == 0
+        verification["passed"] = not critical_issues
 
         if verification["issues"]:
             logger.warning(f"Verification issues: {verification['issues']}")
@@ -1173,6 +1175,9 @@ class TwoTrackWorkflow:
 
     def _extract_keywords(self, query: str) -> List[str]:
         """Extract keywords from query"""
+        if not query:
+            return []
+
         stopwords = {
             "이", "가", "은", "는", "을", "를", "에", "에서", "로", "으로", "의",
             "도", "만", "까지", "부터", "께", "에게", "한테",
@@ -1199,7 +1204,7 @@ class TwoTrackWorkflow:
 
     def _is_casual_greeting(self, message: str) -> bool:
         """Check if message is a casual greeting"""
-        if len(message) > 20:
+        if not message or len(message) > 20:
             return False
 
         greetings = ["안녕", "고마워", "감사", "반가워", "ㅎㅎ", "ㅋㅋ"]
@@ -1301,8 +1306,10 @@ class TwoTrackWorkflow:
 
         if is_gemma:
             # Gemma format
-            prompt_parts.append(f"<start_of_turn>user\n{system_prompt}<end_of_turn>")
-            prompt_parts.append("<start_of_turn>model\n네, 알겠습니다.<end_of_turn>")
+            prompt_parts.extend([
+                f"<start_of_turn>user\n{system_prompt}<end_of_turn>",
+                "<start_of_turn>model\n네, 알겠습니다.<end_of_turn>"
+            ])
 
             for msg in context[-5:]:
                 role = "user" if msg.get("role") == "user" else "model"
@@ -1359,6 +1366,9 @@ class TwoTrackWorkflow:
 
     def _clean_response(self, reply: str, model_path: Optional[str] = None) -> str:
         """Clean up model response"""
+        if not reply:
+            return ""
+
         # Remove special tokens
         tokens_to_remove = [
             "<start_of_turn>", "<end_of_turn>",
@@ -1496,37 +1506,28 @@ class TwoTrackWorkflow:
             f"authority={final_state.get('authority_level')}"
         )
 
-        # Build response with Phase 1 data
-        response = {
+        return {
             "reply": final_state.get("response", "음, 답변을 만들지 못했어요 🤔 다시 질문해주실래요?"),
             "confidence": final_state.get("confidence", 0.0),
             "intent": final_state.get("intent"),
             "track": final_state.get("track"),
             "rag_docs_count": len(final_state.get("retrieved_docs", [])),
-            # Phase 1: Authority Gate
             "authority": {
                 "level": final_state.get("authority_level", "suggest"),
                 "requires_approval": final_state.get("requires_approval", False),
                 "approval_type": final_state.get("approval_type"),
             },
-            # Phase 1: Evidence
             "evidence": final_state.get("evidence", []),
             "has_sufficient_evidence": final_state.get("has_sufficient_evidence", False),
-            # Phase 1: Failure handling
             "failure": final_state.get("failure"),
             "recovery": final_state.get("recovery"),
-            # Tracing
             "trace_id": trace_id,
             "response_id": response_id,
-            # Metrics
             "metrics": final_state.get("metrics", {}),
             "debug_info": final_state.get("debug_info", {}),
-            # Status Query Engine (Phase 2)
             "answer_type": final_state.get("answer_type", ""),
             "used_status_workflow": final_state.get("use_status_workflow", False),
         }
-
-        return response
 
     def run_with_ai_response(
         self,
@@ -1575,8 +1576,7 @@ class TwoTrackWorkflow:
         else:
             status = ResponseStatus.SUCCESS
 
-        # Build AIResponse
-        ai_response = AIResponse(
+        return AIResponse(
             response_id=result.get("response_id", ""),
             content=result.get("reply", ""),
             intent=result.get("intent", ""),
@@ -1594,5 +1594,3 @@ class TwoTrackWorkflow:
             model_used=self.model_path_l2 if result.get("track") == "track_b" else self.model_path_l1,
             track=result.get("track", ""),
         )
-
-        return ai_response

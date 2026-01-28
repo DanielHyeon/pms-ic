@@ -1,7 +1,6 @@
 package com.insuretech.pms.auth.dto;
 
 import com.insuretech.pms.auth.entity.Permission;
-import com.insuretech.pms.auth.entity.User;
 import lombok.Builder;
 import lombok.Data;
 

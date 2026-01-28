@@ -104,7 +104,7 @@ public class UserStoryService {
 
     public UserStoryResponse createStory(CreateUserStoryRequest request) {
         Integer maxPriority = userStoryRepository.findMaxPriorityOrderByProjectIdAndStatus(
-                request.getProjectId(), UserStory.StoryStatus.BACKLOG);
+                request.getProjectId(), UserStory.StoryStatus.IDEA);
         int nextPriority = (maxPriority == null) ? 1 : maxPriority + 1;
 
         UserStory story = UserStory.builder()
@@ -115,7 +115,7 @@ public class UserStoryService {
                 .storyPoints(request.getStoryPoints())
                 .epic(request.getEpic())
                 .assigneeId(request.getAssignee())
-                .status(UserStory.StoryStatus.BACKLOG)
+                .status(UserStory.StoryStatus.IDEA)
                 .priorityOrder(nextPriority)
                 .acceptanceCriteria(serializeAcceptanceCriteria(request.getAcceptanceCriteria()))
                 .build();

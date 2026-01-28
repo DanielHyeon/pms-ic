@@ -18,7 +18,7 @@ public class TestUserStoryBuilder {
     private String acceptanceCriteria = null;
     private UserStory.Priority priority = UserStory.Priority.MEDIUM;
     private Integer storyPoints = 5;
-    private UserStory.StoryStatus status = UserStory.StoryStatus.BACKLOG;
+    private UserStory.StoryStatus status = UserStory.StoryStatus.READY;
     private String assigneeId = null;
     private String epic = null;
     private Integer priorityOrder = null;
@@ -169,12 +169,12 @@ public class TestUserStoryBuilder {
     }
 
     public TestUserStoryBuilder backlog() {
-        this.status = UserStory.StoryStatus.BACKLOG;
+        this.status = UserStory.StoryStatus.READY;
         return this;
     }
 
     public TestUserStoryBuilder selected() {
-        this.status = UserStory.StoryStatus.SELECTED;
+        this.status = UserStory.StoryStatus.IN_SPRINT;
         return this;
     }
 
@@ -184,7 +184,7 @@ public class TestUserStoryBuilder {
     }
 
     public TestUserStoryBuilder completed() {
-        this.status = UserStory.StoryStatus.COMPLETED;
+        this.status = UserStory.StoryStatus.DONE;
         return this;
     }
 

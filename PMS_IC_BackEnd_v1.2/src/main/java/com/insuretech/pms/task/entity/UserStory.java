@@ -3,6 +3,7 @@ package com.insuretech.pms.task.entity;
 import com.insuretech.pms.common.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
+import org.springframework.lang.Nullable;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -24,6 +25,7 @@ public class UserStory extends BaseEntity {
     @Column(name = "project_id", length = 50, nullable = false)
     private String projectId;
 
+    @Nullable
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sprint_id")
     private Sprint sprint;
@@ -31,9 +33,11 @@ public class UserStory extends BaseEntity {
     @Column(name = "title", nullable = false, length = 200)
     private String title;
 
+    @Nullable
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
+    @Nullable
     @Column(name = "acceptance_criteria", columnDefinition = "TEXT")
     private String acceptanceCriteria;
 
@@ -42,6 +46,7 @@ public class UserStory extends BaseEntity {
     @Builder.Default
     private Priority priority = Priority.MEDIUM;
 
+    @Nullable
     @Column(name = "story_points")
     private Integer storyPoints;
 
@@ -50,24 +55,29 @@ public class UserStory extends BaseEntity {
     @Builder.Default
     private StoryStatus status = StoryStatus.IDEA;
 
+    @Nullable
     @Column(name = "assignee_id", length = 50)
     private String assigneeId;
 
+    @Nullable
     @Column(name = "epic", length = 100)
     private String epic;
 
+    @Nullable
     @Column(name = "priority_order")
     private Integer priorityOrder;
 
     /**
      * Feature ID for Feature-Story integration
      */
+    @Nullable
     @Column(name = "feature_id", length = 36)
     private String featureId;
 
     /**
      * WBS Item ID for WbsItem-Story integration
      */
+    @Nullable
     @Column(name = "wbs_item_id", length = 36)
     private String wbsItemId;
 
@@ -75,6 +85,7 @@ public class UserStory extends BaseEntity {
      * Part (Work Area) ID - denormalized from Feature for query performance.
      * Derived from feature.part_id when feature is assigned.
      */
+    @Nullable
     @Column(name = "part_id", length = 50)
     private String partId;
 

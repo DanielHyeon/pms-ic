@@ -455,7 +455,7 @@ public class TestDataFactory {
                 .title(title)
                 .description(description)
                 .priority(priority)
-                .status(UserStory.StoryStatus.BACKLOG)
+                .status(UserStory.StoryStatus.READY)
                 .storyPoints(5)
                 .build();
     }

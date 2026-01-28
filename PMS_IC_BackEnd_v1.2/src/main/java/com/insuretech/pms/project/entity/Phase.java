@@ -3,6 +3,7 @@ package com.insuretech.pms.project.entity;
 import com.insuretech.pms.common.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
+import org.springframework.lang.Nullable;
 
 import java.time.LocalDate;
 
@@ -34,13 +35,16 @@ public class Phase extends BaseEntity {
     @Builder.Default
     private PhaseStatus status = PhaseStatus.NOT_STARTED;
 
+    @Nullable
     @Enumerated(EnumType.STRING)
     @Column(name = "gate_status", length = 50)
     private GateStatus gateStatus;
 
+    @Nullable
     @Column(name = "start_date")
     private LocalDate startDate;
 
+    @Nullable
     @Column(name = "end_date")
     private LocalDate endDate;
 
@@ -48,6 +52,7 @@ public class Phase extends BaseEntity {
     @Builder.Default
     private Integer progress = 0;
 
+    @Nullable
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 

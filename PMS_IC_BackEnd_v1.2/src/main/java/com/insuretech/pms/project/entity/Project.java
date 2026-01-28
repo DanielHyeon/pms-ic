@@ -3,6 +3,7 @@ package com.insuretech.pms.project.entity;
 import com.insuretech.pms.common.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
+import org.springframework.lang.Nullable;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -24,6 +25,7 @@ public class Project extends BaseEntity {
     @Column(name = "name", nullable = false, length = 200)
     private String name;
 
+    @Nullable
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
@@ -32,12 +34,15 @@ public class Project extends BaseEntity {
     @Builder.Default
     private ProjectStatus status = ProjectStatus.PLANNING;
 
+    @Nullable
     @Column(name = "start_date")
     private LocalDate startDate;
 
+    @Nullable
     @Column(name = "end_date")
     private LocalDate endDate;
 
+    @Nullable
     @Column(name = "budget", precision = 15, scale = 2)
     private java.math.BigDecimal budget;
 
