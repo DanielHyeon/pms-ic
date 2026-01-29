@@ -208,7 +208,7 @@ class FeatureServiceTest {
         @DisplayName("Should update feature status and priority")
         void shouldUpdateFeatureStatusAndPriority() {
             FeatureDto request = FeatureDto.builder()
-                    .status("COMPLETED")
+                    .status("DONE")
                     .priority("LOW")
                     .build();
 

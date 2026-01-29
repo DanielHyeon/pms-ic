@@ -5,13 +5,10 @@ spring:
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
 
-  # File Upload Configuration
-  servlet:
-    multipart:
-      enabled: true
-      max-file-size: 100MB
-      max-request-size: 100MB
-      file-size-threshold: 2MB
+  # WebFlux Codec Configuration (replaces servlet multipart)
+  http:
+    codecs:
+      max-in-memory-size: 100MB
 
   # Database
   datasource:
@@ -24,7 +21,7 @@ spring:
       minimum-idle: 5
       connection-timeout: 20000
 
-  # JPA
+  # JPA (kept for gradual migration)
   jpa:
     hibernate:
       ddl-auto: update
@@ -34,6 +31,18 @@ spring:
         format_sql: true
         default_schema: public
     show-sql: false
+
+  # R2DBC (Reactive Database)
+  r2dbc:
+    url: ${SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5432/pms_db}
+    username: ${SPRING_DATASOURCE_USERNAME:pms_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:pms_password}
+    pool:
+      enabled: true
+      initial-size: 5
+      max-size: 20
+      max-idle-time: 30m
+      validation-query: SELECT 1
 
   # Redis
   data:
@@ -75,8 +84,6 @@ spring:
 # Server
 server:
   port: 8080
-  servlet:
-    context-path: /
   error:
     include-message: always
     include-stacktrace: on_param
@@ -87,7 +94,7 @@ jwt:
   expiration: 86400000 # 24 hours in milliseconds
   refresh-expiration: 604800000 # 7 days
 
-# AI Service
+# AI Service (Legacy)
 ai:
   service:
     url: ${AI_SERVICE_URL:http://llm-service:8000}
@@ -97,6 +104,54 @@ ai:
     retry:
       max-attempts: 3
       delay: 1000
+
+# LLM Gateway Configuration
+llm:
+  workers:
+    vllm:
+      url: ${VLLM_WORKER_URL:http://localhost:8000}
+      enabled: ${VLLM_ENABLED:false}
+      model: qwen3-8b
+    gguf:
+      url: ${GGUF_WORKER_URL:http://localhost:8080}
+      enabled: ${GGUF_ENABLED:true}
+      model: gemma-3-12b
+    default: gguf
+  gateway:
+    timeout:
+      total: 120
+      ttft: 15
+  routing:
+    context-threshold: 4096
+    tools-prefer-vllm: true
+  health:
+    check-interval: 10000
+
+# Resilience4j Circuit Breaker
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 3
+        slowCallDurationThreshold: 10s
+        slowCallRateThreshold: 50
+    instances:
+      vllm-worker:
+        baseConfig: default
+      gguf-worker:
+        baseConfig: default
+  timelimiter:
+    configs:
+      default:
+        timeoutDuration: 90s
+    instances:
+      vllm-worker:
+        baseConfig: default
+      gguf-worker:
+        timeoutDuration: 120s
 
 # File storage
 pms:

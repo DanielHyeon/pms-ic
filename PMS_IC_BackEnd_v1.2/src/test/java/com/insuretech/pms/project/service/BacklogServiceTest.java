@@ -121,6 +121,7 @@ class BacklogServiceTest {
         @Test
         @DisplayName("Should get items by status")
         void shouldGetItemsByStatus() {
+            testItem1.setStatus(BacklogItem.BacklogItemStatus.SELECTED);
             List<BacklogItem> selectedItems = Arrays.asList(testItem1);
             when(backlogItemRepository.findByBacklogIdAndStatus(BACKLOG_ID, "SELECTED"))
                     .thenReturn(selectedItems);
@@ -199,6 +200,7 @@ class BacklogServiceTest {
         @Test
         @DisplayName("Should get selected items for sprint planning")
         void shouldGetSelectedItems() {
+            testItem1.setStatus(BacklogItem.BacklogItemStatus.SELECTED);
             List<BacklogItem> selectedItems = Arrays.asList(testItem1);
             when(backlogItemRepository.findSelectedItemsForSprintPlanning(BACKLOG_ID))
                     .thenReturn(selectedItems);

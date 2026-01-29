@@ -57,16 +57,16 @@ public class ProjectSecurityService {
             return false;
         }
 
+        // System admins have access to all projects - check early before getting user ID
+        if (hasSystemRole("ADMIN")) {
+            log.debug("hasAnyRole: User is ADMIN, granting access");
+            return true;
+        }
+
         String userId = getCurrentUserId();
         if (userId == null) {
             log.debug("hasAnyRole: No authenticated user");
             return false;
-        }
-
-        // System admins have access to all projects
-        if (hasSystemRole("ADMIN")) {
-            log.debug("hasAnyRole: User {} is ADMIN, granting access", userId);
-            return true;
         }
 
         Optional<ProjectMember> memberOpt = projectMemberRepository
@@ -98,15 +98,15 @@ public class ProjectSecurityService {
             return false;
         }
 
+        // System admins and auditors can view all projects - check early before getting user ID
+        if (hasSystemRole("ADMIN") || hasSystemRole("AUDITOR")) {
+            log.debug("isProjectMember: User has system role, granting access");
+            return true;
+        }
+
         String userId = getCurrentUserId();
         if (userId == null) {
             return false;
-        }
-
-        // System admins and auditors can view all projects
-        if (hasSystemRole("ADMIN") || hasSystemRole("AUDITOR")) {
-            log.debug("isProjectMember: User {} has system role, granting access", userId);
-            return true;
         }
 
         boolean isMember = projectMemberRepository

@@ -3,13 +3,15 @@ Chat API Routes.
 
 Handles /api/chat/v2 endpoint (Two-Track Workflow).
 Legacy /api/chat has been removed - fallback uses chat_legacy() internally.
+Streaming endpoint /api/chat/v2/stream for SSE responses.
 """
 
 import os
 import re
 import string
 import logging
-from flask import request, jsonify
+import json
+from flask import request, jsonify, Response
 
 from . import chat_bp
 from services.model_service import get_model_service
@@ -295,3 +297,112 @@ def _clean_legacy_response(reply: str) -> str:
         reply = reply[1:].strip()
 
     return reply
+
+
+@chat_bp.route("/api/chat/v2/stream", methods=["POST"])
+def chat_v2_stream():
+    """
+    Streaming Chat API v2 with SSE (Server-Sent Events).
+
+    Returns chunked responses as SSE stream for real-time UI updates.
+    """
+    try:
+        data = request.json
+        message = data.get("message", "")
+        context = data.get("context", [])
+        retrieved_docs = normalize_retrieved_docs(data.get("retrieved_docs", []))
+        user_id = data.get("user_id")
+        project_id = data.get("project_id")
+        user_role = data.get("user_role", "MEMBER")
+        user_access_level = data.get("user_access_level")
+
+        if user_access_level is None:
+            from rag_service_neo4j import get_access_level
+            user_access_level = get_access_level(user_role)
+
+        if not message:
+            return jsonify({"error": "Message is required"}), 400
+
+        def generate_stream():
+            """Generator for SSE stream."""
+            chunk_id = 0
+            try:
+                model_service = get_model_service()
+                model, rag, _ = model_service.load_model()
+
+                if model is None:
+                    yield _format_sse_event(chunk_id, {"chunk": "", "done": True, "error": "Model not loaded"})
+                    return
+
+                # Get RAG documents
+                rag_docs = retrieved_docs
+                if not rag_docs and rag:
+                    rag_docs_objs = rag.search(message, top_k=3)
+                    rag_docs = [doc['content'] for doc in rag_docs_objs]
+
+                from service_state import get_state
+                state = get_state()
+                prompt = build_prompt(message, context, rag_docs, model_path=state.current_model_path)
+
+                # Stream tokens from model
+                model.reset()
+
+                for token_data in model(
+                    prompt,
+                    max_tokens=MAX_TOKENS,
+                    temperature=TEMPERATURE,
+                    top_p=TOP_P,
+                    min_p=MIN_P,
+                    stop=["<end_of_turn>", "<start_of_turn>", "</s>", "<|im_end|>"],
+                    echo=False,
+                    repeat_penalty=REPEAT_PENALTY,
+                    stream=True
+                ):
+                    chunk_id += 1
+                    token = token_data["choices"][0]["text"]
+
+                    # Skip empty tokens
+                    if not token:
+                        continue
+
+                    # Clean token of special markers
+                    token = token.replace("<end_of_turn>", "")
+                    token = token.replace("<start_of_turn>", "")
+                    token = token.replace("<|im_end|>", "")
+
+                    if token:
+                        yield _format_sse_event(chunk_id, {"chunk": token, "done": False})
+
+                # Send completion event
+                chunk_id += 1
+                yield _format_sse_event(chunk_id, {"chunk": "", "done": True, "confidence": 0.85})
+
+            except Exception as e:
+                logger.error(f"Streaming error: {e}", exc_info=True)
+                yield _format_sse_event(chunk_id + 1, {
+                    "chunk": "",
+                    "done": True,
+                    "error": str(e)
+                })
+
+        return Response(
+            generate_stream(),
+            mimetype="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Error processing streaming request: {e}", exc_info=True)
+        return jsonify({
+            "error": "Failed to process streaming request",
+            "message": str(e)
+        }), 500
+
+
+def _format_sse_event(event_id: int, data: dict) -> str:
+    """Format data as SSE event."""
+    return f"id: {event_id}\ndata: {json.dumps(data)}\n\n"

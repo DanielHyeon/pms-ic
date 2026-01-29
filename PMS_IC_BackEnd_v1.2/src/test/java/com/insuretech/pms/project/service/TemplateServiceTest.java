@@ -185,7 +185,7 @@ class TemplateServiceTest {
             TemplateSetDto request = TemplateSetDto.builder()
                     .name("New Template")
                     .description("A new project template")
-                    .category("GENERAL")
+                    .category("CUSTOM")
                     .build();
 
             when(templateSetRepository.save(any(TemplateSet.class))).thenAnswer(invocation -> {

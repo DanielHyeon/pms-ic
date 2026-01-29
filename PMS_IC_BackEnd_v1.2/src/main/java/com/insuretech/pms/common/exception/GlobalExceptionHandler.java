@@ -1,15 +1,16 @@
 package com.insuretech.pms.common.exception;
 
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
-import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.bind.support.WebExchangeBindException;
+import org.springframework.web.server.ServerWebExchange;
+import reactor.core.publisher.Mono;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -19,9 +20,9 @@ import java.util.Map;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(CustomException.class)
-    public ResponseEntity<ErrorResponse> handleCustomException(
+    public Mono<ResponseEntity<ErrorResponse>> handleCustomException(
             CustomException ex,
-            HttpServletRequest request) {
+            ServerWebExchange exchange) {
 
         log.error("CustomException: {}", ex.getMessage(), ex);
 
@@ -29,51 +30,51 @@ public class GlobalExceptionHandler {
                 ex.getStatus().value(),
                 ex.getStatus().getReasonPhrase(),
                 ex.getMessage(),
-                request.getRequestURI(),
+                exchange.getRequest().getPath().value(),
                 ex.getErrorCode()
         );
 
-        return new ResponseEntity<>(errorResponse, ex.getStatus());
+        return Mono.just(new ResponseEntity<>(errorResponse, ex.getStatus()));
     }
 
     @ExceptionHandler(BadCredentialsException.class)
-    public ResponseEntity<ErrorResponse> handleBadCredentialsException(
+    public Mono<ResponseEntity<ErrorResponse>> handleBadCredentialsException(
             BadCredentialsException ex,
-            HttpServletRequest request) {
+            ServerWebExchange exchange) {
 
         log.error("BadCredentialsException: {}", ex.getMessage());
 
         ErrorResponse errorResponse = ErrorResponse.of(
                 HttpStatus.UNAUTHORIZED.value(),
                 "Unauthorized",
-                "이메일 또는 비밀번호가 올바르지 않습니다.",
-                request.getRequestURI()
+                "Invalid email or password.",
+                exchange.getRequest().getPath().value()
         );
 
-        return new ResponseEntity<>(errorResponse, HttpStatus.UNAUTHORIZED);
+        return Mono.just(new ResponseEntity<>(errorResponse, HttpStatus.UNAUTHORIZED));
     }
 
     @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ErrorResponse> handleAccessDeniedException(
+    public Mono<ResponseEntity<ErrorResponse>> handleAccessDeniedException(
             AccessDeniedException ex,
-            HttpServletRequest request) {
+            ServerWebExchange exchange) {
 
         log.error("AccessDeniedException: {}", ex.getMessage());
 
         ErrorResponse errorResponse = ErrorResponse.of(
                 HttpStatus.FORBIDDEN.value(),
                 "Forbidden",
-                "접근 권한이 없습니다.",
-                request.getRequestURI()
+                "Access denied.",
+                exchange.getRequest().getPath().value()
         );
 
-        return new ResponseEntity<>(errorResponse, HttpStatus.FORBIDDEN);
+        return Mono.just(new ResponseEntity<>(errorResponse, HttpStatus.FORBIDDEN));
     }
 
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Map<String, Object>> handleValidationException(
-            MethodArgumentNotValidException ex,
-            HttpServletRequest request) {
+    @ExceptionHandler(WebExchangeBindException.class)
+    public Mono<ResponseEntity<Map<String, Object>>> handleValidationException(
+            WebExchangeBindException ex,
+            ServerWebExchange exchange) {
 
         log.error("ValidationException: {}", ex.getMessage());
 
@@ -88,27 +89,27 @@ public class GlobalExceptionHandler {
         response.put("timestamp", java.time.LocalDateTime.now());
         response.put("status", HttpStatus.BAD_REQUEST.value());
         response.put("error", "Validation Failed");
-        response.put("message", "입력값 검증 실패");
-        response.put("path", request.getRequestURI());
+        response.put("message", "Input validation failed");
+        response.put("path", exchange.getRequest().getPath().value());
         response.put("errors", errors);
 
-        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+        return Mono.just(new ResponseEntity<>(response, HttpStatus.BAD_REQUEST));
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGenericException(
+    public Mono<ResponseEntity<ErrorResponse>> handleGenericException(
             Exception ex,
-            HttpServletRequest request) {
+            ServerWebExchange exchange) {
 
         log.error("Unexpected error: {}", ex.getMessage(), ex);
 
         ErrorResponse errorResponse = ErrorResponse.of(
                 HttpStatus.INTERNAL_SERVER_ERROR.value(),
                 "Internal Server Error",
-                "서버 내부 오류가 발생했습니다.",
-                request.getRequestURI()
+                "An internal server error occurred.",
+                exchange.getRequest().getPath().value()
         );
 
-        return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
+        return Mono.just(new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR));
     }
 }

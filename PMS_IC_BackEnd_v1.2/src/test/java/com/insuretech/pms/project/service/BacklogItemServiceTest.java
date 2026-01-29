@@ -1,5 +1,6 @@
 package com.insuretech.pms.project.service;
 
+import com.insuretech.pms.common.exception.CustomException;
 import com.insuretech.pms.project.entity.Backlog;
 import com.insuretech.pms.project.entity.BacklogItem;
 import com.insuretech.pms.project.repository.BacklogItemRepository;
@@ -71,6 +72,7 @@ class BacklogItemServiceTest {
         @Test
         @DisplayName("Should create manual backlog item")
         void shouldCreateManualBacklogItem() {
+            testItem.setStoryPoints(5);
             when(backlogRepository.findById(BACKLOG_ID))
                     .thenReturn(Optional.of(testBacklog));
             when(backlogItemRepository.findMaxPriorityOrderByBacklogId(BACKLOG_ID))
@@ -93,7 +95,8 @@ class BacklogItemServiceTest {
                     .thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> backlogItemService.createManualBacklogItem(BACKLOG_ID, "Test", 5))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(CustomException.class)
+                    .hasMessageContaining("not found");
         }
     }
 
@@ -126,7 +129,7 @@ class BacklogItemServiceTest {
                     .thenReturn(Optional.of(testItem));
 
             assertThatThrownBy(() -> backlogItemService.selectForSprintPlanning(ITEM_ID))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(CustomException.class)
                     .hasMessageContaining("story points");
         }
 
@@ -153,7 +156,7 @@ class BacklogItemServiceTest {
                     .thenReturn(Optional.of(testItem));
 
             assertThatThrownBy(() -> backlogItemService.moveToSprint(ITEM_ID))
-                    .isInstanceOf(IllegalStateException.class);
+                    .isInstanceOf(CustomException.class);
         }
 
         @Test
@@ -194,7 +197,7 @@ class BacklogItemServiceTest {
                     .thenReturn(Optional.of(testItem));
 
             assertThatThrownBy(() -> backlogItemService.moveBackToBacklog(ITEM_ID))
-                    .isInstanceOf(IllegalStateException.class);
+                    .isInstanceOf(CustomException.class);
         }
     }
 
@@ -239,7 +242,7 @@ class BacklogItemServiceTest {
                     .thenReturn(Optional.of(testItem));
 
             assertThatThrownBy(() -> backlogItemService.syncStoryPointsFromRequirement(ITEM_ID))
-                    .isInstanceOf(IllegalStateException.class);
+                    .isInstanceOf(CustomException.class);
         }
     }
 
@@ -267,7 +270,7 @@ class BacklogItemServiceTest {
                     .thenReturn(Optional.of(testItem));
 
             assertThatThrownBy(() -> backlogItemService.deleteBacklogItem(ITEM_ID))
-                    .isInstanceOf(IllegalStateException.class);
+                    .isInstanceOf(CustomException.class);
         }
 
         @Test
@@ -278,7 +281,7 @@ class BacklogItemServiceTest {
                     .thenReturn(Optional.of(testItem));
 
             assertThatThrownBy(() -> backlogItemService.deleteBacklogItem(ITEM_ID))
-                    .isInstanceOf(IllegalStateException.class);
+                    .isInstanceOf(CustomException.class);
         }
     }
 }

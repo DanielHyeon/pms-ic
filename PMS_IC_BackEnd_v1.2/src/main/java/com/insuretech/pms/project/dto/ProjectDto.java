@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -23,9 +24,13 @@ public class ProjectDto {
     private LocalDate startDate;
     private LocalDate endDate;
     private BigDecimal budget;
+    private BigDecimal aiWeight;
+    private BigDecimal siWeight;
     private Integer progress;
-    private boolean isDefault;
+    private Boolean isDefault;
     private List<PhaseDto> phases;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
 
     public static ProjectDto from(Project project) {
         return ProjectDto.builder()
