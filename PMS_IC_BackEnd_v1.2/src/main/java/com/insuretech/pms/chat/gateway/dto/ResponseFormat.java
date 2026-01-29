@@ -30,4 +30,14 @@ public class ResponseFormat {
                 .jsonSchema(schema)
                 .build();
     }
+
+    /**
+     * Convert to Map for OpenAI API request
+     */
+    public Map<String, Object> toMap() {
+        if ("json_schema".equals(type) && jsonSchema != null) {
+            return Map.of("type", type, "json_schema", jsonSchema);
+        }
+        return Map.of("type", type != null ? type : "json_object");
+    }
 }

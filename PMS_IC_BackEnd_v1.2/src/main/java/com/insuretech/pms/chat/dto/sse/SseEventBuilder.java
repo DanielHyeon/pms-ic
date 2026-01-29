@@ -46,6 +46,10 @@ public class SseEventBuilder {
         return done(DoneEvent.stop());
     }
 
+    public ServerSentEvent<String> doneToolCalls(java.util.List<ToolCallEvent> toolCalls) {
+        return done(DoneEvent.toolCalls(toolCalls));
+    }
+
     public ServerSentEvent<String> error(ErrorEvent event) {
         return ServerSentEvent.<String>builder()
                 .event("error")

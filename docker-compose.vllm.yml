@@ -1,0 +1,98 @@
+# ============================================
+# vLLM Worker Service Configuration
+# ============================================
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.vllm.yml up -d
+#
+# This file adds a vLLM worker service for production-grade LLM inference
+# with OpenAI-compatible API endpoints.
+#
+# Features:
+# - OpenAI-compatible /v1/chat/completions endpoint
+# - Tool calling support
+# - JSON schema response format
+# - High throughput with continuous batching
+# - GPU memory optimization with PagedAttention
+# ============================================
+
+services:
+  # ============================================
+  # vLLM Worker (Production LLM Inference)
+  # ============================================
+  vllm-service:
+    image: vllm/vllm-openai:latest
+    container_name: pms-vllm-service
+    ports:
+      - "${VLLM_PORT:-8001}:8000"
+    volumes:
+      # Model storage - mount your Hugging Face cache or local models
+      - ${VLLM_MODEL_PATH:-./models/vllm}:/models
+      - ${HF_HOME:-~/.cache/huggingface}:/root/.cache/huggingface
+    networks:
+      - pms-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: ${VLLM_GPU_COUNT:-1}
+              capabilities: [gpu]
+    environment:
+      # Model Configuration
+      VLLM_MODEL: ${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct}
+
+      # vLLM Server Configuration
+      VLLM_TENSOR_PARALLEL_SIZE: ${VLLM_TENSOR_PARALLEL_SIZE:-1}
+      VLLM_GPU_MEMORY_UTILIZATION: ${VLLM_GPU_MEMORY_UTILIZATION:-0.85}
+      VLLM_MAX_MODEL_LEN: ${VLLM_MAX_MODEL_LEN:-8192}
+      VLLM_DTYPE: ${VLLM_DTYPE:-auto}
+
+      # API Configuration
+      VLLM_API_KEY: ${VLLM_API_KEY:-}
+      VLLM_SERVED_MODEL_NAME: ${VLLM_SERVED_MODEL_NAME:-default}
+
+      # Hugging Face Token (for gated models)
+      HF_TOKEN: ${HF_TOKEN:-}
+      HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
+
+      # Tool Calling Configuration
+      VLLM_ENABLE_AUTO_TOOL_CHOICE: ${VLLM_ENABLE_AUTO_TOOL_CHOICE:-true}
+      VLLM_TOOL_CALL_PARSER: ${VLLM_TOOL_CALL_PARSER:-hermes}
+
+    command: >
+      --model ${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct}
+      --served-model-name ${VLLM_SERVED_MODEL_NAME:-default}
+      --tensor-parallel-size ${VLLM_TENSOR_PARALLEL_SIZE:-1}
+      --gpu-memory-utilization ${VLLM_GPU_MEMORY_UTILIZATION:-0.85}
+      --max-model-len ${VLLM_MAX_MODEL_LEN:-8192}
+      --dtype ${VLLM_DTYPE:-auto}
+      --trust-remote-code
+      --enable-auto-tool-choice
+      --tool-call-parser ${VLLM_TOOL_CALL_PARSER:-hermes}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s  # vLLM needs time to load model
+    restart: unless-stopped
+
+  # ============================================
+  # Backend Override - Enable vLLM
+  # ============================================
+  backend:
+    environment:
+      # Enable vLLM worker
+      VLLM_ENABLED: "true"
+      VLLM_WORKER_URL: http://vllm-service:8000
+      # Keep GGUF enabled for fallback
+      GGUF_ENABLED: "true"
+      GGUF_WORKER_URL: http://llm-service:8000
+      # Set vLLM as default for production
+      LLM_DEFAULT_ENGINE: ${LLM_DEFAULT_ENGINE:-auto}
+    depends_on:
+      vllm-service:
+        condition: service_healthy
+
+networks:
+  pms-network:
+    external: true

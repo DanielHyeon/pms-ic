@@ -18,23 +18,44 @@ public class EngineRouter {
 
     private final HealthChecker healthChecker;
 
-    @Value("${llm.workers.vllm.url:http://localhost:8000}")
+    @Value("${llm.workers.vllm.url:http://localhost:8001}")
     private String vllmUrl;
 
-    @Value("${llm.workers.vllm.enabled:true}")
+    @Value("${llm.workers.vllm.enabled:false}")
     private boolean vllmEnabled;
 
-    @Value("${llm.workers.gguf.url:http://localhost:8080}")
+    @Value("${llm.workers.vllm.model:Qwen/Qwen2.5-7B-Instruct}")
+    private String vllmModel;
+
+    @Value("${llm.workers.vllm.tool-calling:true}")
+    private boolean vllmToolCalling;
+
+    @Value("${llm.workers.vllm.json-schema:true}")
+    private boolean vllmJsonSchema;
+
+    @Value("${llm.workers.gguf.url:http://localhost:8000}")
     private String ggufUrl;
 
     @Value("${llm.workers.gguf.enabled:true}")
     private boolean ggufEnabled;
 
-    @Value("${llm.workers.default:gguf}")
+    @Value("${llm.workers.gguf.model:gemma-3-12b}")
+    private String ggufModel;
+
+    @Value("${llm.workers.gguf.tool-calling:false}")
+    private boolean ggufToolCalling;
+
+    @Value("${llm.workers.gguf.json-schema:false}")
+    private boolean ggufJsonSchema;
+
+    @Value("${llm.workers.default:auto}")
     private String defaultEngine;
 
     @Value("${llm.routing.context-threshold:4096}")
     private int contextThreshold;
+
+    @Value("${llm.routing.tools-prefer-vllm:true}")
+    private boolean toolsPreferVllm;
 
     public String selectEngine(GatewayRequest request) {
         String requestedEngine = request.getEngine();
@@ -62,8 +83,8 @@ public class EngineRouter {
 
     private String selectAutoEngine(GatewayRequest request) {
         // Rule 1: Tools or JSON schema -> vLLM (better support)
-        if (request.hasTools() || request.hasResponseFormat()) {
-            log.debug("Auto: vLLM selected (tools/schema)");
+        if (toolsPreferVllm && (request.hasTools() || request.hasResponseFormat())) {
+            log.debug("Auto: vLLM selected (tools/schema, prefer_vllm={})", toolsPreferVllm);
             return validateEngineAvailable("vllm");
         }
 
@@ -134,8 +155,8 @@ public class EngineRouter {
 
     public String getModelName(String engine) {
         return switch (engine) {
-            case "vllm" -> "qwen3-8b";
-            case "gguf" -> "gemma-3-12b";
+            case "vllm" -> vllmModel;
+            case "gguf" -> ggufModel;
             default -> "unknown";
         };
     }
@@ -144,6 +165,22 @@ public class EngineRouter {
         return switch (engine) {
             case "vllm" -> vllmEnabled;
             case "gguf" -> ggufEnabled;
+            default -> false;
+        };
+    }
+
+    public boolean supportsToolCalling(String engine) {
+        return switch (engine) {
+            case "vllm" -> vllmToolCalling;
+            case "gguf" -> ggufToolCalling;
+            default -> false;
+        };
+    }
+
+    public boolean supportsJsonSchema(String engine) {
+        return switch (engine) {
+            case "vllm" -> vllmJsonSchema;
+            case "gguf" -> ggufJsonSchema;
             default -> false;
         };
     }

@@ -22,6 +22,7 @@ wbs_bp = Blueprint('wbs', __name__)
 def register_blueprints(app):
     """Register all blueprints with the Flask app."""
     from . import chat_routes
+    from . import openai_compat_routes  # OpenAI-compatible API routes
     from . import document_routes
     from . import model_routes
     from . import ocr_routes

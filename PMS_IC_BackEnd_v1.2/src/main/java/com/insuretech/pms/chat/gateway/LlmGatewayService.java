@@ -3,6 +3,7 @@ package com.insuretech.pms.chat.gateway;
 import com.insuretech.pms.chat.ab.ABTestService;
 import com.insuretech.pms.chat.dto.sse.*;
 import com.insuretech.pms.chat.gateway.dto.GatewayRequest;
+import com.insuretech.pms.chat.gateway.dto.ToolDefinition;
 import com.insuretech.pms.chat.gateway.dto.WorkerRequest;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -37,12 +38,16 @@ public class LlmGatewayService {
     private final HealthChecker healthChecker;
     private final MeterRegistry meterRegistry;
     private final ABTestService abTestService;
+    private final RateLimiter rateLimiter;
 
-    @Value("${llm.gateway.timeout.total:90}")
+    @Value("${llm.gateway.timeout.total:120}")
     private int totalTimeoutSeconds;
 
-    @Value("${llm.gateway.timeout.ttft:10}")
+    @Value("${llm.gateway.timeout.ttft:15}")
     private int ttftTimeoutSeconds;
+
+    @Value("${llm.gateway.timeout.report:300}")
+    private int reportTimeoutSeconds;
 
     public LlmGatewayService(
             EngineRouter engineRouter,
@@ -51,7 +56,8 @@ public class LlmGatewayService {
             WebClient.Builder webClientBuilder,
             HealthChecker healthChecker,
             MeterRegistry meterRegistry,
-            @Lazy ABTestService abTestService) {
+            @Lazy ABTestService abTestService,
+            RateLimiter rateLimiter) {
         this.engineRouter = engineRouter;
         this.transformer = transformer;
         this.sseBuilder = sseBuilder;
@@ -59,9 +65,17 @@ public class LlmGatewayService {
         this.healthChecker = healthChecker;
         this.meterRegistry = meterRegistry;
         this.abTestService = abTestService;
+        this.rateLimiter = rateLimiter;
     }
 
     public Flux<ServerSentEvent<String>> streamChat(GatewayRequest request) {
+        return streamChat(request, null);
+    }
+
+    /**
+     * Stream chat with optional user ID for per-user rate limiting.
+     */
+    public Flux<ServerSentEvent<String>> streamChat(GatewayRequest request, String userId) {
         String traceId = request.getTraceId();
         Instant startTime = Instant.now();
 
@@ -76,30 +90,45 @@ public class LlmGatewayService {
             String workerUrl = engineRouter.getWorkerUrl(engine);
             String modelName = engineRouter.getModelName(engine);
 
-            log.info("Stream request: traceId={}, engine={}, model={}", traceId, engine, modelName);
+            log.info("Stream request: traceId={}, engine={}, model={}, user={}",
+                    traceId, engine, modelName, userId);
             recordEngineSelection(engine);
 
-            // Build worker request
-            WorkerRequest workerRequest = buildWorkerRequest(request, modelName);
+            // Acquire rate limit permit before streaming
+            return rateLimiter.acquire(engine, userId)
+                    .flatMapMany(permit -> {
+                        try {
+                            // Build worker request
+                            WorkerRequest workerRequest = buildWorkerRequest(request, modelName, engine);
 
-            // Meta event
-            ServerSentEvent<String> metaEvent = sseBuilder.meta(MetaEvent.builder()
-                    .traceId(traceId)
-                    .engine(engine)
-                    .model(modelName)
-                    .mode("chat")
-                    .timestamp(startTime)
-                    .build());
+                            // Meta event
+                            ServerSentEvent<String> metaEvent = sseBuilder.meta(MetaEvent.builder()
+                                    .traceId(traceId)
+                                    .engine(engine)
+                                    .model(modelName)
+                                    .mode("chat")
+                                    .timestamp(startTime)
+                                    .build());
 
-            // Stream from worker
-            Flux<ServerSentEvent<String>> workerStream = streamFromWorker(
-                    workerUrl, workerRequest, traceId, engine, startTime
-            );
+                            // Stream from worker with rate limit release on completion
+                            Flux<ServerSentEvent<String>> workerStream = streamFromWorker(
+                                    workerUrl, workerRequest, traceId, engine, startTime
+                            ).doFinally(signal -> rateLimiter.release(permit));
 
-            return Flux.concat(
-                    Flux.just(metaEvent),
-                    workerStream
-            );
+                            return Flux.concat(
+                                    Flux.just(metaEvent),
+                                    workerStream
+                            );
+                        } catch (Exception e) {
+                            rateLimiter.release(permit);
+                            throw e;
+                        }
+                    })
+                    .onErrorResume(RateLimiter.RateLimitExceededException.class, e -> {
+                        log.warn("Rate limit exceeded: traceId={}, error={}", traceId, e.getMessage());
+                        recordRateLimitExceeded(engine);
+                        return Flux.just(sseBuilder.error("RATE_LIMIT_EXCEEDED", e.getMessage(), traceId));
+                    });
 
         } catch (EngineUnavailableException e) {
             log.error("No engine available: traceId={}", traceId);
@@ -162,13 +191,14 @@ public class LlmGatewayService {
                 });
     }
 
-    private WorkerRequest buildWorkerRequest(GatewayRequest request, String model) {
+    private WorkerRequest buildWorkerRequest(GatewayRequest request, String model, String engine) {
         List<WorkerRequest.WorkerMessage> workerMessages = request.getMessages().stream()
                 .map(msg -> WorkerRequest.WorkerMessage.builder()
                         .role(msg.getRole())
                         .content(msg.getContent())
                         .name(msg.getName())
                         .toolCallId(msg.getToolCallId())
+                        .toolCalls(msg.getToolCalls())
                         .build())
                 .toList();
 
@@ -182,6 +212,20 @@ public class LlmGatewayService {
                     .maxTokens(request.getGeneration().getMaxTokens())
                     .topP(request.getGeneration().getTopP())
                     .stop(request.getGeneration().getStop());
+        }
+
+        // Include tools if the engine supports tool calling
+        if (request.getTools() != null && !request.getTools().isEmpty()
+                && engineRouter.supportsToolCalling(engine)) {
+            builder.tools(ToolDefinition.toMapList(request.getTools()));
+            log.debug("Including {} tools in request for engine {}", request.getTools().size(), engine);
+        }
+
+        // Include response format if the engine supports JSON schema
+        if (request.getResponseFormat() != null
+                && engineRouter.supportsJsonSchema(engine)) {
+            builder.responseFormat(request.getResponseFormat().toMap());
+            log.debug("Including response_format in request for engine {}", engine);
         }
 
         return builder.build();
@@ -211,6 +255,13 @@ public class LlmGatewayService {
 
     private void recordError(String engine) {
         Counter.builder("llm.errors")
+                .tag("engine", engine)
+                .register(meterRegistry)
+                .increment();
+    }
+
+    private void recordRateLimitExceeded(String engine) {
+        Counter.builder("llm.rate_limit.exceeded")
                 .tag("engine", engine)
                 .register(meterRegistry)
                 .increment();

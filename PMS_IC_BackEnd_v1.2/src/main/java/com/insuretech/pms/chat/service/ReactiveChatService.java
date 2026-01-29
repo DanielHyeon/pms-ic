@@ -10,6 +10,10 @@ import com.insuretech.pms.chat.dto.sse.SseEventBuilder;
 import com.insuretech.pms.chat.reactive.entity.R2dbcChatMessage;
 import com.insuretech.pms.chat.gateway.LlmGatewayService;
 import com.insuretech.pms.chat.gateway.dto.GatewayRequest;
+import com.insuretech.pms.chat.tool.StreamingToolOrchestrator;
+import com.insuretech.pms.chat.tool.ToolContext;
+import com.insuretech.pms.chat.tool.ToolRegistry;
+import com.insuretech.pms.chat.gateway.dto.ToolDefinition;
 import com.insuretech.pms.chat.reactive.entity.R2dbcChatMessage;
 import com.insuretech.pms.chat.reactive.entity.R2dbcChatSession;
 import com.insuretech.pms.chat.reactive.repository.ReactiveChatMessageRepository;
@@ -42,6 +46,8 @@ public class ReactiveChatService {
     private final TransactionalOperator transactionalOperator;
     private final LlmGatewayService llmGatewayService;
     private final SseEventBuilder sseBuilder;
+    private final StreamingToolOrchestrator streamingToolOrchestrator;
+    private final ToolRegistry toolRegistry;
 
     public Flux<ChatChunk> streamChat(ChatRequest request, String userId) {
         AtomicReference<StringBuilder> contentAccumulator = new AtomicReference<>(new StringBuilder());
@@ -87,6 +93,7 @@ public class ReactiveChatService {
     /**
      * Stream chat using Standard SSE Contract (v2)
      * Events: meta, delta, done, error
+     * Supports tool calling when enabled
      */
     public Flux<ServerSentEvent<String>> streamChatV2(ChatStreamRequest request, String userId) {
         String traceId = UUID.randomUUID().toString();
@@ -96,7 +103,8 @@ public class ReactiveChatService {
         return getOrCreateSession(request.getSessionId(), userId)
                 .flatMapMany(session -> {
                     sessionIdRef.set(session.getId());
-                    log.info("StreamV2: traceId={}, session={}, user={}", traceId, session.getId(), userId);
+                    log.info("StreamV2: traceId={}, session={}, user={}, tools={}",
+                            traceId, session.getId(), userId, request.isEnableTools());
 
                     return saveUserMessage(session.getId(), request.getMessage())
                             .flatMapMany(userMessage -> {
@@ -108,17 +116,25 @@ public class ReactiveChatService {
                                             GatewayRequest gatewayRequest = buildGatewayRequest(
                                                     traceId, request, recentMessages);
 
-                                            return llmGatewayService.streamChat(gatewayRequest)
+                                            // Choose stream strategy based on tool support
+                                            Flux<ServerSentEvent<String>> stream;
+                                            if (request.isEnableTools() && toolRegistry.hasTools()) {
+                                                // Use tool orchestrator for tool-enabled requests
+                                                ToolContext toolContext = buildToolContext(
+                                                        userId, session.getId(), request, traceId);
+                                                stream = streamingToolOrchestrator.streamWithTools(
+                                                        llmGatewayService, gatewayRequest, toolContext);
+                                            } else {
+                                                // Standard streaming without tools
+                                                stream = llmGatewayService.streamChat(gatewayRequest);
+                                            }
+
+                                            return stream
                                                     .doOnNext(event -> {
-                                                        // Track engine from meta event
-                                                        if ("meta".equals(event.event())) {
-                                                            // Engine info is in meta event
-                                                        }
                                                         // Accumulate content from delta events
                                                         if ("delta".equals(event.event())) {
                                                             String data = event.data();
                                                             if (data != null) {
-                                                                // Extract text content from delta JSON
                                                                 extractDeltaText(data).ifPresent(
                                                                         text -> contentAccumulator.get().append(text)
                                                                 );
@@ -148,14 +164,40 @@ public class ReactiveChatService {
                 });
     }
 
+    private ToolContext buildToolContext(String userId, String sessionId,
+                                         ChatStreamRequest request, String traceId) {
+        return ToolContext.builder()
+                .userId(userId)
+                .sessionId(sessionId)
+                .projectId(request.getProjectId())
+                .userRole(request.getUserRole())
+                .accessLevel(request.getUserAccessLevel())
+                .traceId(traceId)
+                .build();
+    }
+
+    private ToolDefinition convertToGatewayToolDefinition(
+            com.insuretech.pms.chat.tool.ToolDefinition toolDef) {
+        return ToolDefinition.function(
+                toolDef.getName(),
+                toolDef.getDescription(),
+                toolDef.getParameters()
+        );
+    }
+
     private GatewayRequest buildGatewayRequest(String traceId, ChatStreamRequest request,
                                                List<R2dbcChatMessage> recentMessages) {
         List<ChatMessageDto> messages = new ArrayList<>();
 
         // Add system prompt if needed
+        String systemPrompt = "You are a helpful assistant for insurance project management.";
+        if (request.isEnableTools() && toolRegistry.hasTools()) {
+            systemPrompt += " You have access to tools that can help you perform tasks. " +
+                    "Use them when appropriate to get real-time data.";
+        }
         messages.add(ChatMessageDto.builder()
                 .role("system")
-                .content("You are a helpful assistant for insurance project management.")
+                .content(systemPrompt)
                 .build());
 
         // Add conversation history
@@ -181,11 +223,35 @@ public class ReactiveChatService {
                     .build());
         }
 
+        // Build tool definitions if enabled
+        List<ToolDefinition> tools = null;
+        if (request.isEnableTools() && toolRegistry.hasTools()) {
+            List<com.insuretech.pms.chat.tool.ToolDefinition> toolDefs;
+            if (request.getTools() != null && !request.getTools().isEmpty()) {
+                // Filter to specific tools if provided
+                toolDefs = toolRegistry.getAllDefinitions().stream()
+                        .filter(t -> request.getTools().contains(t.getName()))
+                        .toList();
+            } else {
+                // Use all registered tools
+                toolDefs = toolRegistry.getAllDefinitions();
+            }
+            // Convert to gateway ToolDefinition format
+            tools = toolDefs.stream()
+                    .map(this::convertToGatewayToolDefinition)
+                    .toList();
+            log.debug("Including {} tools in request: {}",
+                    tools.size(), toolDefs.stream()
+                            .map(com.insuretech.pms.chat.tool.ToolDefinition::getName)
+                            .toList());
+        }
+
         return GatewayRequest.builder()
                 .traceId(traceId)
                 .engine(request.getEngine() != null ? request.getEngine() : "auto")
                 .stream(true)
                 .messages(messages)
+                .tools(tools)
                 .generation(request.getGeneration())
                 .build();
     }

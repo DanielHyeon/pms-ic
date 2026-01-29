@@ -92,23 +92,37 @@ ai:
 llm:
   workers:
     vllm:
-      url: ${VLLM_WORKER_URL:http://localhost:8000}
+      url: ${VLLM_WORKER_URL:http://localhost:8001}
       enabled: ${VLLM_ENABLED:false}
-      model: qwen3-8b
+      model: ${VLLM_MODEL:Qwen/Qwen2.5-7B-Instruct}
+      tool-calling: true
+      json-schema: true
+      max-concurrent: ${LLM_CONCURRENT_VLLM:10}
     gguf:
-      url: ${GGUF_WORKER_URL:http://localhost:8080}
+      url: ${GGUF_WORKER_URL:http://localhost:8000}
       enabled: ${GGUF_ENABLED:true}
-      model: gemma-3-12b
-    default: gguf
+      model: ${GGUF_MODEL:gemma-3-12b}
+      tool-calling: false
+      json-schema: false
+      max-concurrent: ${LLM_CONCURRENT_GGUF:2}
+    default: ${LLM_DEFAULT_ENGINE:auto}
   gateway:
     timeout:
-      total: 120
-      ttft: 15
+      total: ${LLM_TIMEOUT_TOTAL:120}
+      ttft: ${LLM_TIMEOUT_TTFT:15}
+      report: ${LLM_TIMEOUT_REPORT:300}
   routing:
-    context-threshold: 4096
-    tools-prefer-vllm: true
+    context-threshold: ${LLM_CONTEXT_THRESHOLD:4096}
+    tools-prefer-vllm: ${LLM_TOOLS_PREFER_VLLM:true}
   health:
     check-interval: 10000
+  circuit-breaker:
+    failure-rate-threshold: 50
+    slow-call-threshold: 80
+    wait-duration: 30s
+  rate-limit:
+    per-user: ${LLM_RATE_LIMIT_PER_USER:5}
+    acquire-timeout: ${LLM_RATE_LIMIT_TIMEOUT:30}
 
 # Resilience4j Circuit Breaker
 resilience4j:

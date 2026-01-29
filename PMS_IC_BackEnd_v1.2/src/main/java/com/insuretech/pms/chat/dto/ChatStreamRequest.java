@@ -26,4 +26,9 @@ public class ChatStreamRequest {
 
     @Builder.Default
     private GenerationParams generation = GenerationParams.defaults();
+
+    @Builder.Default
+    private boolean enableTools = false; // Enable tool calling
+
+    private List<String> tools;          // Specific tools to enable (null = all registered)
 }

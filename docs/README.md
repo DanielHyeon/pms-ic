@@ -15,7 +15,7 @@
 | **Modules** | [MODULE_COMPOSITION.md](./MODULE_COMPOSITION.md) | Module/component structure |
 | **Database** | [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) | Database schema & ERD |
 | **Full Spec** | [ARCHITECTURE.md](./ARCHITECTURE.md) | Complete technical specification |
-| **AI System** | [LLM_ARCHITECTURE.md](./LLM_ARCHITECTURE.md) | LLM service design & RAG |
+| **AI System** | [LLM_ARCHITECTURE.md](./LLM_ARCHITECTURE.md) | LLM service design (Two-Track + Gateway) |
 | **Security** | [Project-Scoped-Authorization-Design.md](./Project-Scoped-Authorization-Design.md) | RBAC & authorization |
 
 ---
@@ -28,6 +28,7 @@
 | Backend API | ✅ Complete | 38 controllers, 150+ endpoints |
 | Database | ✅ Complete | 54 tables (PostgreSQL) + Neo4j |
 | LLM Service | ✅ Complete | 6 agents, 10 skills, 5 workflows |
+| LLM Gateway | ✅ Complete | GGUF/vLLM interoperability, SSE streaming |
 | AI Phase 1 (Gates) | ✅ Complete | Authority, Evidence, Failure Taxonomy |
 | AI Phase 2 (Workflows) | ✅ Complete | LangGraph Templates (G1-G5) |
 | AI Phase 3 (Productization) | ✅ Complete | Subagent Pool, MCP, Value Metrics |
@@ -41,12 +42,12 @@
 
 | Document | Description | Status |
 |----------|-------------|--------|
-| [ARCHITECTURE_OVERVIEW.md](./ARCHITECTURE_OVERVIEW.md) | **NEW** - Concise architecture summary | ✅ Final |
-| [MENU_STRUCTURE.md](./MENU_STRUCTURE.md) | **NEW** - 9-Zone menu framework | ✅ Final |
-| [MODULE_COMPOSITION.md](./MODULE_COMPOSITION.md) | **NEW** - Module/component structure | ✅ Final |
-| [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) | **NEW** - Database schema & ERD | ✅ Final |
+| [ARCHITECTURE_OVERVIEW.md](./ARCHITECTURE_OVERVIEW.md) | Concise architecture summary | ✅ Final |
+| [MENU_STRUCTURE.md](./MENU_STRUCTURE.md) | 9-Zone menu framework | ✅ Final |
+| [MODULE_COMPOSITION.md](./MODULE_COMPOSITION.md) | Module/component structure | ✅ Final |
+| [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) | Database schema & ERD | ✅ Final |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Complete technical specification | ✅ Final |
-| [LLM_ARCHITECTURE.md](./LLM_ARCHITECTURE.md) | LLM service design & RAG | ✅ Final |
+| [LLM_ARCHITECTURE.md](./LLM_ARCHITECTURE.md) | LLM service (Two-Track + Gateway + SSE) | ✅ Final |
 
 ### Security & Authorization
 

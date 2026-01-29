@@ -1,6 +1,94 @@
 # LLM Service Architecture
 
-## System Overview
+This document covers the LLM service architecture including:
+1. **LLM Gateway** - GGUF/vLLM interoperability with SSE streaming
+2. **Two-Track Workflow** - Intent-based model selection (L1/L2)
+3. **Hybrid Search** - Vector + Keyword search with RRF fusion
+
+---
+
+## LLM Gateway Architecture (GGUF/vLLM Interoperability)
+
+The LLM Gateway provides runtime engine selection and unified SSE streaming.
+
+### Four-Layer Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                              React (UI)                                  │
+│                     POST /api/v2/chat/stream (SSE)                      │
+│                     fetch + ReadableStream                               │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼ SSE (text/event-stream)
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    Chat API Service (Spring WebFlux)                     │
+│  ┌─────────────────────────────────────────────────────────────────┐    │
+│  │ Responsibilities:                                                │    │
+│  │ • Authentication / RBAC                                          │    │
+│  │ • Session / History persistence (R2DBC)                          │    │
+│  │ • RAG / State queries (Reactive Neo4j + PostgreSQL)              │    │
+│  │ • Tool execution (StreamingToolOrchestrator)                     │    │
+│  │ • SSE streaming to UI                                            │    │
+│  └─────────────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼ SSE (text/event-stream)
+┌─────────────────────────────────────────────────────────────────────────┐
+│                       LLM Gateway Service                                │
+│  ┌─────────────────────────────────────────────────────────────────┐    │
+│  │ Responsibilities:                                                │    │
+│  │ • Engine routing (gguf/vllm/auto/ab)                             │    │
+│  │ • Standard SSE transformation (meta/delta/done/error)            │    │
+│  │ • Protection (Timeout/CircuitBreaker/RateLimit)                  │    │
+│  │ • Observability (traceId propagation, metrics)                   │    │
+│  │ • Worker health checks                                           │    │
+│  └─────────────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────┘
+                          │                       │
+                          ▼                       ▼
+┌──────────────────────────────────┐  ┌──────────────────────────────────┐
+│        GGUF Worker               │  │        vLLM Worker               │
+│  ┌────────────────────────────┐  │  │  ┌────────────────────────────┐  │
+│  │ llama-cpp-python           │  │  │  │ vLLM server                │  │
+│  │ OpenAI compatible API      │  │  │  │ /v1/chat/completions       │  │
+│  │ /v1/chat/completions       │  │  │  │ tools + response_format    │  │
+│  │ stream=true                │  │  │  │ stream=true                │  │
+│  └────────────────────────────┘  │  │  └────────────────────────────┘  │
+└──────────────────────────────────┘  └──────────────────────────────────┘
+```
+
+### Standard SSE Event Contract
+
+| Event | Description | Example |
+|-------|-------------|---------|
+| `meta` | Stream metadata | `{"traceId":"xxx","engine":"vllm","model":"qwen"}` |
+| `delta` | Content chunk | `{"kind":"text","text":"Hello"}` |
+| `done` | Completion | `{"finishReason":"stop","usage":{...}}` |
+| `error` | Error | `{"code":"TIMEOUT","message":"..."}` |
+
+### Engine Selection
+
+| Engine | When Selected | Features |
+|--------|--------------|----------|
+| `auto` | Default | Routes based on request (tools→vLLM, else→gguf) |
+| `gguf` | Explicit | Local GGUF model, faster for simple requests |
+| `vllm` | Explicit | vLLM server, supports tools & JSON schema |
+| `ab` | Testing | A/B testing between engines |
+
+### Key Gateway Components
+
+| Component | Location | Role |
+|-----------|----------|------|
+| `LlmGatewayService` | Backend | Engine routing & SSE transformation |
+| `ReactiveChatService` | Backend | Chat session & streaming orchestration |
+| `StreamingToolOrchestrator` | Backend | Tool calling with streaming |
+| `RateLimiter` | Backend | Per-engine & per-user rate limits |
+| `openai_compat_routes.py` | LLM Service | OpenAI-compatible endpoint for GGUF |
+
+---
+
+## System Overview (Legacy Non-Streaming)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -509,4 +597,4 @@ docker logs -f pms-llm-service
 
 ---
 
-*Last Updated: 2026-01-26*
+*Last Updated: 2026-01-30*
