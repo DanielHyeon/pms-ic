@@ -1,6 +1,6 @@
 package com.insuretech.pms.education.dto;
 
-import com.insuretech.pms.education.entity.EducationRoadmap;
+import com.insuretech.pms.education.reactive.entity.R2dbcEducationRoadmap;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -24,13 +24,13 @@ public class EducationRoadmapDto {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    public static EducationRoadmapDto from(EducationRoadmap roadmap) {
+    public static EducationRoadmapDto from(R2dbcEducationRoadmap roadmap) {
         return EducationRoadmapDto.builder()
                 .id(roadmap.getId())
-                .educationId(roadmap.getEducation() != null ? roadmap.getEducation().getId() : null)
-                .educationTitle(roadmap.getEducation() != null ? roadmap.getEducation().getTitle() : null)
-                .targetRole(roadmap.getTargetRole() != null ? roadmap.getTargetRole().name() : null)
-                .level(roadmap.getLevel() != null ? roadmap.getLevel().name() : null)
+                .educationId(roadmap.getEducationId())
+                .educationTitle(null)
+                .targetRole(roadmap.getTargetRole())
+                .level(roadmap.getLevel())
                 .orderNum(roadmap.getOrderNum())
                 .isRequired(roadmap.getIsRequired())
                 .description(roadmap.getDescription())

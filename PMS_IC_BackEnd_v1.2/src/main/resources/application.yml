@@ -10,27 +10,10 @@ spring:
     codecs:
       max-in-memory-size: 100MB
 
-  # Database
-  datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/pms_db}
-    username: ${SPRING_DATASOURCE_USERNAME:pms_user}
-    password: ${SPRING_DATASOURCE_PASSWORD:pms_password}
-    driver-class-name: org.postgresql.Driver
-    hikari:
-      maximum-pool-size: 10
-      minimum-idle: 5
-      connection-timeout: 20000
-
-  # JPA (kept for gradual migration)
-  jpa:
-    hibernate:
-      ddl-auto: update
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: true
-        default_schema: public
-    show-sql: false
+  # SQL Init disabled for R2DBC-only mode
+  sql:
+    init:
+      mode: never
 
   # R2DBC (Reactive Database)
   r2dbc:
@@ -221,18 +204,6 @@ spring:
     activate:
       on-profile: dev
 
-  jpa:
-    show-sql: true
-    defer-datasource-initialization: true
-    properties:
-      hibernate:
-        format_sql: true
-
-  sql:
-    init:
-      mode: always
-      continue-on-error: true
-
   devtools:
     restart:
       enabled: true
@@ -245,6 +216,7 @@ logging:
     com.insuretech.pms: DEBUG
     org.springframework.security: DEBUG
     org.springframework.web.cors: DEBUG
+    org.springframework.r2dbc: DEBUG
 
 ---
 # Production Profile
@@ -253,11 +225,6 @@ spring:
     activate:
       on-profile: prod
 
-  jpa:
-    show-sql: false
-    hibernate:
-      ddl-auto: validate
-
 logging:
   level:
     root: WARN
@@ -265,25 +232,13 @@ logging:
     org.springframework.web: WARN
 
 ---
-# Test Profile (H2 Database)
+# Test Profile
 spring:
   config:
     activate:
       on-profile: test
 
-  datasource:
-    url: jdbc:h2:mem:testdb
-    driver-class-name: org.h2.Driver
+  r2dbc:
+    url: r2dbc:h2:mem:///testdb
     username: sa
     password:
-
-  jpa:
-    hibernate:
-      ddl-auto: create-drop
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.H2Dialect
-
-  h2:
-    console:
-      enabled: true

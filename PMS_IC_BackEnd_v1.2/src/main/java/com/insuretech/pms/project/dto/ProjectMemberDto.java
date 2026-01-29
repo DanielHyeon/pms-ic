@@ -1,6 +1,6 @@
 package com.insuretech.pms.project.dto;
 
-import com.insuretech.pms.project.entity.ProjectMember;
+import com.insuretech.pms.project.reactive.entity.R2dbcProjectMember;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -23,15 +23,29 @@ public class ProjectMemberDto {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    public static ProjectMemberDto from(ProjectMember member) {
+    public static ProjectMemberDto from(R2dbcProjectMember member) {
         return ProjectMemberDto.builder()
                 .id(member.getId())
-                .projectId(member.getProject() != null ? member.getProject().getId() : null)
+                .projectId(member.getProjectId())
                 .userId(member.getUserId())
-                .userName(member.getUserName())
-                .userEmail(member.getUserEmail())
-                .role(member.getRole().name())
-                .department(member.getDepartment())
+                .userName(null) // User name must be populated separately via join
+                .userEmail(null) // User email must be populated separately via join
+                .role(member.getRole())
+                .department(null) // Department must be populated separately via join
+                .createdAt(member.getCreatedAt())
+                .updatedAt(member.getUpdatedAt())
+                .build();
+    }
+
+    public static ProjectMemberDto from(R2dbcProjectMember member, String userName, String userEmail, String department) {
+        return ProjectMemberDto.builder()
+                .id(member.getId())
+                .projectId(member.getProjectId())
+                .userId(member.getUserId())
+                .userName(userName)
+                .userEmail(userEmail)
+                .role(member.getRole())
+                .department(department)
                 .createdAt(member.getCreatedAt())
                 .updatedAt(member.getUpdatedAt())
                 .build();

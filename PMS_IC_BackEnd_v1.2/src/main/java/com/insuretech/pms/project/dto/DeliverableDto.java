@@ -1,6 +1,6 @@
 package com.insuretech.pms.project.dto;
 
-import com.insuretech.pms.project.entity.Deliverable;
+import com.insuretech.pms.project.reactive.entity.R2dbcDeliverable;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -26,14 +26,14 @@ public class DeliverableDto {
     private LocalDateTime uploadedAt;
     private LocalDateTime approvedAt;
 
-    public static DeliverableDto from(Deliverable deliverable) {
+    public static DeliverableDto from(R2dbcDeliverable deliverable) {
         return DeliverableDto.builder()
                 .id(deliverable.getId())
-                .phaseId(deliverable.getPhase() != null ? deliverable.getPhase().getId() : null)
+                .phaseId(deliverable.getPhaseId())
                 .name(deliverable.getName())
                 .description(deliverable.getDescription())
-                .type(deliverable.getType() != null ? deliverable.getType().name() : null)
-                .status(deliverable.getStatus() != null ? deliverable.getStatus().name() : null)
+                .type(deliverable.getType())
+                .status(deliverable.getStatus())
                 .fileName(deliverable.getFileName())
                 .fileSize(deliverable.getFileSize())
                 .uploadedBy(deliverable.getUploadedBy())

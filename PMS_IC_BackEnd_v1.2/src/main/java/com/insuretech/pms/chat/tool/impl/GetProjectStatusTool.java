@@ -2,7 +2,7 @@ package com.insuretech.pms.chat.tool.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.insuretech.pms.chat.tool.*;
-import com.insuretech.pms.project.repository.ProjectRepository;
+import com.insuretech.pms.project.reactive.repository.ReactiveProjectRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -18,7 +18,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class GetProjectStatusTool implements ToolExecutor {
 
-    private final ProjectRepository projectRepository;
+    private final ReactiveProjectRepository projectRepository;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -51,7 +51,6 @@ public class GetProjectStatusTool implements ToolExecutor {
         String projectId = (String) arguments.get("projectId");
 
         if (projectId == null || projectId.isBlank()) {
-            // Use context projectId if not provided
             projectId = context.getProjectId();
         }
 
@@ -61,28 +60,24 @@ public class GetProjectStatusTool implements ToolExecutor {
 
         final String finalProjectId = projectId;
 
-        return Mono.fromCallable(() -> projectRepository.findById(finalProjectId))
-                .map(optProject -> {
-                    if (optProject.isEmpty()) {
-                        return ToolResult.failure(toolCallId, getName(), "Project not found: " + finalProjectId);
-                    }
-
-                    var project = optProject.get();
+        return projectRepository.findById(finalProjectId)
+                .flatMap(project -> {
                     try {
                         Map<String, Object> statusInfo = Map.of(
                                 "id", project.getId(),
                                 "name", project.getName(),
-                                "status", project.getStatus().name(),
+                                "status", project.getStatus() != null ? project.getStatus() : "N/A",
                                 "startDate", project.getStartDate() != null ? project.getStartDate().toString() : "N/A",
                                 "endDate", project.getEndDate() != null ? project.getEndDate().toString() : "N/A"
                         );
 
                         String output = objectMapper.writeValueAsString(statusInfo);
-                        return ToolResult.success(toolCallId, getName(), output);
+                        return Mono.just(ToolResult.success(toolCallId, getName(), output));
                     } catch (Exception e) {
-                        return ToolResult.failure(toolCallId, getName(), "Failed to serialize project status");
+                        return Mono.just(ToolResult.failure(toolCallId, getName(), "Failed to serialize project status"));
                     }
                 })
+                .switchIfEmpty(Mono.just(ToolResult.failure(toolCallId, getName(), "Project not found: " + finalProjectId)))
                 .onErrorResume(e -> {
                     log.error("Error getting project status: {}", e.getMessage());
                     return Mono.just(ToolResult.failure(toolCallId, getName(), e.getMessage()));

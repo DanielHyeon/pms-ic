@@ -1,6 +1,10 @@
 package com.insuretech.pms.report.dto;
 
-import com.insuretech.pms.report.entity.*;
+import com.insuretech.pms.report.enums.GenerationMode;
+import com.insuretech.pms.report.enums.ReportScope;
+import com.insuretech.pms.report.enums.ReportStatus;
+import com.insuretech.pms.report.enums.ReportType;
+import com.insuretech.pms.report.reactive.entity.R2dbcReport;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -55,12 +59,23 @@ public class ReportDto {
     private LocalDateTime updatedAt;
     private LocalDateTime publishedAt;
 
-    public static ReportDto from(Report report) {
+    public static ReportDto from(R2dbcReport report) {
+        ReportType type = null;
+        ReportScope scope = null;
+        ReportStatus stat = null;
+        GenerationMode mode = null;
+        try {
+            if (report.getReportType() != null) type = ReportType.valueOf(report.getReportType());
+            if (report.getReportScope() != null) scope = ReportScope.valueOf(report.getReportScope());
+            if (report.getStatus() != null) stat = ReportStatus.valueOf(report.getStatus());
+            if (report.getGenerationMode() != null) mode = GenerationMode.valueOf(report.getGenerationMode());
+        } catch (IllegalArgumentException ignored) {}
+
         return ReportDto.builder()
                 .id(report.getId())
                 .projectId(report.getProjectId())
-                .reportType(report.getReportType())
-                .reportScope(report.getReportScope())
+                .reportType(type)
+                .reportScope(scope)
                 .title(report.getTitle())
                 .periodStart(report.getPeriodStart())
                 .periodEnd(report.getPeriodEnd())
@@ -69,12 +84,9 @@ public class ReportDto {
                 .scopeUserId(report.getScopeUserId())
                 .createdBy(report.getCreatedBy())
                 .creatorRole(report.getCreatorRole())
-                .generationMode(report.getGenerationMode())
+                .generationMode(mode)
                 .templateId(report.getTemplateId())
-                .templateName(report.getTemplate() != null ? report.getTemplate().getName() : null)
-                .status(report.getStatus())
-                .content(report.getContent())
-                .metricsSnapshot(report.getMetricsSnapshot())
+                .status(stat)
                 .llmGeneratedSections(report.getLlmGeneratedSections())
                 .llmModel(report.getLlmModel())
                 .llmConfidenceScore(report.getLlmConfidenceScore())

@@ -1,15 +1,13 @@
 package com.insuretech.pms.report.dto;
 
-import com.insuretech.pms.report.entity.ReportTemplate;
-import com.insuretech.pms.report.entity.ReportType;
-import com.insuretech.pms.report.entity.TemplateScope;
+import com.insuretech.pms.report.reactive.entity.R2dbcReportTemplate;
+import com.insuretech.pms.report.enums.ReportType;
+import com.insuretech.pms.report.enums.TemplateScope;
 import lombok.*;
 
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * DTO for ReportTemplate entity
@@ -34,30 +32,30 @@ public class ReportTemplateDto {
     private Boolean isActive;
     private Boolean isDefault;
     private Integer version;
-    private List<TemplateSectionDto> sections;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    public static ReportTemplateDto from(ReportTemplate template) {
+    public static ReportTemplateDto from(R2dbcReportTemplate template) {
+        ReportType type = null;
+        TemplateScope templateScope = null;
+        try {
+            if (template.getReportType() != null) type = ReportType.valueOf(template.getReportType());
+            if (template.getScope() != null) templateScope = TemplateScope.valueOf(template.getScope());
+        } catch (IllegalArgumentException ignored) {}
+
         return ReportTemplateDto.builder()
                 .id(template.getId())
                 .name(template.getName())
                 .description(template.getDescription())
-                .reportType(template.getReportType())
-                .scope(template.getScope())
+                .reportType(type)
+                .scope(templateScope)
                 .organizationId(template.getOrganizationId())
                 .createdBy(template.getCreatedBy())
                 .targetRoles(template.getTargetRoles())
                 .targetReportScopes(template.getTargetReportScopes())
-                .structure(template.getStructure())
-                .styling(template.getStyling())
                 .isActive(template.getIsActive())
                 .isDefault(template.getIsDefault())
                 .version(template.getVersion())
-                .sections(template.getSections() != null ?
-                        template.getSections().stream()
-                                .map(TemplateSectionDto::from)
-                                .collect(Collectors.toList()) : null)
                 .createdAt(template.getCreatedAt())
                 .updatedAt(template.getUpdatedAt())
                 .build();

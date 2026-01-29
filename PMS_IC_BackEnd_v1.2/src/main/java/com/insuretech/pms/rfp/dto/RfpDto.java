@@ -1,8 +1,8 @@
 package com.insuretech.pms.rfp.dto;
 
-import com.insuretech.pms.rfp.entity.ProcessingStatus;
-import com.insuretech.pms.rfp.entity.Rfp;
-import com.insuretech.pms.rfp.entity.RfpStatus;
+import com.insuretech.pms.rfp.enums.ProcessingStatus;
+import com.insuretech.pms.rfp.reactive.entity.R2dbcRfp;
+import com.insuretech.pms.rfp.enums.RfpStatus;
 import lombok.*;
 
 import java.time.LocalDateTime;
@@ -28,7 +28,14 @@ public class RfpDto {
     private LocalDateTime updatedAt;
     private int requirementCount;
 
-    public static RfpDto fromEntity(Rfp rfp) {
+    public static RfpDto fromEntity(R2dbcRfp rfp) {
+        RfpStatus rfpStatus = null;
+        ProcessingStatus procStatus = null;
+        try {
+            if (rfp.getStatus() != null) rfpStatus = RfpStatus.valueOf(rfp.getStatus());
+            if (rfp.getProcessingStatus() != null) procStatus = ProcessingStatus.valueOf(rfp.getProcessingStatus());
+        } catch (IllegalArgumentException ignored) {}
+
         return RfpDto.builder()
                 .id(rfp.getId())
                 .projectId(rfp.getProjectId())
@@ -38,13 +45,13 @@ public class RfpDto {
                 .fileName(rfp.getFileName())
                 .fileType(rfp.getFileType())
                 .fileSize(rfp.getFileSize())
-                .status(rfp.getStatus())
-                .processingStatus(rfp.getProcessingStatus())
+                .status(rfpStatus)
+                .processingStatus(procStatus)
                 .processingMessage(rfp.getProcessingMessage())
                 .submittedAt(rfp.getSubmittedAt())
                 .createdAt(rfp.getCreatedAt())
                 .updatedAt(rfp.getUpdatedAt())
-                .requirementCount(rfp.getRequirements() != null ? rfp.getRequirements().size() : 0)
+                .requirementCount(0)
                 .build();
     }
 }

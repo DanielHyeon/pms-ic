@@ -1,6 +1,6 @@
 package com.insuretech.pms.project.dto;
 
-import com.insuretech.pms.project.entity.Issue;
+import com.insuretech.pms.project.reactive.entity.R2dbcIssue;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -31,15 +31,15 @@ public class IssueDto {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    public static IssueDto from(Issue issue) {
+    public static IssueDto from(R2dbcIssue issue) {
         return IssueDto.builder()
                 .id(issue.getId())
-                .projectId(issue.getProject() != null ? issue.getProject().getId() : null)
+                .projectId(issue.getProjectId())
                 .title(issue.getTitle())
                 .description(issue.getDescription())
-                .issueType(issue.getIssueType() != null ? issue.getIssueType().name() : null)
-                .priority(issue.getPriority() != null ? issue.getPriority().name() : null)
-                .status(issue.getStatus() != null ? issue.getStatus().name() : null)
+                .issueType(issue.getIssueType())
+                .priority(issue.getPriority())
+                .status(issue.getStatus())
                 .assignee(issue.getAssignee())
                 .reporter(issue.getReporter())
                 .reviewer(issue.getReviewer())

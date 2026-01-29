@@ -1,7 +1,7 @@
 package com.insuretech.pms.rag.service;
 
 import com.insuretech.pms.common.security.RoleAccessLevel;
-import com.insuretech.pms.project.entity.ProjectMember.ProjectRole;
+import com.insuretech.pms.project.reactive.entity.R2dbcProjectMember.ProjectRole;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.pdmodel.PDDocument;

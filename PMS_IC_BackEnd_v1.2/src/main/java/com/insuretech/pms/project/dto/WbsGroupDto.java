@@ -1,6 +1,6 @@
 package com.insuretech.pms.project.dto;
 
-import com.insuretech.pms.project.entity.WbsGroup;
+import com.insuretech.pms.project.reactive.entity.R2dbcWbsGroup;
 import lombok.Builder;
 import lombok.Data;
 
@@ -27,14 +27,14 @@ public class WbsGroupDto {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    public static WbsGroupDto from(WbsGroup entity) {
+    public static WbsGroupDto from(R2dbcWbsGroup entity) {
         return WbsGroupDto.builder()
                 .id(entity.getId())
-                .phaseId(entity.getPhase() != null ? entity.getPhase().getId() : null)
+                .phaseId(entity.getPhaseId())
                 .code(entity.getCode())
                 .name(entity.getName())
                 .description(entity.getDescription())
-                .status(entity.getStatus() != null ? entity.getStatus().name() : null)
+                .status(entity.getStatus())
                 .progress(entity.getProgress())
                 .plannedStartDate(entity.getPlannedStartDate())
                 .plannedEndDate(entity.getPlannedEndDate())

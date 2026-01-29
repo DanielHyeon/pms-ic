@@ -1,6 +1,9 @@
 package com.insuretech.pms.rfp.dto;
 
-import com.insuretech.pms.rfp.entity.*;
+import com.insuretech.pms.rfp.enums.Priority;
+import com.insuretech.pms.rfp.enums.RequirementCategory;
+import com.insuretech.pms.rfp.enums.RequirementStatus;
+import com.insuretech.pms.rfp.reactive.entity.R2dbcRequirement;
 import lombok.*;
 
 import java.time.LocalDate;
@@ -30,31 +33,39 @@ public class RequirementDto {
     private Integer estimatedEffort;
     private Integer actualEffort;
 
-    // Phase 3: Progress tracking fields
+    // Progress tracking fields
     private Integer storyPoints;
     private Integer estimatedEffortHours;
     private Integer actualEffortHours;
     private Integer remainingEffortHours;
     private Integer progressPercentage;
     private LocalDateTime lastProgressUpdate;
-    private Requirement.ProgressStage progressStage;
-    private Requirement.ProgressCalculationMethod progressCalcMethod;
+    private String progressCalcMethod;
 
     private Set<String> linkedTaskIds;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    public static RequirementDto fromEntity(Requirement req) {
+    public static RequirementDto fromEntity(R2dbcRequirement req) {
+        RequirementCategory cat = null;
+        Priority pri = null;
+        RequirementStatus stat = null;
+        try {
+            if (req.getCategory() != null) cat = RequirementCategory.valueOf(req.getCategory());
+            if (req.getPriority() != null) pri = Priority.valueOf(req.getPriority());
+            if (req.getStatus() != null) stat = RequirementStatus.valueOf(req.getStatus());
+        } catch (IllegalArgumentException ignored) {}
+
         return RequirementDto.builder()
                 .id(req.getId())
-                .rfpId(req.getRfp() != null ? req.getRfp().getId() : null)
+                .rfpId(req.getRfpId())
                 .projectId(req.getProjectId())
                 .code(req.getCode())
                 .title(req.getTitle())
                 .description(req.getDescription())
-                .category(req.getCategory())
-                .priority(req.getPriority())
-                .status(req.getStatus())
+                .category(cat)
+                .priority(pri)
+                .status(stat)
                 .progress(req.getProgress())
                 .sourceText(req.getSourceText())
                 .pageNumber(req.getPageNumber())
@@ -63,16 +74,13 @@ public class RequirementDto {
                 .acceptanceCriteria(req.getAcceptanceCriteria())
                 .estimatedEffort(req.getEstimatedEffort())
                 .actualEffort(req.getActualEffort())
-                // Phase 3: Progress tracking fields
                 .storyPoints(req.getStoryPoints())
                 .estimatedEffortHours(req.getEstimatedEffortHours())
                 .actualEffortHours(req.getActualEffortHours())
                 .remainingEffortHours(req.getRemainingEffortHours())
                 .progressPercentage(req.getProgressPercentage())
                 .lastProgressUpdate(req.getLastProgressUpdate())
-                .progressStage(req.getProgressStage())
                 .progressCalcMethod(req.getProgressCalcMethod())
-                .linkedTaskIds(req.getLinkedTaskIds())
                 .createdAt(req.getCreatedAt())
                 .updatedAt(req.getUpdatedAt())
                 .build();

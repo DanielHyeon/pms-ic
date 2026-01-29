@@ -1,6 +1,6 @@
 package com.insuretech.pms.chat.dto;
 
-import com.insuretech.pms.chat.entity.ChatMessage;
+import com.insuretech.pms.chat.reactive.entity.R2dbcChatMessage;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -31,7 +31,7 @@ public class AIChatContext {
     /**
      * Recent conversation messages for context
      */
-    private List<ChatMessage> recentMessages;
+    private List<R2dbcChatMessage> recentMessages;
 
     /**
      * Project ID for scoped queries (optional)

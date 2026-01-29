@@ -3,7 +3,7 @@ package com.insuretech.pms.chat.service;
 import com.insuretech.pms.chat.dto.AIChatContext;
 import com.insuretech.pms.chat.dto.ChatChunk;
 import com.insuretech.pms.chat.dto.ChatResponse;
-import com.insuretech.pms.chat.entity.ChatMessage;
+import com.insuretech.pms.chat.reactive.entity.R2dbcChatMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -49,7 +49,7 @@ public class ReactiveAIChatClient {
     public Flux<ChatChunk> streamChat(
             String userId,
             String message,
-            List<ChatMessage> chatHistory,
+            List<R2dbcChatMessage> chatHistory,
             String projectId,
             String userRole,
             Integer userAccessLevel
@@ -115,7 +115,7 @@ public class ReactiveAIChatClient {
 
     private Map<String, Object> buildRequest(
             String message,
-            List<ChatMessage> chatHistory,
+            List<R2dbcChatMessage> chatHistory,
             String userId,
             String projectId,
             String userRole,
@@ -123,7 +123,7 @@ public class ReactiveAIChatClient {
     ) {
         List<Map<String, String>> contextList = chatHistory.stream()
                 .map(msg -> Map.of(
-                        "role", msg.getRole().name().toLowerCase(),
+                        "role", msg.getRole().toLowerCase(),
                         "content", msg.getContent()
                 ))
                 .toList();

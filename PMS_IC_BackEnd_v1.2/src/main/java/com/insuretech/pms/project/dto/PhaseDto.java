@@ -1,6 +1,6 @@
 package com.insuretech.pms.project.dto;
 
-import com.insuretech.pms.project.entity.Phase;
+import com.insuretech.pms.project.reactive.entity.R2dbcPhase;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -24,14 +24,14 @@ public class PhaseDto {
     private Integer progress;
     private String description;
 
-    public static PhaseDto from(Phase phase) {
+    public static PhaseDto from(R2dbcPhase phase) {
         return PhaseDto.builder()
                 .id(phase.getId())
-                .projectId(phase.getProject() != null ? phase.getProject().getId() : null)
+                .projectId(phase.getProjectId())
                 .name(phase.getName())
                 .orderNum(phase.getOrderNum())
-                .status(phase.getStatus().name())
-                .gateStatus(phase.getGateStatus() != null ? phase.getGateStatus().name() : null)
+                .status(phase.getStatus())
+                .gateStatus(phase.getGateStatus())
                 .startDate(phase.getStartDate())
                 .endDate(phase.getEndDate())
                 .progress(phase.getProgress())

@@ -1,6 +1,6 @@
 package com.insuretech.pms.project.dto;
 
-import com.insuretech.pms.project.entity.Meeting;
+import com.insuretech.pms.project.reactive.entity.R2dbcMeeting;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -29,14 +29,14 @@ public class MeetingDto {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    public static MeetingDto from(Meeting meeting) {
+    public static MeetingDto from(R2dbcMeeting meeting) {
         return MeetingDto.builder()
                 .id(meeting.getId())
-                .projectId(meeting.getProject() != null ? meeting.getProject().getId() : null)
+                .projectId(meeting.getProjectId())
                 .title(meeting.getTitle())
                 .description(meeting.getDescription())
-                .meetingType(meeting.getMeetingType() != null ? meeting.getMeetingType().name() : null)
-                .status(meeting.getStatus() != null ? meeting.getStatus().name() : null)
+                .meetingType(meeting.getMeetingType())
+                .status(meeting.getStatus())
                 .scheduledAt(meeting.getScheduledAt())
                 .location(meeting.getLocation())
                 .organizer(meeting.getOrganizer())

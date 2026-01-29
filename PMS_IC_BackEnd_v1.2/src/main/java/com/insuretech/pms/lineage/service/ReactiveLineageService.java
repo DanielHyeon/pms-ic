@@ -3,7 +3,7 @@ package com.insuretech.pms.lineage.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.insuretech.pms.lineage.dto.LineageEventDto;
-import com.insuretech.pms.lineage.entity.LineageEventType;
+import com.insuretech.pms.lineage.enums.LineageEventType;
 import com.insuretech.pms.lineage.reactive.entity.R2dbcOutboxEvent;
 import com.insuretech.pms.lineage.reactive.repository.ReactiveOutboxEventRepository;
 import lombok.RequiredArgsConstructor;

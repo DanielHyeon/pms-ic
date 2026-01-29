@@ -20,6 +20,8 @@ public interface ReactiveProjectMemberRepository extends ReactiveCrudRepository<
 
     Mono<Boolean> existsByProjectIdAndUserId(String projectId, String userId);
 
+    Mono<Boolean> existsByProjectIdAndUserIdAndActiveTrue(String projectId, String userId);
+
     @Query("UPDATE project.project_members SET active = false WHERE project_id = :projectId AND user_id = :userId")
     Mono<Void> deactivateMember(String projectId, String userId);
 

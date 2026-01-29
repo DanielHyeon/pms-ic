@@ -9,7 +9,7 @@ import org.springframework.lang.Nullable;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-@Table(name = "outbox_events", schema = "project")
+@Table(name = "outbox_events", schema = "lineage")
 @Getter
 @Setter
 @NoArgsConstructor

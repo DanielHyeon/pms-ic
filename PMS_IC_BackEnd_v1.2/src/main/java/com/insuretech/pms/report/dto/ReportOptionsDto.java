@@ -1,6 +1,6 @@
 package com.insuretech.pms.report.dto;
 
-import com.insuretech.pms.report.entity.ReportScope;
+import com.insuretech.pms.report.enums.ReportScope;
 import lombok.*;
 
 import java.util.List;

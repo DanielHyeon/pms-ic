@@ -1,6 +1,7 @@
 package com.insuretech.pms.task.dto;
 
-import com.insuretech.pms.task.entity.Task;
+import com.insuretech.pms.task.reactive.entity.R2dbcTask;
+import com.insuretech.pms.task.reactive.entity.R2dbcWeeklyReport;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -31,19 +32,19 @@ public class TaskMetrics {
      * @param tasks List of tasks to analyze
      * @return TaskMetrics with calculated values
      */
-    public static TaskMetrics fromTasks(List<Task> tasks) {
+    public static TaskMetrics fromTasks(List<R2dbcTask> tasks) {
         int total = tasks.size();
         int completed = (int) tasks.stream()
-                .filter(t -> t.getStatus() == Task.TaskStatus.DONE)
+                .filter(t -> "DONE".equals(t.getStatus()))
                 .count();
         int inProgress = (int) tasks.stream()
-                .filter(t -> t.getStatus() == Task.TaskStatus.IN_PROGRESS)
+                .filter(t -> "IN_PROGRESS".equals(t.getStatus()))
                 .count();
         int todo = (int) tasks.stream()
-                .filter(t -> t.getStatus() == Task.TaskStatus.TODO)
+                .filter(t -> "TODO".equals(t.getStatus()))
                 .count();
         int blocked = (int) tasks.stream()
-                .filter(t -> t.getStatus() == Task.TaskStatus.REVIEW)
+                .filter(t -> "REVIEW".equals(t.getStatus()))
                 .count();
         double completionRate = total > 0 ? (completed * 100.0) / total : 0.0;
 
@@ -62,7 +63,7 @@ public class TaskMetrics {
      *
      * @param report The report to update
      */
-    public void applyTo(com.insuretech.pms.task.entity.WeeklyReport report) {
+    public void applyTo(R2dbcWeeklyReport report) {
         report.setTotalTasks(this.total);
         report.setCompletedTasks(this.completed);
         report.setInProgressTasks(this.inProgress);

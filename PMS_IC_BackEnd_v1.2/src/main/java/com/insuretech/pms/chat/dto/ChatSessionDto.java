@@ -1,6 +1,6 @@
 package com.insuretech.pms.chat.dto;
 
-import com.insuretech.pms.chat.entity.ChatSession;
+import com.insuretech.pms.chat.reactive.entity.R2dbcChatSession;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -21,7 +21,7 @@ public class ChatSessionDto {
     private LocalDateTime updatedAt;
     private Long messageCount; // 메시지 개수 (선택적)
 
-    public static ChatSessionDto from(ChatSession session) {
+    public static ChatSessionDto from(R2dbcChatSession session) {
         return ChatSessionDto.builder()
                 .id(session.getId())
                 .userId(session.getUserId())

@@ -1,6 +1,6 @@
 package com.insuretech.pms.education.dto;
 
-import com.insuretech.pms.education.entity.Education;
+import com.insuretech.pms.education.reactive.entity.R2dbcEducation;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -28,14 +28,14 @@ public class EducationDto {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    public static EducationDto from(Education education) {
+    public static EducationDto from(R2dbcEducation education) {
         return EducationDto.builder()
                 .id(education.getId())
                 .title(education.getTitle())
                 .description(education.getDescription())
-                .educationType(education.getEducationType() != null ? education.getEducationType().name() : null)
-                .category(education.getCategory() != null ? education.getCategory().name() : null)
-                .targetRole(education.getTargetRole() != null ? education.getTargetRole().name() : null)
+                .educationType(education.getEducationType())
+                .category(education.getCategory())
+                .targetRole(education.getTargetRole())
                 .durationHours(education.getDurationHours())
                 .prerequisites(education.getPrerequisites())
                 .learningObjectives(education.getLearningObjectives())

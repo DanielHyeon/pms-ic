@@ -1,6 +1,6 @@
 package com.insuretech.pms.education.dto;
 
-import com.insuretech.pms.education.entity.EducationHistory;
+import com.insuretech.pms.education.reactive.entity.R2dbcEducationHistory;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -28,16 +28,34 @@ public class EducationHistoryDto {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    public static EducationHistoryDto from(EducationHistory history) {
+    public static EducationHistoryDto from(R2dbcEducationHistory history) {
         return EducationHistoryDto.builder()
                 .id(history.getId())
-                .sessionId(history.getSession() != null ? history.getSession().getId() : null)
-                .educationTitle(history.getSession() != null && history.getSession().getEducation() != null
-                        ? history.getSession().getEducation().getTitle() : null)
+                .sessionId(history.getSessionId())
+                .educationTitle(null) // Education title must be populated separately via join
                 .participantId(history.getParticipantId())
                 .participantName(history.getParticipantName())
                 .participantDepartment(history.getParticipantDepartment())
-                .completionStatus(history.getCompletionStatus() != null ? history.getCompletionStatus().name() : null)
+                .completionStatus(history.getCompletionStatus())
+                .registeredAt(history.getRegisteredAt())
+                .completedAt(history.getCompletedAt())
+                .score(history.getScore())
+                .feedback(history.getFeedback())
+                .certificateIssued(history.getCertificateIssued())
+                .createdAt(history.getCreatedAt())
+                .updatedAt(history.getUpdatedAt())
+                .build();
+    }
+
+    public static EducationHistoryDto from(R2dbcEducationHistory history, String educationTitle) {
+        return EducationHistoryDto.builder()
+                .id(history.getId())
+                .sessionId(history.getSessionId())
+                .educationTitle(educationTitle)
+                .participantId(history.getParticipantId())
+                .participantName(history.getParticipantName())
+                .participantDepartment(history.getParticipantDepartment())
+                .completionStatus(history.getCompletionStatus())
                 .registeredAt(history.getRegisteredAt())
                 .completedAt(history.getCompletedAt())
                 .score(history.getScore())

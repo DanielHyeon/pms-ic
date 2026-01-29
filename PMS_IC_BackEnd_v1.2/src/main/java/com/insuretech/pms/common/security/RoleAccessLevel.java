@@ -1,7 +1,7 @@
 package com.insuretech.pms.common.security;
 
-import com.insuretech.pms.auth.entity.User.UserRole;
-import com.insuretech.pms.project.entity.ProjectMember.ProjectRole;
+import com.insuretech.pms.auth.reactive.entity.R2dbcUser.UserRole;
+import com.insuretech.pms.project.reactive.entity.R2dbcProjectMember.ProjectRole;
 
 import java.util.Map;
 
@@ -22,7 +22,6 @@ public final class RoleAccessLevel {
             ProjectRole.BUSINESS_ANALYST, 2,
             ProjectRole.QA, 2,
             ProjectRole.DEVELOPER, 1,
-            ProjectRole.AUDITOR, 0,
             ProjectRole.MEMBER, 1
     );
 
@@ -45,7 +44,7 @@ public final class RoleAccessLevel {
         return USER_ROLE_LEVELS.getOrDefault(role, 1);
     }
 
-    public static int getLevel(String roleName) {
+    public static int getLevelByName(String roleName) {
         if (roleName == null || roleName.isBlank()) {
             return 1;
         }

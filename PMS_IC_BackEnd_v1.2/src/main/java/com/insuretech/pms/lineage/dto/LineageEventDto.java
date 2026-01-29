@@ -1,6 +1,6 @@
 package com.insuretech.pms.lineage.dto;
 
-import com.insuretech.pms.lineage.entity.LineageEventType;
+import com.insuretech.pms.lineage.enums.LineageEventType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

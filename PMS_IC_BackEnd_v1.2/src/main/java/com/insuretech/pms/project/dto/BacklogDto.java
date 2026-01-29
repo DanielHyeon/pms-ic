@@ -1,6 +1,6 @@
 package com.insuretech.pms.project.dto;
 
-import com.insuretech.pms.project.entity.Backlog;
+import com.insuretech.pms.project.reactive.entity.R2dbcBacklog;
 
 import java.time.LocalDateTime;
 
@@ -58,13 +58,13 @@ public class BacklogDto {
     public String getUpdatedBy() { return updatedBy; }
     public void setUpdatedBy(String updatedBy) { this.updatedBy = updatedBy; }
 
-    public static BacklogDto fromEntity(Backlog backlog) {
+    public static BacklogDto fromEntity(R2dbcBacklog backlog) {
         BacklogDto dto = new BacklogDto();
         dto.setId(backlog.getId());
         dto.setProjectId(backlog.getProjectId());
         dto.setName(backlog.getName());
         dto.setDescription(backlog.getDescription());
-        dto.setStatus(backlog.getStatus().name());
+        dto.setStatus(backlog.getStatus());
         dto.setCreatedAt(backlog.getCreatedAt());
         dto.setUpdatedAt(backlog.getUpdatedAt());
         dto.setCreatedBy(backlog.getCreatedBy());

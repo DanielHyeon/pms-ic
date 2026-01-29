@@ -1,6 +1,6 @@
 package com.insuretech.pms.project.dto;
 
-import com.insuretech.pms.project.entity.WbsDependency;
+import com.insuretech.pms.project.reactive.entity.R2dbcWbsDependency;
 import lombok.*;
 
 @Data
@@ -17,14 +17,14 @@ public class WbsDependencyDto {
     private Integer lagDays;
     private String projectId;
 
-    public static WbsDependencyDto from(WbsDependency entity) {
+    public static WbsDependencyDto from(R2dbcWbsDependency entity) {
         return WbsDependencyDto.builder()
             .id(entity.getId())
-            .predecessorType(entity.getPredecessorType().name())
+            .predecessorType(entity.getPredecessorType())
             .predecessorId(entity.getPredecessorId())
-            .successorType(entity.getSuccessorType().name())
+            .successorType(entity.getSuccessorType())
             .successorId(entity.getSuccessorId())
-            .dependencyType(entity.getDependencyType().name())
+            .dependencyType(entity.getDependencyType())
             .lagDays(entity.getLagDays())
             .projectId(entity.getProjectId())
             .build();

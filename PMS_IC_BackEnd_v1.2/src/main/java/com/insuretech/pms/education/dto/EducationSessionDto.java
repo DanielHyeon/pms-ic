@@ -1,6 +1,6 @@
 package com.insuretech.pms.education.dto;
 
-import com.insuretech.pms.education.entity.EducationSession;
+import com.insuretech.pms.education.reactive.entity.R2dbcEducationSession;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -28,11 +28,11 @@ public class EducationSessionDto {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    public static EducationSessionDto from(EducationSession session) {
+    public static EducationSessionDto from(R2dbcEducationSession session) {
         return EducationSessionDto.builder()
                 .id(session.getId())
-                .educationId(session.getEducation() != null ? session.getEducation().getId() : null)
-                .educationTitle(session.getEducation() != null ? session.getEducation().getTitle() : null)
+                .educationId(session.getEducationId())
+                .educationTitle(null)
                 .sessionName(session.getSessionName())
                 .scheduledAt(session.getScheduledAt())
                 .endAt(session.getEndAt())
@@ -40,7 +40,7 @@ public class EducationSessionDto {
                 .instructor(session.getInstructor())
                 .maxParticipants(session.getMaxParticipants())
                 .currentParticipants(session.getCurrentParticipants())
-                .status(session.getStatus() != null ? session.getStatus().name() : null)
+                .status(session.getStatus())
                 .notes(session.getNotes())
                 .createdAt(session.getCreatedAt())
                 .updatedAt(session.getUpdatedAt())

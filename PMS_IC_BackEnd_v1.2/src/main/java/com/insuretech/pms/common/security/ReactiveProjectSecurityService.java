@@ -2,9 +2,7 @@ package com.insuretech.pms.common.security;
 
 import com.insuretech.pms.auth.reactive.entity.R2dbcUser;
 import com.insuretech.pms.auth.reactive.repository.ReactiveUserRepository;
-import com.insuretech.pms.project.entity.ProjectMember;
-import com.insuretech.pms.project.entity.ProjectMember.ProjectRole;
-import com.insuretech.pms.project.repository.ProjectMemberRepository;
+import com.insuretech.pms.project.reactive.repository.ReactiveProjectMemberRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -12,21 +10,20 @@ import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 
 import java.util.Arrays;
 import java.util.Optional;
 
 /**
  * Reactive service for project-scoped authorization checks.
- * Uses R2DBC for user lookup, JPA (wrapped) for project member checks.
+ * Uses R2DBC for both user lookup and project member checks.
  */
 @Slf4j
 @Service("reactiveProjectSecurity")
 @RequiredArgsConstructor
 public class ReactiveProjectSecurityService {
 
-    private final ProjectMemberRepository projectMemberRepository;
+    private final ReactiveProjectMemberRepository reactiveProjectMemberRepository;
     private final ReactiveUserRepository reactiveUserRepository;
 
     /**
@@ -54,16 +51,13 @@ public class ReactiveProjectSecurityService {
                                     return Mono.just(true);
                                 }
 
-                                return Mono.fromCallable(() ->
-                                                projectMemberRepository.findByProjectIdAndUserIdAndActiveTrue(projectId, userId))
-                                        .subscribeOn(Schedulers.boundedElastic())
-                                        .map(memberOpt -> {
-                                            if (memberOpt.isEmpty()) {
-                                                return false;
-                                            }
-                                            String userRole = memberOpt.get().getRole().name();
+                                return reactiveProjectMemberRepository
+                                        .findByProjectIdAndUserIdAndActiveTrue(projectId, userId)
+                                        .map(member -> {
+                                            String userRole = member.getRole();
                                             return Arrays.asList(requiredRoles).contains(userRole);
-                                        });
+                                        })
+                                        .defaultIfEmpty(false);
                             });
                 })
                 .defaultIfEmpty(false);
@@ -84,9 +78,8 @@ public class ReactiveProjectSecurityService {
                                     if (hasSystemAccess) {
                                         return Mono.just(true);
                                     }
-                                    return Mono.fromCallable(() ->
-                                                    projectMemberRepository.existsByProjectIdAndUserIdAndActiveTrue(projectId, userId))
-                                            .subscribeOn(Schedulers.boundedElastic());
+                                    return reactiveProjectMemberRepository
+                                            .existsByProjectIdAndUserIdAndActiveTrue(projectId, userId);
                                 })
                 )
                 .defaultIfEmpty(false);
@@ -126,12 +119,12 @@ public class ReactiveProjectSecurityService {
     /**
      * Get the project role of current user for the specified project.
      */
-    public Mono<Optional<ProjectRole>> getProjectRole(String projectId) {
+    public Mono<Optional<String>> getProjectRole(String projectId) {
         return getCurrentUserId()
-                .flatMap(userId -> Mono.fromCallable(() ->
-                                projectMemberRepository.findByProjectIdAndUserIdAndActiveTrue(projectId, userId)
-                                        .map(ProjectMember::getRole))
-                        .subscribeOn(Schedulers.boundedElastic()))
+                .flatMap(userId -> reactiveProjectMemberRepository
+                        .findByProjectIdAndUserIdAndActiveTrue(projectId, userId)
+                        .map(member -> Optional.of(member.getRole()))
+                        .defaultIfEmpty(Optional.empty()))
                 .defaultIfEmpty(Optional.empty());
     }
 

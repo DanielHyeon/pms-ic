@@ -1,6 +1,6 @@
 package com.insuretech.pms.project.dto;
 
-import com.insuretech.pms.project.entity.Project;
+import com.insuretech.pms.project.reactive.entity.R2dbcProject;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -10,7 +10,6 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Data
 @Builder
@@ -32,21 +31,41 @@ public class ProjectDto {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    public static ProjectDto from(Project project) {
+    public static ProjectDto from(R2dbcProject project) {
         return ProjectDto.builder()
                 .id(project.getId())
                 .name(project.getName())
                 .description(project.getDescription())
-                .status(project.getStatus().name())
+                .status(project.getStatus())
                 .startDate(project.getStartDate())
                 .endDate(project.getEndDate())
                 .budget(project.getBudget())
+                .aiWeight(project.getAiWeight())
+                .siWeight(project.getSiWeight())
                 .progress(project.getProgress())
-                .isDefault(project.isDefault())
-                .phases(project.getPhases() != null ?
-                        project.getPhases().stream()
-                                .map(PhaseDto::from)
-                                .collect(Collectors.toList()) : null)
+                .isDefault(project.getIsDefault())
+                .phases(null) // Phases must be populated separately via join
+                .createdAt(project.getCreatedAt())
+                .updatedAt(project.getUpdatedAt())
+                .build();
+    }
+
+    public static ProjectDto from(R2dbcProject project, List<PhaseDto> phases) {
+        return ProjectDto.builder()
+                .id(project.getId())
+                .name(project.getName())
+                .description(project.getDescription())
+                .status(project.getStatus())
+                .startDate(project.getStartDate())
+                .endDate(project.getEndDate())
+                .budget(project.getBudget())
+                .aiWeight(project.getAiWeight())
+                .siWeight(project.getSiWeight())
+                .progress(project.getProgress())
+                .isDefault(project.getIsDefault())
+                .phases(phases)
+                .createdAt(project.getCreatedAt())
+                .updatedAt(project.getUpdatedAt())
                 .build();
     }
 }

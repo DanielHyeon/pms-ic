@@ -55,7 +55,7 @@ services:
     container_name: pms-backend
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-pms_db}
+      SPRING_R2DBC_URL: r2dbc:postgresql://postgres:5432/${POSTGRES_DB:-pms_db}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-pms_user}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-pms_password}
       SPRING_REDIS_HOST: ${REDIS_HOST:-redis}

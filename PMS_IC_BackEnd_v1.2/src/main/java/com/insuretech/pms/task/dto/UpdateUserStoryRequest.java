@@ -1,6 +1,6 @@
 package com.insuretech.pms.task.dto;
 
-import com.insuretech.pms.task.entity.UserStory;
+import com.insuretech.pms.task.reactive.entity.R2dbcUserStory;
 import lombok.Data;
 
 import java.util.List;
@@ -12,11 +12,11 @@ public class UpdateUserStoryRequest {
 
     private String description;
 
-    private UserStory.Priority priority;
+    private R2dbcUserStory.Priority priority;
 
     private Integer storyPoints;
 
-    private UserStory.StoryStatus status;
+    private R2dbcUserStory.StoryStatus status;
 
     private String epic;
 

@@ -2,7 +2,7 @@
 
 **Project**: Insurance Claims Project Management System with AI Support
 **Status**: ✅ Production Ready
-**Last Updated**: 2026-01-28
+**Last Updated**: 2026-01-30
 
 ---
 
@@ -123,11 +123,11 @@
 | Layer | Technology | Version |
 |-------|------------|---------|
 | Frontend | React + TypeScript + Vite | React 18, Vite 5 |
-| Backend | Spring Boot + JPA | Spring Boot 3.2 |
+| Backend | Spring Boot + WebFlux + R2DBC | Spring Boot 3.2 |
 | LLM Service | Flask + LangGraph | Python 3.11 |
-| Database | PostgreSQL | 15 |
-| Graph DB | Neo4j | 5.20 |
-| Cache | Redis | 7 |
+| Database | PostgreSQL (R2DBC) | 15 |
+| Graph DB | Neo4j (Outbox Pattern) | 5.20 |
+| Cache | Redis (Reactive) | 7 |
 | Container | Docker Compose | - |
 
 ---
@@ -167,4 +167,4 @@ docker-compose up -d
 
 ---
 
-*Last Updated: 2026-01-28*
+*Last Updated: 2026-01-30*

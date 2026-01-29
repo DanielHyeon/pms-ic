@@ -7,7 +7,7 @@ import com.insuretech.pms.chat.dto.ChatRequest;
 import com.insuretech.pms.chat.dto.ChatResponse;
 import com.insuretech.pms.chat.dto.ChatStreamRequest;
 import com.insuretech.pms.chat.dto.sse.SseEventBuilder;
-import com.insuretech.pms.chat.entity.ChatMessage;
+import com.insuretech.pms.chat.reactive.entity.R2dbcChatMessage;
 import com.insuretech.pms.chat.gateway.LlmGatewayService;
 import com.insuretech.pms.chat.gateway.dto.GatewayRequest;
 import com.insuretech.pms.chat.reactive.entity.R2dbcChatMessage;
@@ -161,7 +161,7 @@ public class ReactiveChatService {
         // Add conversation history
         for (R2dbcChatMessage msg : recentMessages) {
             messages.add(ChatMessageDto.builder()
-                    .role(msg.getRole().toLowerCase())
+                    .role(msg.getRole() != null ? msg.getRole().toLowerCase() : "user")
                     .content(msg.getContent())
                     .build());
         }
@@ -301,7 +301,7 @@ public class ReactiveChatService {
                 .then(reactiveRedisTemplate.expire(redisKey, Duration.ofHours(1)));
     }
 
-    private AIChatContext buildContext(String userId, ChatRequest request, List<ChatMessage> recentMessages) {
+    private AIChatContext buildContext(String userId, ChatRequest request, List<R2dbcChatMessage> recentMessages) {
         return AIChatContext.builder()
                 .userId(userId)
                 .message(request.getMessage())
@@ -312,14 +312,9 @@ public class ReactiveChatService {
                 .build();
     }
 
-    private List<ChatMessage> toJpaMessages(List<R2dbcChatMessage> r2dbcMessages) {
-        return r2dbcMessages.stream()
-                .map(msg -> ChatMessage.builder()
-                        .id(msg.getId())
-                        .role(ChatMessage.Role.valueOf(msg.getRole()))
-                        .content(msg.getContent())
-                        .build())
-                .toList();
+    private List<R2dbcChatMessage> toJpaMessages(List<R2dbcChatMessage> r2dbcMessages) {
+        // R2DBC messages are already in the correct format, just return them
+        return r2dbcMessages;
     }
 
     public Flux<R2dbcChatMessage> getHistory(String sessionId) {

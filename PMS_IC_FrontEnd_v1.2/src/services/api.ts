@@ -1,6 +1,6 @@
 import { DEFAULT_TEMPLATES, getDefaultTemplateById } from '../data/defaultTemplates';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8083/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8083/api/v2';
 
 // Types for Excel import/export
 export interface ImportError {
@@ -33,7 +33,7 @@ export class ApiService {
 
   private async checkBackendAvailability() {
     try {
-      const healthUrl = API_BASE_URL.replace('/api', '') + '/actuator/health';
+      const healthUrl = API_BASE_URL.replace('/api/v2', '').replace('/api', '') + '/actuator/health';
       const response = await fetch(healthUrl, {
         method: 'GET',
         signal: AbortSignal.timeout(5000), // 타임아웃을 5초로 증가

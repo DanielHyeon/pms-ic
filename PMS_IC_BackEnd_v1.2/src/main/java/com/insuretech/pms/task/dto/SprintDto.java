@@ -1,6 +1,6 @@
 package com.insuretech.pms.task.dto;
 
-import com.insuretech.pms.task.entity.Sprint;
+import com.insuretech.pms.task.reactive.entity.R2dbcSprint;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -70,7 +70,7 @@ public class SprintDto {
     public String getUpdatedBy() { return updatedBy; }
     public void setUpdatedBy(String updatedBy) { this.updatedBy = updatedBy; }
 
-    public static SprintDto fromEntity(Sprint sprint) {
+    public static SprintDto fromEntity(R2dbcSprint sprint) {
         SprintDto dto = new SprintDto();
         dto.setId(sprint.getId());
         dto.setProjectId(sprint.getProjectId());
@@ -78,7 +78,7 @@ public class SprintDto {
         dto.setGoal(sprint.getGoal());
         dto.setStartDate(sprint.getStartDate());
         dto.setEndDate(sprint.getEndDate());
-        dto.setStatus(sprint.getStatus().name());
+        dto.setStatus(sprint.getStatus());
         dto.setCreatedAt(sprint.getCreatedAt());
         dto.setUpdatedAt(sprint.getUpdatedAt());
         dto.setCreatedBy(sprint.getCreatedBy());

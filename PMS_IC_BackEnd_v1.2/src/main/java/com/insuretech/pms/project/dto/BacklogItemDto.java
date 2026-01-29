@@ -1,6 +1,6 @@
 package com.insuretech.pms.project.dto;
 
-import com.insuretech.pms.project.entity.BacklogItem;
+import com.insuretech.pms.project.reactive.entity.R2dbcBacklogItem;
 
 import java.time.LocalDateTime;
 
@@ -95,16 +95,16 @@ public class BacklogItemDto {
     public String getUpdatedBy() { return updatedBy; }
     public void setUpdatedBy(String updatedBy) { this.updatedBy = updatedBy; }
 
-    public static BacklogItemDto fromEntity(BacklogItem item) {
+    public static BacklogItemDto fromEntity(R2dbcBacklogItem item) {
         BacklogItemDto dto = new BacklogItemDto();
         dto.setId(item.getId());
-        dto.setBacklogId(item.getBacklog().getId());
-        dto.setRequirementId(item.getRequirement() != null ? item.getRequirement().getId() : null);
-        dto.setOriginType(item.getOriginType().name());
+        dto.setBacklogId(item.getBacklogId());
+        dto.setRequirementId(item.getRequirementId());
+        dto.setOriginType(item.getOriginType());
         dto.setEpicId(item.getEpicId());
-        dto.setEpicIdRef(item.getEpic() != null ? item.getEpic().getId() : null);
+        dto.setEpicIdRef(item.getEpicIdRef());
         dto.setPriorityOrder(item.getPriorityOrder());
-        dto.setStatus(item.getStatus().name());
+        dto.setStatus(item.getStatus());
         dto.setStoryPoints(item.getStoryPoints());
         dto.setEstimatedEffortHours(item.getEstimatedEffortHours());
         dto.setAcceptanceCriteria(item.getAcceptanceCriteria());

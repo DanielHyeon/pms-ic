@@ -1,7 +1,7 @@
 package com.insuretech.pms.auth.dto;
 
-import com.insuretech.pms.auth.entity.User;
-import com.insuretech.pms.project.entity.ProjectMember;
+import com.insuretech.pms.auth.reactive.entity.R2dbcUser;
+import com.insuretech.pms.project.reactive.entity.R2dbcProjectMember;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -34,12 +34,12 @@ public class LoginResponse {
         private String systemRole;
         private String department;
 
-        public static UserInfo from(User user) {
+        public static UserInfo from(R2dbcUser user) {
             String systemRole = null;
             String role = null;
 
             if (user.getRole() != null) {
-                String roleName = user.getRole().name();
+                String roleName = user.getRole();
                 role = roleName.toLowerCase();
 
                 // System-wide roles: ADMIN and AUDITOR
@@ -68,11 +68,19 @@ public class LoginResponse {
         private String projectName;
         private String role;
 
-        public static ProjectRoleInfo from(ProjectMember member) {
+        public static ProjectRoleInfo from(R2dbcProjectMember member) {
             return ProjectRoleInfo.builder()
-                    .projectId(member.getProject().getId())
-                    .projectName(member.getProject().getName())
-                    .role(member.getRole().name().toLowerCase())
+                    .projectId(member.getProjectId())
+                    .projectName(null) // Project name must be populated separately via join
+                    .role(member.getRole().toLowerCase())
+                    .build();
+        }
+
+        public static ProjectRoleInfo from(R2dbcProjectMember member, String projectName) {
+            return ProjectRoleInfo.builder()
+                    .projectId(member.getProjectId())
+                    .projectName(projectName)
+                    .role(member.getRole().toLowerCase())
                     .build();
         }
     }

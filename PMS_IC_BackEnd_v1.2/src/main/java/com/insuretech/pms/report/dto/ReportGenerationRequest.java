@@ -1,8 +1,8 @@
 package com.insuretech.pms.report.dto;
 
-import com.insuretech.pms.report.entity.GenerationMode;
-import com.insuretech.pms.report.entity.ReportScope;
-import com.insuretech.pms.report.entity.ReportType;
+import com.insuretech.pms.report.enums.GenerationMode;
+import com.insuretech.pms.report.enums.ReportScope;
+import com.insuretech.pms.report.enums.ReportType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;

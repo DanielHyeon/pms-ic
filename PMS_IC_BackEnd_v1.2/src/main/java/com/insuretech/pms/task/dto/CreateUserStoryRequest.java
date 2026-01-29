@@ -1,6 +1,6 @@
 package com.insuretech.pms.task.dto;
 
-import com.insuretech.pms.task.entity.UserStory;
+import com.insuretech.pms.task.reactive.entity.R2dbcUserStory;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
@@ -16,7 +16,7 @@ public class CreateUserStoryRequest {
     private String description;
 
     @NotNull(message = "Priority is required")
-    private UserStory.Priority priority;
+    private R2dbcUserStory.Priority priority;
 
     private Integer storyPoints;
 

@@ -21,6 +21,9 @@ public class R2dbcTask extends R2dbcBaseEntity {
     @Column("id")
     private String id;
 
+    @Column("project_id")
+    private String projectId;
+
     @Column("column_id")
     private String columnId;
 

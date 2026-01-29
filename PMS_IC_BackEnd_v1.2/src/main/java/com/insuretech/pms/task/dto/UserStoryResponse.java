@@ -1,7 +1,7 @@
 package com.insuretech.pms.task.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
-import com.insuretech.pms.task.entity.UserStory;
+import com.insuretech.pms.task.reactive.entity.R2dbcUserStory;
 import lombok.Builder;
 import lombok.Data;
 
@@ -24,11 +24,11 @@ public class UserStoryResponse {
 
     private String acceptanceCriteria;
 
-    private UserStory.Priority priority;
+    private String priority;
 
     private Integer storyPoints;
 
-    private UserStory.StoryStatus status;
+    private String status;
 
     private String assigneeId;
 
@@ -48,11 +48,11 @@ public class UserStoryResponse {
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime updatedAt;
 
-    public static UserStoryResponse fromEntity(UserStory story, List<String> acceptanceCriteriaList) {
+    public static UserStoryResponse fromEntity(R2dbcUserStory story, List<String> acceptanceCriteriaList) {
         return UserStoryResponse.builder()
                 .id(story.getId())
                 .projectId(story.getProjectId())
-                .sprintId(story.getSprint() != null ? story.getSprint().getId() : null)
+                .sprintId(story.getSprintId())
                 .title(story.getTitle())
                 .description(story.getDescription())
                 .acceptanceCriteria(story.getAcceptanceCriteria())

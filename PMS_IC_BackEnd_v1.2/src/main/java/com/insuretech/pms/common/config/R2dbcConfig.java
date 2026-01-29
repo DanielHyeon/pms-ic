@@ -11,7 +11,7 @@ import org.springframework.transaction.reactive.TransactionalOperator;
 
 @Configuration
 @EnableR2dbcAuditing
-@EnableR2dbcRepositories(basePackages = "com.insuretech.pms.**.reactive.repository")
+@EnableR2dbcRepositories(basePackages = "com.insuretech.pms")
 public class R2dbcConfig {
 
     @Bean

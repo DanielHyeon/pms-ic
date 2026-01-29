@@ -1,6 +1,6 @@
 package com.insuretech.pms.project.dto;
 
-import com.insuretech.pms.project.entity.WbsItem;
+import com.insuretech.pms.project.reactive.entity.R2dbcWbsItem;
 import lombok.Builder;
 import lombok.Data;
 
@@ -30,15 +30,15 @@ public class WbsItemDto {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    public static WbsItemDto from(WbsItem entity) {
+    public static WbsItemDto from(R2dbcWbsItem entity) {
         return WbsItemDto.builder()
                 .id(entity.getId())
-                .groupId(entity.getGroup() != null ? entity.getGroup().getId() : null)
-                .phaseId(entity.getPhase() != null ? entity.getPhase().getId() : null)
+                .groupId(entity.getGroupId())
+                .phaseId(entity.getPhaseId())
                 .code(entity.getCode())
                 .name(entity.getName())
                 .description(entity.getDescription())
-                .status(entity.getStatus() != null ? entity.getStatus().name() : null)
+                .status(entity.getStatus())
                 .progress(entity.getProgress())
                 .plannedStartDate(entity.getPlannedStartDate())
                 .plannedEndDate(entity.getPlannedEndDate())

@@ -1,6 +1,6 @@
 package com.insuretech.pms.project.dto;
 
-import com.insuretech.pms.project.entity.WbsSnapshot;
+import com.insuretech.pms.project.reactive.entity.R2dbcWbsSnapshot;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -36,21 +36,21 @@ public class WbsSnapshotDto {
     private String restoredBy;
 
     /**
-     * Create DTO from entity
+     * Create DTO from R2DBC entity
      */
-    public static WbsSnapshotDto from(WbsSnapshot entity) {
+    public static WbsSnapshotDto from(R2dbcWbsSnapshot entity) {
         return WbsSnapshotDto.builder()
                 .id(entity.getId())
                 .phaseId(entity.getPhaseId())
                 .projectId(entity.getProjectId())
                 .snapshotName(entity.getSnapshotName())
                 .description(entity.getDescription())
-                .snapshotType(entity.getSnapshotType().name())
+                .snapshotType(entity.getSnapshotType())
                 .groupCount(entity.getGroupCount())
                 .itemCount(entity.getItemCount())
                 .taskCount(entity.getTaskCount())
                 .dependencyCount(entity.getDependencyCount())
-                .status(entity.getStatus().name())
+                .status(entity.getStatus())
                 .createdAt(entity.getCreatedAt())
                 .createdBy(entity.getCreatedBy())
                 .restoredAt(entity.getRestoredAt())
@@ -61,7 +61,7 @@ public class WbsSnapshotDto {
     /**
      * Create DTO from entity with phase and project names
      */
-    public static WbsSnapshotDto from(WbsSnapshot entity, String phaseName, String projectName) {
+    public static WbsSnapshotDto from(R2dbcWbsSnapshot entity, String phaseName, String projectName) {
         WbsSnapshotDto dto = from(entity);
         dto.setPhaseName(phaseName);
         dto.setProjectName(projectName);

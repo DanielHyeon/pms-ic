@@ -1,6 +1,6 @@
 package com.insuretech.pms.project.dto;
 
-import com.insuretech.pms.project.entity.Feature;
+import com.insuretech.pms.project.reactive.entity.R2dbcFeature;
 import lombok.Builder;
 import lombok.Data;
 
@@ -22,17 +22,34 @@ public class FeatureDto {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    public static FeatureDto from(Feature entity) {
+    public static FeatureDto from(R2dbcFeature entity) {
         return FeatureDto.builder()
                 .id(entity.getId())
-                .epicId(entity.getEpic() != null ? entity.getEpic().getId() : null)
-                .partId(entity.getPart() != null ? entity.getPart().getId() : null)
-                .partName(entity.getPart() != null ? entity.getPart().getName() : null)
+                .epicId(entity.getEpicId())
+                .partId(entity.getPartId())
+                .partName(null) // Part name must be populated separately via join
                 .wbsGroupId(entity.getWbsGroupId())
                 .name(entity.getName())
                 .description(entity.getDescription())
-                .status(entity.getStatus() != null ? entity.getStatus().name() : null)
-                .priority(entity.getPriority() != null ? entity.getPriority().name() : null)
+                .status(entity.getStatus())
+                .priority(entity.getPriority())
+                .orderNum(entity.getOrderNum())
+                .createdAt(entity.getCreatedAt())
+                .updatedAt(entity.getUpdatedAt())
+                .build();
+    }
+
+    public static FeatureDto from(R2dbcFeature entity, String partName) {
+        return FeatureDto.builder()
+                .id(entity.getId())
+                .epicId(entity.getEpicId())
+                .partId(entity.getPartId())
+                .partName(partName)
+                .wbsGroupId(entity.getWbsGroupId())
+                .name(entity.getName())
+                .description(entity.getDescription())
+                .status(entity.getStatus())
+                .priority(entity.getPriority())
                 .orderNum(entity.getOrderNum())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())

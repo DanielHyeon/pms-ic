@@ -1,6 +1,6 @@
 package com.insuretech.pms.project.dto;
 
-import com.insuretech.pms.project.entity.Kpi;
+import com.insuretech.pms.project.reactive.entity.R2dbcKpi;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,14 +18,14 @@ public class KpiDto {
     private String current;
     private String status;
 
-    public static KpiDto from(Kpi kpi) {
+    public static KpiDto from(R2dbcKpi kpi) {
         return KpiDto.builder()
                 .id(kpi.getId())
-                .phaseId(kpi.getPhase() != null ? kpi.getPhase().getId() : null)
+                .phaseId(kpi.getPhaseId())
                 .name(kpi.getName())
                 .target(kpi.getTarget())
                 .current(kpi.getCurrent())
-                .status(kpi.getStatus() != null ? kpi.getStatus().name() : null)
+                .status(kpi.getStatus())
                 .build();
     }
 }

@@ -26,6 +26,20 @@ public interface ReactiveTaskRepository extends ReactiveCrudRepository<R2dbcTask
 
     Mono<Integer> countByColumnId(String columnId);
 
+    // Direct project_id queries (tenant isolation)
+    Flux<R2dbcTask> findByProjectIdOrderByOrderNumAsc(String projectId);
+
+    Flux<R2dbcTask> findByProjectIdAndStatus(String projectId, String status);
+
+    Flux<R2dbcTask> findByProjectIdAndAssigneeId(String projectId, String assigneeId);
+
+    Flux<R2dbcTask> findByProjectIdAndSprintId(String projectId, String sprintId);
+
+    Mono<Long> countByProjectId(String projectId);
+
+    Mono<Long> countByProjectIdAndStatus(String projectId, String status);
+
+    // Legacy join-based query (kept for backwards compatibility)
     @Query("SELECT t.* FROM task.tasks t JOIN task.kanban_columns kc ON t.column_id = kc.id WHERE kc.project_id = :projectId ORDER BY kc.order_num, t.order_num")
-    Flux<R2dbcTask> findByProjectId(String projectId);
+    Flux<R2dbcTask> findByProjectIdWithColumnOrder(String projectId);
 }
