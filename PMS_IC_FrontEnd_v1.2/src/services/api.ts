@@ -1950,7 +1950,7 @@ export class ApiService {
 
   // ========== WBS API ==========
   async getWbsGroups(phaseId: string) {
-    const response = await this.fetchWithFallback(`/phases/${phaseId}/wbs/groups`, {}, { data: [] });
+    const response = await this.fetchWithFallback(`/phases/${phaseId}/wbs-groups`, {}, { data: [] });
     return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
   }
 
@@ -1960,7 +1960,7 @@ export class ApiService {
   }
 
   async createWbsGroup(phaseId: string, data: any) {
-    const response = await this.fetchWithFallback(`/phases/${phaseId}/wbs/groups`, {
+    const response = await this.fetchWithFallback(`/phases/${phaseId}/wbs-groups`, {
       method: 'POST',
       body: JSON.stringify(data),
     }, { data: { ...data, id: `wbs-grp-${Date.now()}` } });
