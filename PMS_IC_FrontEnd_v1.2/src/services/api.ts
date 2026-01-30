@@ -1,6 +1,11 @@
 import { DEFAULT_TEMPLATES, getDefaultTemplateById } from '../data/defaultTemplates';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8083/api/v2';
+// Base URL without version prefix - version is added per-endpoint
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8083/api';
+
+// API version prefixes
+const V2 = '/v2'; // For v2 endpoints: projects, chat, users, permissions, educations, rfps, requirements, lineage, reports, kanban
+// No prefix for: phases, members, sprints, meetings, issues, auth, llm, admin, wbs-snapshots
 
 // Types for Excel import/export
 export interface ImportError {
@@ -196,7 +201,7 @@ export class ApiService {
   // ========== Portfolio Dashboard API (aggregated for user's accessible projects) ==========
 
   async getPortfolioDashboardStats() {
-    return this.fetchWithFallback('/dashboard/stats', {}, {
+    return this.fetchWithFallback(`${V2}/dashboard/stats`, {}, {
       isPortfolioView: true,
       projectId: null,
       projectName: null,
@@ -216,7 +221,7 @@ export class ApiService {
   }
 
   async getPortfolioActivities() {
-    return this.fetchWithFallback('/dashboard/activities', {}, [
+    return this.fetchWithFallback(`${V2}/dashboard/activities`, {}, [
       { user: '박민수', action: 'OCR 모델 v2.1 성능 테스트 완료', time: '5분 전', type: 'success' as const, projectId: 'proj-001', projectName: 'AI 보험심사 처리 시스템' },
       { user: '이영희', action: '데이터 비식별화 문서 승인 요청', time: '1시간 전', type: 'info' as const, projectId: 'proj-001', projectName: 'AI 보험심사 처리 시스템' },
       { user: 'AI 어시스턴트', action: '일정 지연 위험 감지 알림 발송', time: '2시간 전', type: 'warning' as const, projectId: 'proj-002', projectName: '모바일 보험 플랫폼' },
@@ -226,7 +231,7 @@ export class ApiService {
   // ========== Project-specific Dashboard API ==========
 
   async getProjectDashboardStats(projectId: string) {
-    return this.fetchWithFallback(`/projects/${projectId}/dashboard/stats`, {}, {
+    return this.fetchWithFallback(`${V2}/projects/${projectId}/dashboard/stats`, {}, {
       isPortfolioView: false,
       projectId,
       projectName: 'AI 보험심사 처리 시스템',
@@ -242,14 +247,14 @@ export class ApiService {
   }
 
   async getProjectActivities(projectId: string) {
-    return this.fetchWithFallback(`/projects/${projectId}/dashboard/activities`, {}, [
+    return this.fetchWithFallback(`${V2}/projects/${projectId}/dashboard/activities`, {}, [
       { user: '박민수', action: 'OCR 모델 v2.1 성능 테스트 완료', time: '5분 전', type: 'success' as const, projectId, projectName: 'AI 보험심사 처리 시스템' },
       { user: '이영희', action: '데이터 비식별화 문서 승인 요청', time: '1시간 전', type: 'info' as const, projectId, projectName: 'AI 보험심사 처리 시스템' },
     ]);
   }
 
   async getWeightedProgress(projectId: string) {
-    return this.fetchWithFallback(`/projects/${projectId}/dashboard/weighted-progress`, {}, {
+    return this.fetchWithFallback(`${V2}/projects/${projectId}/dashboard/weighted-progress`, {}, {
       aiProgress: 45.5,
       siProgress: 60.0,
       commonProgress: 30.0,
@@ -282,7 +287,7 @@ export class ApiService {
 
   // ========== Project API ==========
   async getProjects() {
-    const response = await this.fetchWithFallback('/projects', {}, {
+    const response = await this.fetchWithFallback(`${V2}/projects`, {}, {
       data: [
         {
           id: 'proj-001',
@@ -308,7 +313,7 @@ export class ApiService {
   }
 
   async getProject(projectId: string) {
-    const response = await this.fetchWithFallback(`/projects/${projectId}`, {}, {
+    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}`, {}, {
       data: {
         id: projectId,
         name: projectId === 'proj-001' ? 'AI 보험심사 처리 시스템' : '모바일 보험 플랫폼',
@@ -328,7 +333,7 @@ export class ApiService {
   }
 
   async createProject(data: any) {
-    const response = await this.fetchWithFallback('/projects', {
+    const response = await this.fetchWithFallback(`${V2}/projects`, {
       method: 'POST',
       body: JSON.stringify(data),
     }, { data: { ...data, id: Date.now().toString() } });
@@ -336,7 +341,7 @@ export class ApiService {
   }
 
   async updateProject(projectId: string, data: any) {
-    const response = await this.fetchWithFallback(`/projects/${projectId}`, {
+    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     }, { data: { ...data, id: projectId } });
@@ -344,13 +349,13 @@ export class ApiService {
   }
 
   async deleteProject(projectId: string) {
-    return this.fetchWithFallback(`/projects/${projectId}`, {
+    return this.fetchWithFallback(`${V2}/projects/${projectId}`, {
       method: 'DELETE',
     }, { success: true });
   }
 
   async setDefaultProject(projectId: string) {
-    return this.fetchWithFallback(`/projects/${projectId}/set-default`, {
+    return this.fetchWithFallback(`${V2}/projects/${projectId}/set-default`, {
       method: 'POST',
     }, { success: true, projectId });
   }
@@ -508,7 +513,7 @@ export class ApiService {
     }, { message: 'Phase deleted' });
   }
 
-  async updateDeliverable(phaseId: number, deliverableId: number, data: any) {
+  async updateDeliverable(phaseId: string | number, deliverableId: string | number, data: any) {
     return this.fetchWithFallback(`/phases/${phaseId}/deliverables/${deliverableId}`, {
       method: 'PUT',
       body: JSON.stringify(data),
@@ -600,8 +605,9 @@ export class ApiService {
     return this.fetchWithFallback('/tasks', {}, []);
   }
 
-  async getTaskColumns() {
-    return this.fetchWithFallback('/tasks/columns', {}, []);
+  async getTaskColumns(projectId?: string) {
+    const params = projectId ? `?projectId=${projectId}` : '';
+    return this.fetchWithFallback(`/tasks/columns${params}`, {}, []);
   }
 
   async createTask(task: any) {
@@ -611,21 +617,21 @@ export class ApiService {
     }, { ...task, id: Date.now() });
   }
 
-  async updateTask(taskId: number, data: any) {
+  async updateTask(taskId: string | number, data: any) {
     return this.fetchWithFallback(`/tasks/${taskId}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     }, data);
   }
 
-  async moveTask(taskId: number, toColumn: string) {
+  async moveTask(taskId: string | number, toColumn: string) {
     return this.fetchWithFallback(`/tasks/${taskId}/move`, {
       method: 'PUT',
       body: JSON.stringify({ toColumn }),
     }, { taskId, toColumn });
   }
 
-  async deleteTask(taskId: number) {
+  async deleteTask(taskId: string | number) {
     return this.fetchWithFallback(`/tasks/${taskId}`, {
       method: 'DELETE',
     }, { message: 'Task deleted' });
@@ -647,14 +653,14 @@ export class ApiService {
     }, { ...story, id: Date.now() });
   }
 
-  async updateStory(storyId: number, data: any) {
+  async updateStory(storyId: string | number, data: any) {
     return this.fetchWithFallback(`/stories/${storyId}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     }, data);
   }
 
-  async updateStoryPriority(storyId: number, direction: 'up' | 'down') {
+  async updateStoryPriority(storyId: string | number, direction: 'up' | 'down') {
     return this.fetchWithFallback(`/stories/${storyId}/priority`, {
       method: 'PUT',
       body: JSON.stringify({ direction }),
@@ -668,7 +674,7 @@ export class ApiService {
   }
 
   async getPermissions() {
-    return this.fetchWithFallback('/permissions', {}, [
+    return this.fetchWithFallback(`${V2}/permissions`, {}, [
       {
         id: 'view_dashboard',
         category: '대시보드',
@@ -868,7 +874,7 @@ export class ApiService {
   }
 
   async updateRolePermission(role: string, permissionId: string, granted: boolean) {
-    return this.fetchWithFallback('/permissions/role', {
+    return this.fetchWithFallback(`${V2}/permissions/role`, {
       method: 'PUT',
       body: JSON.stringify({ role, permissionId, granted }),
     }, { message: 'Permission updated' });
@@ -876,7 +882,7 @@ export class ApiService {
 
   // ========== User Management API (Admin) ==========
   async getUsers() {
-    const response = await this.fetchWithFallback('/users', {}, {
+    const response = await this.fetchWithFallback(`${V2}/users`, {}, {
       data: [
         {
           id: 'user-001',
@@ -964,7 +970,7 @@ export class ApiService {
   }
 
   async getUser(userId: string) {
-    const response = await this.fetchWithFallback(`/users/${userId}`, {}, {
+    const response = await this.fetchWithFallback(`${V2}/users/${userId}`, {}, {
       data: {
         id: userId,
         name: 'Unknown User',
@@ -1006,7 +1012,7 @@ export class ApiService {
   }
 
   async createUser(data: any) {
-    const response = await this.fetchWithFallback('/users', {
+    const response = await this.fetchWithFallback(`${V2}/users`, {
       method: 'POST',
       body: JSON.stringify(data),
     }, { data: { ...data, id: `user-${Date.now()}` } });
@@ -1101,17 +1107,17 @@ export class ApiService {
 
   // ========== Education API ==========
   async getEducations() {
-    const response = await this.fetchWithFallback('/educations', {}, { data: [] });
+    const response = await this.fetchWithFallback(`${V2}/educations`, {}, { data: [] });
     return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
   }
 
   async getEducation(educationId: string) {
-    const response = await this.fetchWithFallback(`/educations/${educationId}`, {}, { data: null });
+    const response = await this.fetchWithFallback(`${V2}/educations/${educationId}`, {}, { data: null });
     return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
   }
 
   async createEducation(data: any) {
-    const response = await this.fetchWithFallback('/educations', {
+    const response = await this.fetchWithFallback(`${V2}/educations`, {
       method: 'POST',
       body: JSON.stringify(data),
     }, { data: { ...data, id: Date.now().toString() } });
@@ -1119,7 +1125,7 @@ export class ApiService {
   }
 
   async updateEducation(educationId: string, data: any) {
-    const response = await this.fetchWithFallback(`/educations/${educationId}`, {
+    const response = await this.fetchWithFallback(`${V2}/educations/${educationId}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     }, { data: { ...data, id: educationId } });
@@ -1127,19 +1133,19 @@ export class ApiService {
   }
 
   async deleteEducation(educationId: string) {
-    return this.fetchWithFallback(`/educations/${educationId}`, {
+    return this.fetchWithFallback(`${V2}/educations/${educationId}`, {
       method: 'DELETE',
     }, { message: 'Education deleted' });
   }
 
   // ========== Education Session API ==========
   async getEducationSessions(educationId: string) {
-    const response = await this.fetchWithFallback(`/educations/${educationId}/sessions`, {}, { data: [] });
+    const response = await this.fetchWithFallback(`${V2}/educations/${educationId}/sessions`, {}, { data: [] });
     return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
   }
 
   async createEducationSession(educationId: string, data: any) {
-    const response = await this.fetchWithFallback(`/educations/${educationId}/sessions`, {
+    const response = await this.fetchWithFallback(`${V2}/educations/${educationId}/sessions`, {
       method: 'POST',
       body: JSON.stringify(data),
     }, { data: { ...data, id: Date.now().toString() } });
@@ -1147,7 +1153,7 @@ export class ApiService {
   }
 
   async updateEducationSession(educationId: string, sessionId: string, data: any) {
-    const response = await this.fetchWithFallback(`/educations/${educationId}/sessions/${sessionId}`, {
+    const response = await this.fetchWithFallback(`${V2}/educations/${educationId}/sessions/${sessionId}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     }, { data: { ...data, id: sessionId } });
@@ -1155,7 +1161,7 @@ export class ApiService {
   }
 
   async deleteEducationSession(educationId: string, sessionId: string) {
-    return this.fetchWithFallback(`/educations/${educationId}/sessions/${sessionId}`, {
+    return this.fetchWithFallback(`${V2}/educations/${educationId}/sessions/${sessionId}`, {
       method: 'DELETE',
     }, { message: 'Session deleted' });
   }
@@ -1195,17 +1201,17 @@ export class ApiService {
 
   // ========== Education History API ==========
   async getEducationHistoriesBySession(sessionId: string) {
-    const response = await this.fetchWithFallback(`/education-histories/session/${sessionId}`, {}, { data: [] });
+    const response = await this.fetchWithFallback(`${V2}/education-histories/session/${sessionId}`, {}, { data: [] });
     return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
   }
 
   async getEducationHistoriesByParticipant(participantId: string) {
-    const response = await this.fetchWithFallback(`/education-histories/participant/${participantId}`, {}, { data: [] });
+    const response = await this.fetchWithFallback(`${V2}/education-histories/participant/${participantId}`, {}, { data: [] });
     return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
   }
 
   async registerEducationParticipant(sessionId: string, data: any) {
-    const response = await this.fetchWithFallback(`/education-histories/session/${sessionId}/register`, {
+    const response = await this.fetchWithFallback(`${V2}/education-histories/session/${sessionId}/register`, {
       method: 'POST',
       body: JSON.stringify(data),
     }, { data: { ...data, id: Date.now().toString() } });
@@ -1213,7 +1219,7 @@ export class ApiService {
   }
 
   async updateEducationHistory(historyId: string, data: any) {
-    const response = await this.fetchWithFallback(`/education-histories/${historyId}`, {
+    const response = await this.fetchWithFallback(`${V2}/education-histories/${historyId}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     }, { data: { ...data, id: historyId } });
@@ -1221,7 +1227,7 @@ export class ApiService {
   }
 
   async cancelEducationRegistration(historyId: string) {
-    return this.fetchWithFallback(`/education-histories/${historyId}`, {
+    return this.fetchWithFallback(`${V2}/education-histories/${historyId}`, {
       method: 'DELETE',
     }, { message: 'Registration cancelled' });
   }
@@ -1242,17 +1248,17 @@ export class ApiService {
       { id: 'req-002-04', code: 'REQ-MOB-004', title: '푸시 알림', description: '청구 상태 업데이트를 위한 실시간 알림', category: 'FUNCTIONAL', priority: 'MEDIUM', status: 'IDENTIFIED', progress: 0, linkedTaskIds: [] },
       { id: 'req-002-05', code: 'REQ-MOB-005', title: '오프라인 모드', description: '앱은 오프라인에서 작동하고 연결 시 데이터 동기화 가능해야 함', category: 'NON_FUNCTIONAL', priority: 'MEDIUM', status: 'IDENTIFIED', progress: 0, linkedTaskIds: [] },
     ];
-    const response = await this.fetchWithFallback(`/projects/${projectId}/requirements`, {}, { data: mockRequirements });
+    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/requirements`, {}, { data: mockRequirements });
     return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
   }
 
   async getRequirement(projectId: string, requirementId: string) {
-    const response = await this.fetchWithFallback(`/projects/${projectId}/requirements/${requirementId}`, {}, { data: null });
+    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/requirements/${requirementId}`, {}, { data: null });
     return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
   }
 
   async createRequirement(projectId: string, data: any) {
-    const response = await this.fetchWithFallback(`/projects/${projectId}/requirements`, {
+    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/requirements`, {
       method: 'POST',
       body: JSON.stringify(data),
     }, { data: { ...data, id: Date.now().toString(), code: `REQ-${Date.now()}` } });
@@ -1260,7 +1266,7 @@ export class ApiService {
   }
 
   async updateRequirement(projectId: string, requirementId: string, data: any) {
-    const response = await this.fetchWithFallback(`/projects/${projectId}/requirements/${requirementId}`, {
+    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/requirements/${requirementId}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     }, { data: { ...data, id: requirementId } });
@@ -1268,13 +1274,13 @@ export class ApiService {
   }
 
   async deleteRequirement(projectId: string, requirementId: string) {
-    return this.fetchWithFallback(`/projects/${projectId}/requirements/${requirementId}`, {
+    return this.fetchWithFallback(`${V2}/projects/${projectId}/requirements/${requirementId}`, {
       method: 'DELETE',
     }, { message: 'Requirement deleted' });
   }
 
   async linkRequirementToTask(projectId: string, requirementId: string, taskId: string) {
-    const response = await this.fetchWithFallback(`/projects/${projectId}/requirements/${requirementId}/link-task`, {
+    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/requirements/${requirementId}/link-task`, {
       method: 'POST',
       body: JSON.stringify({ taskId }),
     }, { data: { requirementId, taskId, linked: true } });
@@ -1282,7 +1288,7 @@ export class ApiService {
   }
 
   async unlinkRequirementFromTask(projectId: string, requirementId: string, taskId: string) {
-    return this.fetchWithFallback(`/projects/${projectId}/requirements/${requirementId}/unlink-task/${taskId}`, {
+    return this.fetchWithFallback(`${V2}/projects/${projectId}/requirements/${requirementId}/unlink-task/${taskId}`, {
       method: 'DELETE',
     }, { message: 'Task unlinked' });
   }
@@ -1294,18 +1300,18 @@ export class ApiService {
     ] : [
       { id: 'rfp-002', title: '모바일 보험 플랫폼 RFP', content: '보험 서비스를 위한 종합 모바일 플랫폼 구축 제안요청서. 필수 포함사항: 보험증권 관리, 청구 제출, 실시간 알림, 보안 인증, 오프라인 기능.', status: 'SUBMITTED', processingStatus: 'PENDING', createdAt: '2026-01-20T10:00:00Z', updatedAt: '2026-01-20T10:00:00Z' },
     ];
-    const response = await this.fetchWithFallback(`/projects/${projectId}/rfps`, {}, { data: mockRfps });
+    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/rfps`, {}, { data: mockRfps });
     return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
   }
 
   async getRfp(projectId: string, rfpId: string) {
-    const response = await this.fetchWithFallback(`/projects/${projectId}/rfps/${rfpId}`, {}, { data: null });
+    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/rfps/${rfpId}`, {}, { data: null });
     return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
   }
 
   async createRfp(projectId: string, data: { title: string; content?: string; status: string; processingStatus: string }) {
     const rfpId = `rfp-${Date.now()}`;
-    const response = await this.fetchWithFallback(`/projects/${projectId}/rfps`, {
+    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/rfps`, {
       method: 'POST',
       body: JSON.stringify(data),
     }, {
@@ -1321,7 +1327,7 @@ export class ApiService {
   }
 
   async updateRfp(projectId: string, rfpId: string, data: Partial<{ title: string; content: string; status: string }>) {
-    const response = await this.fetchWithFallback(`/projects/${projectId}/rfps/${rfpId}`, {
+    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/rfps/${rfpId}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     }, { data: { id: rfpId, ...data, updatedAt: new Date().toISOString() } });
@@ -1329,7 +1335,7 @@ export class ApiService {
   }
 
   async deleteRfp(projectId: string, rfpId: string) {
-    return this.fetchWithFallback(`/projects/${projectId}/rfps/${rfpId}`, {
+    return this.fetchWithFallback(`${V2}/projects/${projectId}/rfps/${rfpId}`, {
       method: 'DELETE',
     }, { message: 'RFP deleted' });
   }
@@ -1371,7 +1377,7 @@ export class ApiService {
   }
 
   async extractRequirements(projectId: string, rfpId: string, content?: string) {
-    const response = await this.fetchWithFallback(`/projects/${projectId}/rfps/${rfpId}/extract`, {
+    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/rfps/${rfpId}/extract`, {
       method: 'POST',
       body: JSON.stringify({ content }),
     }, {
@@ -1385,7 +1391,7 @@ export class ApiService {
   }
 
   async getRfpProcessingStatus(projectId: string, rfpId: string) {
-    const response = await this.fetchWithFallback(`/projects/${projectId}/rfps/${rfpId}/status`, {}, {
+    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/rfps/${rfpId}/status`, {}, {
       data: {
         rfpId,
         status: 'COMPLETED',
@@ -1398,7 +1404,7 @@ export class ApiService {
 
   // ========== RFP Auto-Classification API ==========
   async classifyRfpRequirements(projectId: string, rfpId: string) {
-    const response = await this.fetchWithFallback(`/projects/${projectId}/rfps/${rfpId}/classify`, {
+    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/rfps/${rfpId}/classify`, {
       method: 'POST',
     }, {
       data: {
@@ -1413,8 +1419,9 @@ export class ApiService {
   }
 
   // ========== Lineage API ==========
+  // Backend uses /api/v2/projects/{projectId}/lineage/* pattern
   async getLineageGraph(projectId: string) {
-    const response = await this.fetchWithFallback(`/lineage/graph/${projectId}`, {}, {
+    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/lineage/graph`, {}, {
       nodes: [],
       edges: [],
       statistics: {
@@ -1451,7 +1458,7 @@ export class ApiService {
 
     const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
 
-    const response = await this.fetchWithFallback(`/lineage/timeline/${projectId}${query}`, {}, {
+    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/lineage/timeline${query}`, {}, {
       content: [],
       totalElements: 0,
       totalPages: 0,
@@ -1463,7 +1470,7 @@ export class ApiService {
 
   async getEntityHistory(aggregateType: string, aggregateId: string) {
     const response = await this.fetchWithFallback(
-      `/lineage/history/${aggregateType}/${aggregateId}`,
+      `${V2}/lineage/history/${aggregateType}/${aggregateId}`,
       {},
       []
     );
@@ -1472,7 +1479,7 @@ export class ApiService {
 
   async getLineageUpstream(aggregateType: string, aggregateId: string, depth: number = 3) {
     const response = await this.fetchWithFallback(
-      `/lineage/upstream/${aggregateType}/${aggregateId}?depth=${depth}`,
+      `${V2}/lineage/upstream/${aggregateType}/${aggregateId}?depth=${depth}`,
       {},
       { nodes: [], edges: [], maxDepth: 0, totalNodes: 0 }
     );
@@ -1481,7 +1488,7 @@ export class ApiService {
 
   async getLineageDownstream(aggregateType: string, aggregateId: string, depth: number = 3) {
     const response = await this.fetchWithFallback(
-      `/lineage/downstream/${aggregateType}/${aggregateId}?depth=${depth}`,
+      `${V2}/lineage/downstream/${aggregateType}/${aggregateId}?depth=${depth}`,
       {},
       { nodes: [], edges: [], maxDepth: 0, totalNodes: 0 }
     );
@@ -1490,7 +1497,7 @@ export class ApiService {
 
   async getImpactAnalysis(aggregateType: string, aggregateId: string) {
     const response = await this.fetchWithFallback(
-      `/lineage/impact/${aggregateType}/${aggregateId}`,
+      `${V2}/lineage/impact/${aggregateType}/${aggregateId}`,
       {},
       {
         sourceId: aggregateId,
@@ -1508,7 +1515,7 @@ export class ApiService {
   }
 
   async getLineageStatistics(projectId: string) {
-    const response = await this.fetchWithFallback(`/lineage/statistics/${projectId}`, {}, {
+    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/lineage/statistics`, {}, {
       requirements: 0,
       stories: 0,
       tasks: 0,
@@ -1534,7 +1541,7 @@ export class ApiService {
         ...(this.token && { Authorization: `Bearer ${this.token}` }),
       };
 
-      const response = await fetch(`${API_BASE_URL}/chat/message`, {
+      const response = await fetch(`${API_BASE_URL}${V2}/chat/message`, {
         method: 'POST',
         headers,
         body: JSON.stringify({

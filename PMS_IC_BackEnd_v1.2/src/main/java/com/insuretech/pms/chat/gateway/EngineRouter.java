@@ -1,7 +1,6 @@
 package com.insuretech.pms.chat.gateway;
 
 import com.insuretech.pms.chat.gateway.dto.GatewayRequest;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -13,25 +12,22 @@ import java.time.LocalTime;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class EngineRouter {
 
     private final HealthChecker healthChecker;
+    private final VllmConfigService vllmConfigService;
 
-    @Value("${llm.workers.vllm.url:http://localhost:8001}")
-    private String vllmUrl;
-
-    @Value("${llm.workers.vllm.enabled:false}")
-    private boolean vllmEnabled;
-
-    @Value("${llm.workers.vllm.model:Qwen/Qwen2.5-7B-Instruct}")
-    private String vllmModel;
-
+    // vLLM settings from VllmConfigService (dynamic)
     @Value("${llm.workers.vllm.tool-calling:true}")
     private boolean vllmToolCalling;
 
     @Value("${llm.workers.vllm.json-schema:true}")
     private boolean vllmJsonSchema;
+
+    public EngineRouter(HealthChecker healthChecker, VllmConfigService vllmConfigService) {
+        this.healthChecker = healthChecker;
+        this.vllmConfigService = vllmConfigService;
+    }
 
     @Value("${llm.workers.gguf.url:http://localhost:8000}")
     private String ggufUrl;
@@ -98,7 +94,7 @@ public class EngineRouter {
         // Rule 3: Business hours -> prefer vLLM for throughput
         if (isBusinessHours()) {
             log.debug("Auto: vLLM preferred (business hours)");
-            if (vllmEnabled && healthChecker.isHealthy("vllm")) {
+            if (vllmConfigService.isEnabled() && healthChecker.isHealthy("vllm")) {
                 return "vllm";
             }
         }
@@ -115,7 +111,7 @@ public class EngineRouter {
 
     private String validateEngineAvailable(String engine) {
         boolean available = switch (engine) {
-            case "vllm" -> vllmEnabled && healthChecker.isHealthy("vllm");
+            case "vllm" -> vllmConfigService.isEnabled() && healthChecker.isHealthy("vllm");
             case "gguf" -> ggufEnabled && healthChecker.isHealthy("gguf");
             default -> false;
         };
@@ -147,7 +143,7 @@ public class EngineRouter {
 
     public String getWorkerUrl(String engine) {
         return switch (engine) {
-            case "vllm" -> vllmUrl;
+            case "vllm" -> vllmConfigService.getCurrentUrl();
             case "gguf" -> ggufUrl;
             default -> throw new IllegalArgumentException("Unknown engine: " + engine);
         };
@@ -155,7 +151,7 @@ public class EngineRouter {
 
     public String getModelName(String engine) {
         return switch (engine) {
-            case "vllm" -> vllmModel;
+            case "vllm" -> vllmConfigService.getCurrentModel();
             case "gguf" -> ggufModel;
             default -> "unknown";
         };
@@ -163,7 +159,7 @@ public class EngineRouter {
 
     public boolean isEngineEnabled(String engine) {
         return switch (engine) {
-            case "vllm" -> vllmEnabled;
+            case "vllm" -> vllmConfigService.isEnabled();
             case "gguf" -> ggufEnabled;
             default -> false;
         };

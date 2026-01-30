@@ -11,7 +11,8 @@ import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import LoginScreen from './components/LoginScreen';
 import Settings from './components/Settings';
-import { LayoutDashboard, GitBranch, Kanban, ListTodo, Users, Settings as SettingsIcon, GraduationCap, FolderOpen, Briefcase, Network, FileText, ClipboardList, History } from 'lucide-react';
+import SystemSettings from './components/SystemSettings';
+import { LayoutDashboard, GitBranch, Kanban, ListTodo, Users, Settings as SettingsIcon, GraduationCap, FolderOpen, Briefcase, Network, FileText, ClipboardList, History, Cpu } from 'lucide-react';
 import EducationManagement from './components/EducationManagement';
 import CommonManagement from './components/CommonManagement';
 import ProjectManagement from './components/ProjectManagement';
@@ -22,7 +23,7 @@ import { LineageManagement } from './components/lineage';
 import { ProjectProvider } from '../contexts/ProjectContext';
 import ToastContainer from './components/ToastContainer';
 
-export type View = 'dashboard' | 'projects' | 'parts' | 'rfp' | 'requirements' | 'lineage' | 'phases' | 'kanban' | 'backlog' | 'roles' | 'common' | 'education' | 'settings';
+export type View = 'dashboard' | 'projects' | 'parts' | 'rfp' | 'requirements' | 'lineage' | 'phases' | 'kanban' | 'backlog' | 'roles' | 'common' | 'education' | 'settings' | 'system-settings';
 
 export type UserRole = 'sponsor' | 'pmo_head' | 'pm' | 'developer' | 'qa' | 'business_analyst' | 'auditor' | 'admin';
 
@@ -56,13 +57,13 @@ export default function App() {
   const getAvailableMenus = (role: UserRole): View[] => {
     const menuAccess: Record<UserRole, View[]> = {
       sponsor: ['dashboard', 'rfp', 'requirements', 'lineage', 'phases', 'roles', 'common', 'education', 'settings'],
-      pmo_head: ['dashboard', 'projects', 'parts', 'rfp', 'requirements', 'lineage', 'phases', 'kanban', 'backlog', 'roles', 'common', 'education', 'settings'],
+      pmo_head: ['dashboard', 'projects', 'parts', 'rfp', 'requirements', 'lineage', 'phases', 'kanban', 'backlog', 'roles', 'common', 'education', 'system-settings', 'settings'],
       pm: ['dashboard', 'projects', 'parts', 'rfp', 'requirements', 'lineage', 'phases', 'kanban', 'backlog', 'common', 'education', 'settings'],
       developer: ['dashboard', 'requirements', 'lineage', 'kanban', 'backlog', 'education', 'settings'],
       qa: ['dashboard', 'requirements', 'lineage', 'kanban', 'backlog', 'education', 'settings'],
       business_analyst: ['dashboard', 'rfp', 'requirements', 'lineage', 'phases', 'backlog', 'education', 'settings'],
       auditor: ['dashboard', 'requirements', 'lineage', 'phases', 'roles', 'settings'],
-      admin: ['dashboard', 'projects', 'parts', 'rfp', 'requirements', 'lineage', 'phases', 'kanban', 'backlog', 'roles', 'common', 'education', 'settings'],
+      admin: ['dashboard', 'projects', 'parts', 'rfp', 'requirements', 'lineage', 'phases', 'kanban', 'backlog', 'roles', 'common', 'education', 'system-settings', 'settings'],
     };
     return menuAccess[role] || [];
   };
@@ -80,7 +81,8 @@ export default function App() {
     { id: 'roles' as View, label: '권한 관리', icon: Users },
     { id: 'common' as View, label: '공통 관리', icon: FolderOpen },
     { id: 'education' as View, label: '교육 관리', icon: GraduationCap },
-    { id: 'settings' as View, label: '설정', icon: SettingsIcon },
+    { id: 'system-settings' as View, label: '시스템 설정', icon: Cpu },
+    { id: 'settings' as View, label: '개인 설정', icon: SettingsIcon },
   ];
 
   const availableMenus = currentUser ? getAvailableMenus(currentUser.role) : [];
@@ -115,6 +117,8 @@ export default function App() {
         return <CommonManagement userRole={currentUser?.role || 'pm'} />;
       case 'education':
         return <EducationManagement userRole={currentUser?.role || 'pm'} />;
+      case 'system-settings':
+        return <SystemSettings userRole={currentUser?.role || 'pm'} />;
       case 'settings':
         return <Settings userRole={currentUser?.role || 'pm'} />;
       default:

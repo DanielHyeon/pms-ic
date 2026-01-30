@@ -273,7 +273,7 @@ export const menuConfig: MenuConfig = {
 
     // Zone 9: Settings
     {
-      id: 'system-settings',
+      id: 'admin-settings',
       label: '설정',
       icon: Settings,
       zone: 'ADMIN',
@@ -286,8 +286,8 @@ export const menuConfig: MenuConfig = {
           icon: UserCog,
         },
         {
-          id: 'common',
-          path: '/common',
+          id: 'system-settings',
+          path: '/system-settings',
           label: '시스템 설정',
           icon: Settings,
         },
@@ -347,7 +347,7 @@ export const menuAccessByRole: Record<UserRole, string[]> = {
     'reports',
     'statistics',
     'user-management',
-    'common',
+    'system-settings',
     'audit-logs',
     'settings',
   ],
@@ -451,7 +451,7 @@ export const menuAccessByRole: Record<UserRole, string[]> = {
     'reports',
     'statistics',
     'user-management',
-    'common',
+    'system-settings',
     'audit-logs',
     'settings',
   ],

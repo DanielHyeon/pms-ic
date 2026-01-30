@@ -14,7 +14,7 @@ import reactor.core.publisher.Mono;
 import java.security.Principal;
 
 @RestController
-@RequestMapping("/api/v2/auth")
+@RequestMapping({"/api/auth", "/api/v2/auth"})
 @RequiredArgsConstructor
 public class ReactiveAuthController {
 

@@ -51,12 +51,13 @@ public class ReactiveSecurityConfig {
                         // Public endpoints
                         .pathMatchers(HttpMethod.OPTIONS).permitAll()
                         .pathMatchers(
+                                "/api/auth/login",
+                                "/api/auth/refresh",
                                 "/api/v2/auth/login",
                                 "/api/v2/auth/refresh",
                                 "/api/chat/**",
                                 "/api/v2/chat/**",
-                                "/api/llm/model",
-                                "/api/llm/health",
+                                "/api/llm/**",
                                 "/actuator/**",
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**",

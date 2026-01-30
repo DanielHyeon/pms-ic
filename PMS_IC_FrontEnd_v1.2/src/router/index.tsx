@@ -18,6 +18,7 @@ const RoleManagement = lazy(() => import('../app/components/RoleManagement'));
 const CommonManagement = lazy(() => import('../app/components/CommonManagement'));
 const EducationManagement = lazy(() => import('../app/components/EducationManagement'));
 const Settings = lazy(() => import('../app/components/Settings'));
+const SystemSettings = lazy(() => import('../app/components/SystemSettings'));
 const LoginScreen = lazy(() => import('../app/components/LoginScreen'));
 
 // Implemented pages
@@ -65,6 +66,7 @@ const RoleManagementWithRole = withUserRole(RoleManagement);
 const CommonManagementWithRole = withUserRole(CommonManagement);
 const EducationManagementWithRole = withUserRole(EducationManagement);
 const SettingsWithRole = withUserRole(Settings);
+const SystemSettingsWithRole = withUserRole(SystemSettings);
 const ReportManagementWithRole = withUserRole(ReportManagement);
 const WbsManagementWithRole = withUserRole(WbsManagement);
 const TraceabilityManagementWithRole = withUserRole(TraceabilityManagement);
@@ -324,6 +326,14 @@ export const router = createBrowserRouter([
         element: (
           <SuspenseWrapper>
             <AuditLogsPageWithRole />
+          </SuspenseWrapper>
+        ),
+      },
+      {
+        path: 'system-settings',
+        element: (
+          <SuspenseWrapper>
+            <SystemSettingsWithRole />
           </SuspenseWrapper>
         ),
       },
