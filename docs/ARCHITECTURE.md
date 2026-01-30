@@ -1,7 +1,7 @@
 # PMS Insurance Claims - 시스템 아키텍처 문서
 
-> **버전**: 2.4
-> **최종 업데이트**: 2026-01-26
+> **버전**: 2.5
+> **최종 업데이트**: 2026-01-31
 > **작성자**: PMS Insurance Claims Team
 
 ---
@@ -51,7 +51,7 @@ Neo4j GraphRAG 기반의 지능형 챗봇을 통해 프로젝트 관리 의사�
 | 레이어 | 기술 | 버전 |
 |--------|------|------|
 | Frontend | React + TypeScript + Vite | React 18, Vite 5 |
-| Backend | Spring Boot + JPA | Spring Boot 3.2 |
+| Backend | Spring Boot + WebFlux + R2DBC | Spring Boot 3.5, Java 21 |
 | LLM Service | Flask + LangGraph | Python 3.11 |
 | Database | PostgreSQL | 15 |
 | Graph DB | Neo4j | 5.20 |
@@ -130,7 +130,7 @@ Neo4j GraphRAG 기반의 지능형 챗봇을 통해 프로젝트 관리 의사�
 │  │  │  AuthService │ ProjectService │ ChatService │ ...      │ │   │
 │  │  └────────────────────────────────────────────────────────┘ │   │
 │  │  ┌────────────────────────────────────────────────────────┐ │   │
-│  │  │                  Repository Layer (JPA)                 │ │   │
+│  │  │               Repository Layer (R2DBC Reactive)         │ │   │
 │  │  └────────────────────────────────────────────────────────┘ │   │
 │  └─────────────────────────────────────────────────────────────┘   │
 └───────┬──────────────────────┬──────────────────────┬───────────────┘
@@ -162,7 +162,7 @@ Neo4j GraphRAG 기반의 지능형 챗봇을 통해 프로젝트 관리 의사�
 |--------|--------|----------|------|
 | Frontend | Backend | REST/HTTP | API 호출 |
 | Backend | LLM Service | REST/HTTP | AI 채팅 요청 |
-| Backend | PostgreSQL | JDBC | 데이터 영속화 |
+| Backend | PostgreSQL | R2DBC | 데이터 영속화 |
 | Backend | Redis | Redis Protocol | 세션/캐시 |
 | LLM Service | Neo4j | Bolt | RAG 검색 |
 

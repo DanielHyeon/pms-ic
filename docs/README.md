@@ -2,7 +2,7 @@
 
 **Project**: Insurance Claims Project Management System with AI Support
 **Status**: ✅ Production Ready
-**Last Updated**: 2026-01-30
+**Last Updated**: 2026-01-31
 
 ---
 
@@ -65,13 +65,6 @@
 | [ai-architecture/phase3-productization.md](./ai-architecture/phase3-productization.md) | Subagent pool, MCP gateway | ✅ Final |
 | [ai-architecture/implementation-status.md](./ai-architecture/implementation-status.md) | Implementation verification | ✅ Final |
 
-### Development Standards
-
-| Document | Description | Status |
-|----------|-------------|--------|
-| [coding-rules.md](./coding-rules.md) | Coding standards (Martin Fowler principles) | ✅ Final |
-| [code-inspection.md](./code-inspection.md) | Code inspection protocol | ✅ Final |
-
 ### Infrastructure
 
 | Document | Description | Status |
@@ -124,7 +117,7 @@
 | Layer | Technology | Version |
 |-------|------------|---------|
 | Frontend | React + TypeScript + Vite | React 18, Vite 5 |
-| Backend | Spring Boot + WebFlux + R2DBC | Spring Boot 3.2 |
+| Backend | Spring Boot + WebFlux + R2DBC | Spring Boot 3.5, Java 21 |
 | LLM Service | Flask + LangGraph | Python 3.11 |
 | Database | PostgreSQL (R2DBC) | 15 |
 | Graph DB | Neo4j (Outbox Pattern) | 5.20 |
@@ -162,10 +155,10 @@ docker-compose up -d
 
 ## Contributing
 
-1. Follow coding standards in [coding-rules.md](./coding-rules.md)
+1. Follow coding standards defined in [ARCHITECTURE.md](./ARCHITECTURE.md) Section 1.4
 2. Update this index when adding new documents
 3. Use proper status indicators for document maturity
 
 ---
 
-*Last Updated: 2026-01-30*
+*Last Updated: 2026-01-31*

@@ -1,6 +1,6 @@
 # PMS-IC Architecture Overview
 
-> **Version**: 1.0 | **Status**: Final | **Last Updated**: 2026-01-28
+> **Version**: 1.1 | **Status**: Final | **Last Updated**: 2026-01-31
 
 ---
 
@@ -13,7 +13,7 @@ PMS Insurance Claims is an **AI-integrated Project Management Platform** for ins
 | Layer | Technology | Version |
 |-------|------------|---------|
 | **Frontend** | React + TypeScript + Vite | React 18, Vite 5 |
-| **Backend** | Spring Boot + JPA | Spring Boot 3.2, Java 17 |
+| **Backend** | Spring Boot + WebFlux + R2DBC | Spring Boot 3.5, Java 21 |
 | **LLM Service** | Flask + LangGraph | Python 3.11 |
 | **Database** | PostgreSQL | 15 |
 | **Graph DB** | Neo4j | 5.20 |
@@ -44,7 +44,7 @@ PMS Insurance Claims is an **AI-integrated Project Management Platform** for ins
 │  │  └── report: Report, Dashboard, WeeklyReport                    ││
 │  └─────────────────────────────────────────────────────────────────┘│
 └─────────┬────────────────────────────────┬──────────────────────────┘
-          │ JPA                            │ HTTP
+          │ R2DBC                          │ HTTP
           ▼                                ▼
 ┌─────────────────────┐     ┌──────────────────────────────────────────┐
 │  PostgreSQL (5433)  │     │      LLM Service (Port 8000)             │
@@ -146,7 +146,7 @@ public void updateProject(String projectId, ProjectData data) { ... }
 |--------|--------|----------|---------|
 | Frontend | Backend | REST/HTTP | API calls |
 | Backend | LLM Service | REST/HTTP | AI chat requests |
-| Backend | PostgreSQL | JDBC | Data persistence |
+| Backend | PostgreSQL | R2DBC | Data persistence |
 | Backend | Redis | Redis Protocol | Session/Cache |
 | LLM Service | Neo4j | Bolt | RAG search |
 | Backend | Neo4j | Outbox Pattern | Data sync |
