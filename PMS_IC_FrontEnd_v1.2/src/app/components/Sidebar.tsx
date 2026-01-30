@@ -275,7 +275,7 @@ export default function Sidebar({ userRole, menuItems, currentView, onViewChange
 
   return (
     <aside
-      className={`w-64 bg-gradient-to-b ${roleColors[userRole]} text-white flex flex-col`}
+      className={`w-64 h-full bg-gradient-to-b ${roleColors[userRole]} text-white flex flex-col`}
     >
       {/* Header */}
       <div className="p-5 border-b border-white/20">

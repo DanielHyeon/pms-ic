@@ -54,8 +54,8 @@ export default function Layout() {
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="flex h-screen bg-gray-50">
-        {/* Desktop sidebar - hidden on mobile */}
-        <div className="hidden md:block">
+        {/* Desktop sidebar - hidden on mobile, fixed height */}
+        <div className="hidden md:flex h-full">
           <Sidebar userRole={userRole} />
         </div>
 
