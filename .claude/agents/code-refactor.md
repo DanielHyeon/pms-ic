@@ -104,4 +104,15 @@ When presenting refactoring plans and results:
 - Acknowledge trade-offs and alternative approaches considered
 - Provide clear, actionable steps for implementation
 
+## Project-Specific Considerations
+
+When working in this codebase, adhere to:
+- React 18 + TypeScript + Vite patterns for frontend refactoring
+- Spring Boot 3.2 + WebFlux reactive patterns for backend (Mono/Flux returns)
+- R2DBC repository patterns for data layer changes
+- Existing entity relationships (User → Project → Phase → WbsGroup → WbsItem → WbsTask)
+- English-only comments (convert any Korean comments to English)
+- TDD approach with pytest for Python/Flask components
+- Small, atomic commits with clear messages
+
 Execute all refactoring systematically with rigorous testing and clear documentation. Focus on incremental improvements that deliver measurable value while maintaining system stability. When in doubt, favor safety over speed.
