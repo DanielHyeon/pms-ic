@@ -29,6 +29,7 @@ public class EngineRouter {
 
     private final HealthChecker healthChecker;
     private final VllmConfigService vllmConfigService;
+    private final GgufConfigService ggufConfigService;
     private final CircuitBreakerRegistry circuitBreakerRegistry;
 
     // Engine priority order for auto selection
@@ -43,21 +44,6 @@ public class EngineRouter {
 
     @Value("${llm.workers.vllm.json-schema:true}")
     private boolean vllmJsonSchema;
-
-    @Value("${llm.workers.gguf.url:http://localhost:8000}")
-    private String ggufUrl;
-
-    @Value("${llm.workers.gguf.enabled:true}")
-    private boolean ggufEnabled;
-
-    @Value("${llm.workers.gguf.model:gemma-3-12b}")
-    private String ggufModel;
-
-    @Value("${llm.workers.gguf.tool-calling:false}")
-    private boolean ggufToolCalling;
-
-    @Value("${llm.workers.gguf.json-schema:false}")
-    private boolean ggufJsonSchema;
 
     @Value("${llm.workers.default:auto}")
     private String defaultEngine;
@@ -74,9 +60,11 @@ public class EngineRouter {
     public EngineRouter(
             HealthChecker healthChecker,
             VllmConfigService vllmConfigService,
+            GgufConfigService ggufConfigService,
             CircuitBreakerRegistry circuitBreakerRegistry) {
         this.healthChecker = healthChecker;
         this.vllmConfigService = vllmConfigService;
+        this.ggufConfigService = ggufConfigService;
         this.circuitBreakerRegistry = circuitBreakerRegistry;
     }
 
@@ -122,7 +110,7 @@ public class EngineRouter {
                 return "vllm";
             }
             // Fallback to GGUF if vLLM unavailable but GGUF supports required features
-            if (request.hasTools() && ggufToolCalling && isEngineFullyAvailable("gguf")) {
+            if (request.hasTools() && ggufConfigService.supportsToolCalling() && isEngineFullyAvailable("gguf")) {
                 log.debug("Auto: GGUF selected as fallback for tools (vLLM unavailable)");
                 return "gguf";
             }
@@ -288,7 +276,7 @@ public class EngineRouter {
     public String getWorkerUrl(String engine) {
         return switch (engine) {
             case "vllm" -> vllmConfigService.getCurrentUrl();
-            case "gguf" -> ggufUrl;
+            case "gguf" -> ggufConfigService.getCurrentUrl();
             default -> throw new IllegalArgumentException("Unknown engine: " + engine);
         };
     }
@@ -296,7 +284,7 @@ public class EngineRouter {
     public String getModelName(String engine) {
         return switch (engine) {
             case "vllm" -> vllmConfigService.getCurrentModel();
-            case "gguf" -> ggufModel;
+            case "gguf" -> ggufConfigService.getCurrentModel();
             default -> "unknown";
         };
     }
@@ -304,7 +292,7 @@ public class EngineRouter {
     public boolean isEngineEnabled(String engine) {
         return switch (engine) {
             case "vllm" -> vllmConfigService.isEnabled();
-            case "gguf" -> ggufEnabled;
+            case "gguf" -> ggufConfigService.isEnabled();
             default -> false;
         };
     }
@@ -312,7 +300,7 @@ public class EngineRouter {
     public boolean supportsToolCalling(String engine) {
         return switch (engine) {
             case "vllm" -> vllmToolCalling;
-            case "gguf" -> ggufToolCalling;
+            case "gguf" -> ggufConfigService.supportsToolCalling();
             default -> false;
         };
     }
@@ -320,7 +308,7 @@ public class EngineRouter {
     public boolean supportsJsonSchema(String engine) {
         return switch (engine) {
             case "vllm" -> vllmJsonSchema;
-            case "gguf" -> ggufJsonSchema;
+            case "gguf" -> ggufConfigService.supportsJsonSchema();
             default -> false;
         };
     }

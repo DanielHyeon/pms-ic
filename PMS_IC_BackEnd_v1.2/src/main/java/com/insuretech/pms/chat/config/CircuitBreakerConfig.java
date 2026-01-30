@@ -143,7 +143,6 @@ public class CircuitBreakerConfig {
     public RetryRegistry llmRetryRegistry() {
         RetryConfig defaultConfig = RetryConfig.custom()
             .maxAttempts(maxRetryAttempts)
-            .waitDuration(Duration.ofMillis(retryWaitDurationMs))
             .intervalFunction(io.github.resilience4j.core.IntervalFunction.ofExponentialBackoff(
                 Duration.ofMillis(retryWaitDurationMs),
                 exponentialBackoffMultiplier,

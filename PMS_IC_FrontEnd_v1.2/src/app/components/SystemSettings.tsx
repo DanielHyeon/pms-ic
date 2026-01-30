@@ -191,11 +191,17 @@ export default function SystemSettings({ userRole }: SystemSettingsProps) {
   const fetchVllmConfig = async () => {
     try {
       setVllmLoading(true);
-      const response = await fetch(`${apiBaseUrl}/llm/vllm/config`, {
-        headers: { ...getAuthHeaders() },
-      });
-      if (response.ok) {
-        const data = await response.json();
+      // Fetch both vLLM and GGUF configs to determine engine mode
+      const [vllmResponse, ggufResponse] = await Promise.all([
+        fetch(`${apiBaseUrl}/llm/vllm/config`, { headers: { ...getAuthHeaders() } }),
+        fetch(`${apiBaseUrl}/llm/gguf/config`, { headers: { ...getAuthHeaders() } }),
+      ]);
+
+      let vllmEnabledState = false;
+      let ggufEnabledState = true; // default
+
+      if (vllmResponse.ok) {
+        const data = await vllmResponse.json();
         const config = data?.data || data;
         const lightweightModel = config?.lightweightModel || config?.currentModel || '';
         const mediumModel = config?.mediumModel || config?.currentModel || '';
@@ -203,13 +209,26 @@ export default function SystemSettings({ userRole }: SystemSettingsProps) {
         setCurrentVllmMedium(mediumModel);
         setSelectedVllmLightweight(lightweightModel);
         setSelectedVllmMedium(mediumModel);
-        setVllmEnabled(config?.enabled || false);
-        if (config?.enabled) {
-          setEngineMode('vllm');
-        }
+        vllmEnabledState = config?.enabled || false;
+        setVllmEnabled(vllmEnabledState);
+      }
+
+      if (ggufResponse.ok) {
+        const data = await ggufResponse.json();
+        const config = data?.data || data;
+        ggufEnabledState = config?.enabled !== false; // default true
+      }
+
+      // Determine engine mode based on enabled states
+      if (vllmEnabledState && ggufEnabledState) {
+        setEngineMode('both');
+      } else if (vllmEnabledState) {
+        setEngineMode('vllm');
+      } else {
+        setEngineMode('gguf');
       }
     } catch (error) {
-      console.error('Failed to fetch vLLM config:', error);
+      console.error('Failed to fetch vLLM/GGUF config:', error);
       setCurrentVllmLightweight(VLLM_LIGHTWEIGHT_MODELS[0]?.modelId || '');
       setCurrentVllmMedium(VLLM_MEDIUM_MODELS[0]?.modelId || '');
       setSelectedVllmLightweight(VLLM_LIGHTWEIGHT_MODELS[0]?.modelId || '');
@@ -259,17 +278,40 @@ export default function SystemSettings({ userRole }: SystemSettingsProps) {
   const handleEngineModeChange = async (mode: EngineMode) => {
     setEngineMode(mode);
     try {
-      await fetch(`${apiBaseUrl}/llm/vllm/enabled`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders(),
-        },
-        body: JSON.stringify({ enabled: mode === 'vllm' || mode === 'both' }),
+      // Update both vLLM and GGUF enabled states based on selected mode
+      const vllmEnabled = mode === 'vllm' || mode === 'both';
+      const ggufEnabled = mode === 'gguf' || mode === 'both';
+
+      await Promise.all([
+        fetch(`${apiBaseUrl}/llm/vllm/enabled`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders(),
+          },
+          body: JSON.stringify({ enabled: vllmEnabled }),
+        }),
+        fetch(`${apiBaseUrl}/llm/gguf/enabled`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders(),
+          },
+          body: JSON.stringify({ enabled: ggufEnabled }),
+        }),
+      ]);
+
+      setVllmEnabled(vllmEnabled);
+      setStatusMessage({
+        type: 'success',
+        text: `엔진 모드가 변경되었습니다: ${mode === 'gguf' ? 'GGUF 전용' : mode === 'vllm' ? 'vLLM 전용' : '자동 선택'}`,
       });
-      setVllmEnabled(mode === 'vllm' || mode === 'both');
     } catch (error) {
       console.error('Failed to update engine mode:', error);
+      setStatusMessage({
+        type: 'error',
+        text: '엔진 모드 변경에 실패했습니다.',
+      });
     }
   };
 
