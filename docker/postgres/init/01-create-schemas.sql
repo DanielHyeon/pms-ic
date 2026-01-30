@@ -1,34 +1,55 @@
--- PostgreSQL 초기화 스크립트
--- 각 모듈별 독립 스키마 생성 (MSA 전환 대비)
+-- PostgreSQL Initialization Script
+-- Create independent schemas for each module (MSA-ready)
+-- Updated: 2026-01-31
 
--- Auth 스키마
+-- ============================================
+-- Schema Creation
+-- ============================================
+
+-- Auth schema (authentication & authorization)
 CREATE SCHEMA IF NOT EXISTS auth;
 
--- Project 스키마
+-- Project schema (projects, phases, WBS, parts, epics, features)
 CREATE SCHEMA IF NOT EXISTS project;
 
--- Task 스키마
+-- Task schema (sprints, stories, tasks, kanban, weekly reports)
 CREATE SCHEMA IF NOT EXISTS task;
 
--- Chat 스키마
+-- Chat schema (chat sessions, messages for AI assistant)
 CREATE SCHEMA IF NOT EXISTS chat;
 
--- Risk 스키마
+-- Risk schema (risk management - future use)
 CREATE SCHEMA IF NOT EXISTS risk;
 
--- Report 스키마
+-- Report schema (reports, templates)
 CREATE SCHEMA IF NOT EXISTS report;
 
--- 기본 권한 설정
+-- RFP schema (RFPs, requirements)
+CREATE SCHEMA IF NOT EXISTS rfp;
+
+-- Education schema (education modules, roadmaps, sessions)
+CREATE SCHEMA IF NOT EXISTS education;
+
+-- Lineage schema (data lineage tracking, outbox events)
+CREATE SCHEMA IF NOT EXISTS lineage;
+
+-- ============================================
+-- Grant Privileges
+-- ============================================
 GRANT ALL PRIVILEGES ON SCHEMA auth TO pms_user;
 GRANT ALL PRIVILEGES ON SCHEMA project TO pms_user;
 GRANT ALL PRIVILEGES ON SCHEMA task TO pms_user;
 GRANT ALL PRIVILEGES ON SCHEMA chat TO pms_user;
 GRANT ALL PRIVILEGES ON SCHEMA risk TO pms_user;
 GRANT ALL PRIVILEGES ON SCHEMA report TO pms_user;
+GRANT ALL PRIVILEGES ON SCHEMA rfp TO pms_user;
+GRANT ALL PRIVILEGES ON SCHEMA education TO pms_user;
+GRANT ALL PRIVILEGES ON SCHEMA lineage TO pms_user;
 
+-- ============================================
 -- Extensions
+-- ============================================
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pg_trgm"; -- 텍스트 검색 최적화
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";  -- Text search optimization
 
 COMMIT;

@@ -34,8 +34,10 @@ export default function FeatureGroupLinker({
   const [isExpanded, setIsExpanded] = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
 
-  const { data: linkedFeatures = [], isLoading: loadingLinked } = useFeaturesByWbsGroup(wbsGroupId);
-  const { data: unlinkedFeatures = [], isLoading: loadingUnlinked } = useUnlinkedFeatures(epicId);
+  const { data: linkedFeaturesData, isLoading: loadingLinked } = useFeaturesByWbsGroup(wbsGroupId);
+  const linkedFeatures = (linkedFeaturesData || []) as Feature[];
+  const { data: unlinkedFeaturesData, isLoading: loadingUnlinked } = useUnlinkedFeatures(epicId);
+  const unlinkedFeatures = (unlinkedFeaturesData || []) as Feature[];
 
   const linkMutation = useLinkFeatureToWbsGroup();
   const unlinkMutation = useUnlinkFeatureFromWbsGroup();

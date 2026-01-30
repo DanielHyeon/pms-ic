@@ -65,9 +65,10 @@ export default function TemplateLibrary({
   const [templateToEdit, setTemplateToEdit] = useState<TemplateSet | null>(null);
   const [importJson, setImportJson] = useState('');
 
-  const { data: templates = [], isLoading, refetch } = useTemplateSets(
+  const { data: templatesData, isLoading, refetch } = useTemplateSets(
     selectedCategory === 'ALL' ? undefined : selectedCategory
   );
+  const templates = (templatesData || []) as TemplateSet[];
 
   const createMutation = useCreateTemplateSet();
   const deleteMutation = useDeleteTemplateSet();

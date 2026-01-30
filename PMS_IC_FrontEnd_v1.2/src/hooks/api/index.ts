@@ -62,7 +62,33 @@ export * from './useWbs';
 export * from './useTemplates';
 
 // WBS-Backlog Integration hooks (Phase-Epic, WbsGroup-Feature, WbsItem-Story)
-export * from './useWbsBacklogIntegration';
+// Explicitly export to avoid name conflicts with useFeatures
+export {
+  integrationKeys,
+  useEpicsByPhase,
+  useUnlinkedEpics,
+  useLinkEpicToPhase,
+  useUnlinkEpicFromPhase,
+  useFeaturesByWbsGroup as useFeaturesByWbsGroupIntegration,
+  useWbsGroupsByFeature,
+  useUnlinkedFeatures,
+  useLinkFeatureToWbsGroup as useLinkFeatureToWbsGroupIntegration,
+  useUnlinkFeatureFromWbsGroup as useUnlinkFeatureFromWbsGroupIntegration,
+  useStoriesByWbsItem,
+  useWbsItemsByStory,
+  useUnlinkedStories,
+  useUnlinkedStoriesByProject,
+  useLinkStoryToWbsItem,
+  useUnlinkStoryFromWbsItem,
+  usePhaseIntegration,
+  useAllIntegrationLinks,
+} from './useWbsBacklogIntegration';
+export type {
+  PhaseEpicSummary,
+  GroupFeatureSummary,
+  ItemStorySummary,
+  PhaseIntegrationSummary,
+} from './useWbsBacklogIntegration';
 
 // DB Admin hooks (Sync, Backup, Restore)
 export * from './useDbAdmin';

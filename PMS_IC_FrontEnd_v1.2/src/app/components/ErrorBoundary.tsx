@@ -39,10 +39,14 @@ export class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div className="flex flex-col items-center justify-center min-h-[400px] p-8">
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="flex flex-col items-center justify-center min-h-[400px] p-8"
+        >
           <div className="flex flex-col items-center gap-4 max-w-md text-center">
             <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center">
-              <AlertTriangle className="w-8 h-8 text-red-600" />
+              <AlertTriangle className="w-8 h-8 text-red-600" aria-hidden="true" />
             </div>
 
             <h2 className="text-xl font-semibold text-gray-900">
@@ -53,7 +57,7 @@ export class ErrorBoundary extends Component<Props, State> {
               An unexpected error occurred. Please try again or contact support if the problem persists.
             </p>
 
-            {process.env.NODE_ENV === 'development' && this.state.error && (
+            {import.meta.env.DEV && this.state.error && (
               <details className="w-full mt-4 p-4 bg-gray-100 rounded-lg text-left">
                 <summary className="cursor-pointer text-sm font-medium text-gray-700">
                   Error Details
@@ -66,10 +70,11 @@ export class ErrorBoundary extends Component<Props, State> {
             )}
 
             <button
+              type="button"
               onClick={this.handleRetry}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
-              <RefreshCw className="w-4 h-4" />
+              <RefreshCw className="w-4 h-4" aria-hidden="true" />
               Try Again
             </button>
           </div>

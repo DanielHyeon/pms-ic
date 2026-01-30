@@ -34,7 +34,7 @@ class WebSocketService {
   private maxReconnectAttempts = 5;
   private reconnectDelay = 3000;
   private messageQueue: WipUpdateEvent[] = [];
-  private heartbeatInterval: NodeJS.Timeout | null = null;
+  private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';

@@ -1,6 +1,6 @@
 """
 Response Validator for Gemma 3 12B Q5 Stability
-특정 실패 패턴 감지 및 재시도 트리거
+Detect specific failure patterns and trigger retry
 """
 
 import re
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class ResponseFailureType(Enum):
-    """응답 실패 유형 분류"""
+    """Response failure type classification"""
     UNABLE_TO_ANSWER = "unable_to_answer"
     INCOMPLETE_RESPONSE = "incomplete_response"
     MALFORMED_RESPONSE = "malformed_response"
@@ -26,7 +26,7 @@ class ResponseFailureType(Enum):
 
 @dataclass
 class ValidationResult:
-    """응답 검증 결과"""
+    """Response validation result"""
     is_valid: bool
     failure_type: ResponseFailureType
     confidence: float  # 0.0 ~ 1.0
@@ -36,15 +36,15 @@ class ValidationResult:
 
 class ResponseValidator:
     """
-    Gemma 3 LLM 응답 검증
-    불안정한 응답 패턴 감지 및 분류
+    Gemma 3 LLM response validation
+    Detect and classify unstable response patterns
     """
 
     def __init__(self, min_response_length: int = 10, max_response_length: int = 4000):
         self.min_response_length = min_response_length
         self.max_response_length = max_response_length
 
-        # 실패 패턴 정의
+        # Define failure patterns
         self.unable_to_answer_patterns = [
             r"unable\s+to\s+answer",
             r"cannot\s+answer",
@@ -59,49 +59,49 @@ class ResponseValidator:
         ]
 
         self.incomplete_patterns = [
-            r"\.{3,}$",  # 끝에 "..."
-            r"등이\s+있습니다\.$",  # 미완성 문장
-            r"^\s*(요약|Summary):",  # 미완성 답변
-            r"다음과\s+같습니다\.",  # 불완전한 마침
+            r"\.{3,}$",  # Ends with "..."
+            r"등이\s+있습니다\.$",  # Incomplete sentence pattern (Korean)
+            r"^\s*(요약|Summary):",  # Incomplete answer
+            r"다음과\s+같습니다\.",  # Incomplete ending (Korean)
         ]
 
         self.repetitive_patterns = [
-            r"(.{20,})\1{2,}",  # 같은 문구 3번 이상 반복
-            r"(네|예)\s+(네|예)\s+(네|예)",  # 반복 응답
-            r"(좋습니다)\s+(좋습니다)",  # 중복 단어
+            r"(.{20,})\1{2,}",  # Same phrase repeated 3+ times
+            r"(네|예)\s+(네|예)\s+(네|예)",  # Repetitive affirmation (Korean)
+            r"(좋습니다)\s+(좋습니다)",  # Duplicate words (Korean)
         ]
 
     def validate(self, response: str, original_query: str = "") -> ValidationResult:
         """
-        응답 검증
+        Validate response
 
         Args:
-            response: LLM의 응답 텍스트
-            original_query: 원본 질문 (컨텍스트용)
+            response: LLM response text
+            original_query: Original question (for context)
 
         Returns:
-            ValidationResult: 검증 결과
+            ValidationResult: Validation result
         """
-        # 공백 정리
+        # Trim whitespace
         response = response.strip() if response else ""
 
-        # 1. 빈 응답 확인
+        # 1. Check empty response
         if not response or len(response) == 0:
             return ValidationResult(
                 is_valid=False,
                 failure_type=ResponseFailureType.EMPTY_RESPONSE,
                 confidence=1.0,
-                reason="응답이 비어있음",
+                reason="Response is empty",
                 suggested_retry=True
             )
 
-        # 2. 길이 검증
+        # 2. Length validation
         if len(response) < self.min_response_length:
             return ValidationResult(
                 is_valid=False,
                 failure_type=ResponseFailureType.INCOMPLETE_RESPONSE,
                 confidence=0.8,
-                reason=f"응답이 너무 짧음 ({len(response)} chars < {self.min_response_length})",
+                reason=f"Response too short ({len(response)} chars < {self.min_response_length})",
                 suggested_retry=True
             )
 
@@ -110,46 +110,46 @@ class ResponseValidator:
                 is_valid=False,
                 failure_type=ResponseFailureType.MALFORMED_RESPONSE,
                 confidence=0.6,
-                reason=f"응답이 너무 길음 ({len(response)} chars > {self.max_response_length})",
+                reason=f"Response too long ({len(response)} chars > {self.max_response_length})",
                 suggested_retry=False
             )
 
-        # 3. "Unable to Answer" 패턴 검증
+        # 3. "Unable to Answer" pattern validation
         result = self._check_unable_to_answer(response)
         if result:
             return result
 
-        # 4. 불완전한 응답 패턴
+        # 4. Incomplete response pattern
         result = self._check_incomplete_response(response)
         if result:
             return result
 
-        # 5. 반복적인 응답 검증
+        # 5. Repetitive response validation
         result = self._check_repetitive_response(response)
         if result:
             return result
 
-        # 6. 타임아웃으로 인한 절단 응답 검증
+        # 6. Timeout cutoff response validation
         result = self._check_timeout_cutoff(response)
         if result:
             return result
 
-        # 7. 형식 오류 검증
+        # 7. Malformed response validation
         result = self._check_malformed_response(response)
         if result:
             return result
 
-        # 모든 검사 통과
+        # All checks passed
         return ValidationResult(
             is_valid=True,
             failure_type=ResponseFailureType.NONE,
             confidence=0.95,
-            reason="응답이 유효함",
+            reason="Response is valid",
             suggested_retry=False
         )
 
     def _check_unable_to_answer(self, response: str) -> Optional[ValidationResult]:
-        """'Unable to answer' 패턴 확인"""
+        """Check 'Unable to answer' patterns"""
         response_lower = response.lower()
 
         for pattern in self.unable_to_answer_patterns:
@@ -159,14 +159,14 @@ class ResponseValidator:
                     is_valid=False,
                     failure_type=ResponseFailureType.UNABLE_TO_ANSWER,
                     confidence=0.95,
-                    reason=f"응답이 답변 불가 패턴 포함: {pattern}",
+                    reason=f"Response contains unable-to-answer pattern: {pattern}",
                     suggested_retry=True
                 )
 
         return None
 
     def _check_incomplete_response(self, response: str) -> Optional[ValidationResult]:
-        """불완전한 응답 패턴 확인"""
+        """Check incomplete response patterns"""
         for pattern in self.incomplete_patterns:
             if re.search(pattern, response, re.IGNORECASE | re.DOTALL):
                 logger.warning(f"Detected incomplete pattern: {pattern}")
@@ -174,14 +174,14 @@ class ResponseValidator:
                     is_valid=False,
                     failure_type=ResponseFailureType.INCOMPLETE_RESPONSE,
                     confidence=0.7,
-                    reason=f"응답이 불완전한 패턴 포함: {pattern}",
+                    reason=f"Response contains incomplete pattern: {pattern}",
                     suggested_retry=True
                 )
 
         return None
 
     def _check_repetitive_response(self, response: str) -> Optional[ValidationResult]:
-        """반복적인 응답 검증"""
+        """Check repetitive response patterns"""
         for pattern in self.repetitive_patterns:
             matches = re.findall(pattern, response, re.IGNORECASE | re.DOTALL)
             if matches:
@@ -190,24 +190,24 @@ class ResponseValidator:
                     is_valid=False,
                     failure_type=ResponseFailureType.REPETITIVE_RESPONSE,
                     confidence=0.8,
-                    reason=f"응답에 반복적인 문구 포함",
+                    reason="Response contains repetitive phrases",
                     suggested_retry=True
                 )
 
         return None
 
     def _check_timeout_cutoff(self, response: str) -> Optional[ValidationResult]:
-        """타임아웃으로 인한 절단 응답 검증"""
-        # 특징: 갑작스럽게 끝나는 문장 (불완전한 마침)
+        """Check for timeout-induced cutoff response"""
+        # Characteristic: Abruptly ending sentence (incomplete ending)
         timeout_patterns = [
-            r"[^\.\!\?:\n]$",  # 마침표 없이 끝남
-            r"^.{5,10}$",  # 너무 짧으면서 마침표 없음
-            r",\s*$",  # 쉼표로 끝남
-            r":\s*$",  # 콜론으로 끝남
-            r"^\d{1,3}\.\s",  # 리스트 형식인데 하나만
+            r"[^\.\!\?:\n]$",  # Ends without period
+            r"^.{5,10}$",  # Too short without period
+            r",\s*$",  # Ends with comma
+            r":\s*$",  # Ends with colon
+            r"^\d{1,3}\.\s",  # List format with only one item
         ]
 
-        # 추가 휴리스틱: 문장이 너무 많이 끝나지 않음
+        # Additional heuristic: Sentence doesn't end properly
         period_count = response.count(".")
         comma_count = response.count(",")
         sentence_count = len(re.split(r"[.!?\n]", response))
@@ -218,20 +218,20 @@ class ResponseValidator:
                 is_valid=False,
                 failure_type=ResponseFailureType.TIMEOUT_CUTOFF,
                 confidence=0.6,
-                reason="타임아웃으로 인한 응답 절단 추정",
+                reason="Suspected timeout cutoff - response truncated",
                 suggested_retry=True
             )
 
         return None
 
     def _check_malformed_response(self, response: str) -> Optional[ValidationResult]:
-        """형식 오류 검증"""
+        """Check for malformed response"""
         malformed_patterns = [
-            r"^```",  # 코드 블록만 있음
-            r"^```[\s\S]*```$",  # 코드 블록 형식만
-            r"^#{6,}",  # 제목이 너무 많음
-            r"^[\s\-\*]{3,}$",  # 구분선만
-            r"^(?:[\s\-\*])*$",  # 공백과 기호만
+            r"^```",  # Only code block
+            r"^```[\s\S]*```$",  # Only code block format
+            r"^#{6,}",  # Too many heading markers
+            r"^[\s\-\*]{3,}$",  # Only separator line
+            r"^(?:[\s\-\*])*$",  # Only whitespace and symbols
         ]
 
         for pattern in malformed_patterns:
@@ -241,31 +241,31 @@ class ResponseValidator:
                     is_valid=False,
                     failure_type=ResponseFailureType.MALFORMED_RESPONSE,
                     confidence=0.85,
-                    reason=f"응답의 형식이 잘못됨",
+                    reason="Response format is malformed",
                     suggested_retry=True
                 )
 
         return None
 
     def should_retry(self, validation_result: ValidationResult) -> bool:
-        """재시도 여부 결정"""
+        """Determine whether to retry"""
         return validation_result.suggested_retry and not validation_result.is_valid
 
     def get_retry_suggestion(self, validation_result: ValidationResult) -> str:
-        """재시도 전략 제안"""
+        """Suggest retry strategy"""
         suggestions = {
-            ResponseFailureType.UNABLE_TO_ANSWER: "쿼리 키워드 개선 필요",
-            ResponseFailureType.INCOMPLETE_RESPONSE: "더 명확한 질문 필요",
-            ResponseFailureType.MALFORMED_RESPONSE: "쿼리 리포매팅 필요",
-            ResponseFailureType.REPETITIVE_RESPONSE: "다른 키워드로 재시도 필요",
-            ResponseFailureType.TIMEOUT_CUTOFF: "타임아웃 처리 - 컨텍스트 축소 후 재시도",
-            ResponseFailureType.EMPTY_RESPONSE: "LLM 서비스 상태 확인 필요",
+            ResponseFailureType.UNABLE_TO_ANSWER: "Need to improve query keywords",
+            ResponseFailureType.INCOMPLETE_RESPONSE: "Need clearer question",
+            ResponseFailureType.MALFORMED_RESPONSE: "Need to reformat query",
+            ResponseFailureType.REPETITIVE_RESPONSE: "Need to retry with different keywords",
+            ResponseFailureType.TIMEOUT_CUTOFF: "Timeout - retry with reduced context",
+            ResponseFailureType.EMPTY_RESPONSE: "Need to check LLM service status",
         }
-        return suggestions.get(validation_result.failure_type, "쿼리 개선 후 재시도")
+        return suggestions.get(validation_result.failure_type, "Retry after improving query")
 
 
 class BatchResponseValidator:
-    """배치 응답 검증 (모니터링/메트릭용)"""
+    """Batch response validation (for monitoring/metrics)"""
 
     def __init__(self):
         self.validator = ResponseValidator()
@@ -273,7 +273,7 @@ class BatchResponseValidator:
         self.total_validations = 0
 
     def validate_batch(self, responses: list, queries: list = None) -> list:
-        """배치 검증"""
+        """Batch validation"""
         if queries is None:
             queries = [""] * len(responses)
 
@@ -282,7 +282,7 @@ class BatchResponseValidator:
             result = self.validator.validate(response, query)
             results.append(result)
 
-            # 통계 업데이트
+            # Update statistics
             if not result.is_valid:
                 failure_type = result.failure_type.value
                 self.failure_counts[failure_type] = self.failure_counts.get(failure_type, 0) + 1
@@ -292,7 +292,7 @@ class BatchResponseValidator:
         return results
 
     def get_stats(self) -> dict:
-        """통계 반환"""
+        """Return statistics"""
         return {
             "total_validations": self.total_validations,
             "failure_counts": self.failure_counts,
@@ -302,6 +302,6 @@ class BatchResponseValidator:
         }
 
     def reset_stats(self):
-        """통계 초기화"""
+        """Reset statistics"""
         self.failure_counts = {}
         self.total_validations = 0

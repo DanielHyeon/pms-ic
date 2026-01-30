@@ -62,7 +62,10 @@ export function useCreateWbsSnapshot() {
   return useMutation({
     mutationFn: async (request: CreateSnapshotRequest): Promise<WbsSnapshot> => {
       const result = await apiService.createWbsSnapshot(request);
-      return result as WbsSnapshot;
+      if (!result) {
+        throw new Error('Failed to create snapshot');
+      }
+      return result as unknown as WbsSnapshot;
     },
     onSuccess: (data, variables) => {
       // Invalidate snapshots for the phase

@@ -16,7 +16,7 @@ interface PartMetricRowProps {
 
 function PartMetricRow({ partId, partName, partLeader, projectId }: PartMetricRowProps) {
   const navigate = useNavigate();
-  const { data: metrics, isLoading } = usePartMetrics(partId);
+  const { data: metrics, isLoading } = usePartMetrics(projectId, partId);
 
   const handleClick = () => {
     navigate(`/parts/${partId}/dashboard`);
@@ -34,10 +34,10 @@ function PartMetricRow({ partId, partName, partLeader, projectId }: PartMetricRo
     );
   }
 
-  const completionRate = metrics?.featureCompletionRate ?? 0;
-  const totalStoryPoints = metrics?.totalStoryPoints ?? 0;
-  const completedStoryPoints = metrics?.completedStoryPoints ?? 0;
-  const openIssues = metrics?.openIssues ?? 0;
+  const completionRate = metrics?.completionRate ?? 0;
+  const storyCompletionRate = metrics?.storyCompletionRate ?? 0;
+  const wipCount = metrics?.wipCount ?? 0;
+  const blockerCount = metrics?.blockerCount ?? 0;
 
   return (
     <tr
@@ -58,12 +58,12 @@ function PartMetricRow({ partId, partName, partLeader, projectId }: PartMetricRo
         </div>
       </td>
       <td className="py-3 text-center text-sm text-gray-600">
-        {completedStoryPoints}/{totalStoryPoints}
+        {storyCompletionRate.toFixed(0)}%
       </td>
       <td className="py-3 text-center">
-        {openIssues > 0 ? (
+        {blockerCount > 0 ? (
           <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded-full">
-            {openIssues}
+            {blockerCount}
           </span>
         ) : (
           <span className="text-gray-400 text-sm">0</span>
@@ -118,6 +118,7 @@ export default function PartComparisonView({ projectId }: PartComparisonViewProp
               key={part.id}
               partId={part.id}
               partName={part.name}
+              projectId={projectId}
             />
           ))}
         </div>
@@ -160,9 +161,9 @@ export default function PartComparisonView({ projectId }: PartComparisonViewProp
 }
 
 // Sub-component for progress bar
-function PartProgressBar({ partId, partName }: { partId: string; partName: string }) {
-  const { data: metrics } = usePartMetrics(partId);
-  const completionRate = metrics?.featureCompletionRate ?? 0;
+function PartProgressBar({ partId, partName, projectId }: { partId: string; partName: string; projectId: string }) {
+  const { data: metrics } = usePartMetrics(projectId, partId);
+  const completionRate = metrics?.completionRate ?? 0;
 
   return (
     <div className="flex items-center gap-4">

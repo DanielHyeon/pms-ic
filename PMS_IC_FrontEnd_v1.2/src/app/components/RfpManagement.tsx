@@ -233,7 +233,7 @@ export default function RfpManagement({ userRole }: RfpManagementProps) {
                 ))}
               </SelectContent>
             </Select>
-            <Button variant="outline" onClick={loadRfps} disabled={isLoading}>
+            <Button variant="outline" onClick={() => loadRfps()} disabled={isLoading}>
               <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
             </Button>
           </div>

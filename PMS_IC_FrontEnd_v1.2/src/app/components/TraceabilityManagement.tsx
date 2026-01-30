@@ -60,8 +60,8 @@ export default function TraceabilityManagement({
   // API hooks
   const { data: lineageData, isLoading: isLineageLoading } = useLineageGraph(projectId);
   const { data: requirements = [] } = useRequirements(projectId);
-  const { data: stories = [] } = useStories(projectId);
-  const { data: tasks = [] } = useKanbanTasks(projectId);
+  const { data: stories = [] } = useStories();
+  const { data: tasks = [] } = useKanbanTasks();
 
   // Role permissions
   const permissions = getRolePermissions(userRole);

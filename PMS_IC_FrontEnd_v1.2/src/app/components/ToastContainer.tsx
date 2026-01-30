@@ -11,13 +11,13 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onClose }) => {
   const getIcon = (type: ToastType) => {
     switch (type) {
       case 'success':
-        return <CheckCircle className="w-5 h-5 text-emerald-600" />;
+        return <CheckCircle className="w-5 h-5 text-emerald-600" aria-hidden="true" />;
       case 'error':
-        return <AlertCircle className="w-5 h-5 text-red-600" />;
+        return <AlertCircle className="w-5 h-5 text-red-600" aria-hidden="true" />;
       case 'warning':
-        return <AlertTriangle className="w-5 h-5 text-amber-600" />;
+        return <AlertTriangle className="w-5 h-5 text-amber-600" aria-hidden="true" />;
       case 'info':
-        return <Info className="w-5 h-5 text-blue-600" />;
+        return <Info className="w-5 h-5 text-blue-600" aria-hidden="true" />;
     }
   };
 
@@ -86,10 +86,12 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onClose }) => {
         )}
       </div>
       <button
+        type="button"
         onClick={() => onClose(toast.id)}
-        className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
+        className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 rounded"
+        aria-label="Close notification"
       >
-        <X className="w-5 h-5" />
+        <X className="w-5 h-5" aria-hidden="true" />
       </button>
     </div>
   );
@@ -127,7 +129,12 @@ const ToastContainer: React.FC = () => {
   };
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 space-y-3 max-w-md">
+    <div
+      role="status"
+      aria-live="polite"
+      aria-atomic="false"
+      className="fixed bottom-4 right-4 z-50 space-y-3 max-w-md"
+    >
       {Array.from(toasts.values()).map((toast) => (
         <ToastItem
           key={toast.id}

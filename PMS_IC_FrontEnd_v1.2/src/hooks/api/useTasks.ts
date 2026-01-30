@@ -87,23 +87,26 @@ export function useKanbanTasks() {
   return useQuery({
     queryKey: [...taskKeys.all, 'kanban'],
     queryFn: async () => {
-      const response = await apiService.getTasks();
-      const tasks = response?.data || response || [];
+      const response = await apiService.getTasks() as unknown;
+      // Handle both wrapped { data: [...] } and direct array responses
+      const tasks = (response && typeof response === 'object' && 'data' in response
+        ? (response as { data: unknown[] }).data
+        : response) || [];
 
       if (!Array.isArray(tasks)) return [];
 
       // Map API tasks to KanbanTask format
-      return tasks.map((task: any): KanbanTask => ({
-        id: task.id,
-        title: task.title,
-        assignee: task.assigneeId || 'Unassigned',
-        assigneeId: task.assigneeId,
-        priority: mapPriority(task.priority),
-        storyPoints: task.storyPoints || 3,
-        dueDate: task.dueDate || '',
+      return tasks.map((task: Record<string, unknown>): KanbanTask => ({
+        id: String(task.id),
+        title: String(task.title || ''),
+        assignee: String(task.assigneeId || 'Unassigned'),
+        assigneeId: task.assigneeId as string | undefined,
+        priority: mapPriority(task.priority as string | undefined),
+        storyPoints: (task.storyPoints as number) || 3,
+        dueDate: String(task.dueDate || ''),
         isFirefighting: task.priority === 'CRITICAL',
-        labels: task.tags || [],
-        status: task.status || 'TODO',
+        labels: (task.tags as string[]) || [],
+        status: String(task.status || 'TODO'),
       }));
     },
   });

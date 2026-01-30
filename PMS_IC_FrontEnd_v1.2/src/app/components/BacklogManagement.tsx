@@ -291,10 +291,13 @@ export default function BacklogManagement({ userRole, projectId = 'proj-001' }: 
   const isSprintStatus = (status: string) => ['SELECTED', 'IN_SPRINT', 'IN_PROGRESS', 'REVIEW'].includes(status);
   const isDoneStatus = (status: string) => ['COMPLETED', 'DONE'].includes(status);
 
-  // Filter by Part if selected
-  const filterByPart = <T extends { partId?: string }>(items: T[]): T[] => {
+  // Filter by Part if selected (Note: UserStory may not have partId)
+  const filterByPart = <T extends object>(items: T[]): T[] => {
     if (!selectedPartFilter) return items;
-    return items.filter((item) => item.partId === selectedPartFilter);
+    return items.filter((item) => {
+      const partId = (item as { partId?: string }).partId;
+      return partId === selectedPartFilter;
+    });
   };
 
   const backlogStoriesOnly = filterByPart(stories.filter((s) => isBacklogStatus(s.status))).sort((a, b) => a.priority - b.priority);
@@ -602,7 +605,7 @@ export default function BacklogManagement({ userRole, projectId = 'proj-001' }: 
               <p className="text-sm font-medium text-gray-700 mb-2">미산정 스토리:</p>
               <div className="flex flex-wrap gap-2">
                 {stories
-                  .filter((s) => !s.storyPoints && s.status === 'BACKLOG')
+                  .filter((s) => !s.storyPoints && isBacklogStatus(s.status))
                   .slice(0, 5)
                   .map((story) => (
                     <button
@@ -618,7 +621,7 @@ export default function BacklogManagement({ userRole, projectId = 'proj-001' }: 
                       #{story.id} {story.title.slice(0, 30)}...
                     </button>
                   ))}
-                {stories.filter((s) => !s.storyPoints && s.status === 'BACKLOG').length === 0 && (
+                {stories.filter((s) => !s.storyPoints && isBacklogStatus(s.status)).length === 0 && (
                   <span className="text-sm text-gray-500">모든 스토리가 산정되었습니다!</span>
                 )}
               </div>

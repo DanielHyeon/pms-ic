@@ -35,13 +35,31 @@ interface AggregatedDeliverable {
   phaseName: string;
 }
 
+// Phase type with deliverables for this component
+interface PhaseWithDeliverables {
+  id: string;
+  name: string;
+  deliverables?: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    type?: string;
+    status?: string;
+    version?: string;
+    uploadedAt?: string;
+    approvedBy?: string;
+  }>;
+  [key: string]: unknown;
+}
+
 export default function DeliverablesPage({ userRole, projectId = 'proj-001' }: DeliverablesPageProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [filterPhase, setFilterPhase] = useState<string>('');
 
   // API hooks
-  const { data: phases = [], isLoading: isPhasesLoading } = useAllPhases();
+  const { data: phasesData = [], isLoading: isPhasesLoading } = useAllPhases();
+  const phases = phasesData as PhaseWithDeliverables[];
 
   // Role permissions
   const permissions = getRolePermissions(userRole);
@@ -53,7 +71,7 @@ export default function DeliverablesPage({ userRole, projectId = 'proj-001' }: D
 
     phases.forEach((phase) => {
       if (phase.deliverables && Array.isArray(phase.deliverables)) {
-        phase.deliverables.forEach((d: { id: string; name: string; description?: string; type?: string; status?: string; version?: string; uploadedAt?: string; approvedBy?: string }) => {
+        phase.deliverables.forEach((d) => {
           deliverables.push({
             id: d.id,
             name: d.name,
@@ -111,7 +129,7 @@ export default function DeliverablesPage({ userRole, projectId = 'proj-001' }: D
     id: d.id,
     name: d.name,
     description: d.description,
-    type: d.type,
+    type: (d.type || 'OTHER') as 'DOCUMENT' | 'CODE' | 'REPORT' | 'PRESENTATION' | 'OTHER',
     status: d.status,
     version: d.version,
     uploadedAt: d.uploadedAt,

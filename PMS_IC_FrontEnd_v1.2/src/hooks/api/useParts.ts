@@ -203,10 +203,14 @@ const mockPartMetrics: PartMetrics = {
 export function usePartDashboard(projectId: string, partId: string) {
   return useQuery<PartDashboard>({
     queryKey: partKeys.dashboard(projectId, partId),
-    queryFn: async () => {
+    queryFn: async (): Promise<PartDashboard> => {
       try {
         const response = await apiService.getPartDashboard(projectId, partId);
-        return response;
+        if (response) {
+          return response as PartDashboard;
+        }
+        // Return mock data with part info if response is null
+        return { ...mockPartDashboard, partId };
       } catch {
         // Return mock data with part info
         return { ...mockPartDashboard, partId };
@@ -219,10 +223,14 @@ export function usePartDashboard(projectId: string, partId: string) {
 export function usePartMetrics(projectId: string, partId: string) {
   return useQuery<PartMetrics>({
     queryKey: partKeys.metrics(projectId, partId),
-    queryFn: async () => {
+    queryFn: async (): Promise<PartMetrics> => {
       try {
         const response = await apiService.getPartMetrics(projectId, partId);
-        return response;
+        if (response) {
+          return response as PartMetrics;
+        }
+        // Return mock data with part info if response is null
+        return { ...mockPartMetrics, partId };
       } catch {
         // Return mock data with part info
         return { ...mockPartMetrics, partId };

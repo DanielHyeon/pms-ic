@@ -601,6 +601,19 @@ export class ApiService {
     }, { message: 'KPI deleted' });
   }
 
+  // Alias methods for Phase KPIs (used by usePhases.ts)
+  async createPhaseKpi(phaseId: string, data: { name: string; target: string; current?: string; status?: string }) {
+    return this.createKpi(phaseId, data);
+  }
+
+  async updatePhaseKpi(phaseId: string, kpiId: string, data: { name?: string; target?: string; current?: string; status?: string }) {
+    return this.updateKpi(phaseId, kpiId, data);
+  }
+
+  async deletePhaseKpi(phaseId: string, kpiId: string) {
+    return this.deleteKpi(phaseId, kpiId);
+  }
+
   async getTasks() {
     return this.fetchWithFallback('/tasks', {}, []);
   }
@@ -1733,6 +1746,40 @@ export class ApiService {
       { method: 'DELETE' },
       { message: 'Report deleted' }
     );
+  }
+
+  // Weekly Reports by Project (used by useWeeklyReports.ts)
+  async getWeeklyReports(projectId: string) {
+    const response = await this.fetchWithFallback(
+      `/weekly-reports/project/${projectId}`,
+      {},
+      { data: [] }
+    );
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async createWeeklyReport(projectId: string, data: { periodStart: string; periodEnd: string; content: string; status: string }) {
+    const response = await this.fetchWithFallback(
+      `/weekly-reports`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ ...data, projectId }),
+      },
+      { id: `report-${Date.now()}`, ...data, projectId }
+    );
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async generateAiReport(projectId: string, startDate: string, endDate: string, context?: string) {
+    const response = await this.fetchWithFallback(
+      `${V2}/reports/generate`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ projectId, startDate, endDate, context }),
+      },
+      { content: 'AI generated report content', generatedAt: new Date().toISOString() }
+    );
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
   }
 
   // ========== RAG Admin API ==========

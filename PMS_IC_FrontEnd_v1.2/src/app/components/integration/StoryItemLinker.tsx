@@ -35,8 +35,10 @@ export default function StoryItemLinker({
   const [isExpanded, setIsExpanded] = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
 
-  const { data: linkedStories = [], isLoading: loadingLinked } = useStoriesByWbsItem(wbsItemId);
-  const { data: unlinkedStories = [], isLoading: loadingUnlinked } = useUnlinkedStories(featureId, epicId);
+  const { data: linkedStoriesData, isLoading: loadingLinked } = useStoriesByWbsItem(wbsItemId);
+  const linkedStories = (linkedStoriesData || []) as UserStory[];
+  const { data: unlinkedStoriesData, isLoading: loadingUnlinked } = useUnlinkedStories(featureId, epicId);
+  const unlinkedStories = (unlinkedStoriesData || []) as UserStory[];
 
   const linkMutation = useLinkStoryToWbsItem();
   const unlinkMutation = useUnlinkStoryFromWbsItem();

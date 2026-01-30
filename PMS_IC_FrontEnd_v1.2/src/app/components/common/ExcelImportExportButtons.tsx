@@ -3,8 +3,8 @@ import { Download, Upload, FileSpreadsheet, ChevronDown, X, CheckCircle, AlertCi
 import { ImportResult, ImportError } from '../../../services/api';
 
 export interface ExcelImportExportButtonsProps {
-  onDownloadTemplate: () => Promise<void>;
-  onExport: () => Promise<void>;
+  onDownloadTemplate: () => Promise<void | Blob | null>;
+  onExport: () => Promise<void | Blob | null>;
   onImport: (file: File) => Promise<ImportResult>;
   isDownloadingTemplate?: boolean;
   isExporting?: boolean;

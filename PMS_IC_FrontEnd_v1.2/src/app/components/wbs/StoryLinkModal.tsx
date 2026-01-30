@@ -2,6 +2,13 @@ import { useState } from 'react';
 import { X, Search, Link2, Check } from 'lucide-react';
 import { useStoryWbsLinks, useLinkStoryToWbs, useUnlinkStoryFromWbs } from '../../../hooks/api/useWbs';
 
+// Link type for story-WBS connections
+interface StoryWbsLink {
+  storyId: string;
+  wbsItemId: string;
+  linkedAt?: string;
+}
+
 interface StoryLinkModalProps {
   wbsItemId: string;
   wbsItemName: string;
@@ -22,7 +29,8 @@ export default function StoryLinkModal({
   onClose,
 }: StoryLinkModalProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const { data: links = [] } = useStoryWbsLinks();
+  const { data: linksData } = useStoryWbsLinks();
+  const links = (linksData || []) as StoryWbsLink[];
   const linkMutation = useLinkStoryToWbs();
   const unlinkMutation = useUnlinkStoryFromWbs();
 

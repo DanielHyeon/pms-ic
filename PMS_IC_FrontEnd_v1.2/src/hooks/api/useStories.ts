@@ -1,17 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../../services/api';
+import { UserStory, StoryStatus } from '../../utils/storyTypes';
 
-interface UserStory {
-  id: number;
-  title: string;
-  description: string;
-  priority: number;
-  storyPoints?: number;
-  status: 'BACKLOG' | 'SELECTED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
-  assignee?: string;
-  epic: string;
-  acceptanceCriteria: string[];
-}
+export type { UserStory };
 
 const initialStories: UserStory[] = [
   {
@@ -20,7 +11,7 @@ const initialStories: UserStory[] = [
     description: '영수증 OCR 기능 구현',
     priority: 1,
     storyPoints: 8,
-    status: 'SELECTED',
+    status: 'IN_SPRINT',
     assignee: '이영희',
     epic: 'OCR 엔진',
     acceptanceCriteria: [
@@ -35,7 +26,7 @@ const initialStories: UserStory[] = [
     description: 'AI 설명 가능성(XAI) 기능 구현',
     priority: 2,
     storyPoints: 13,
-    status: 'BACKLOG',
+    status: 'READY',
     epic: 'AI 모델',
     acceptanceCriteria: [
       'AI 판단의 주요 근거(약관 조항, 유사 판례 등) 제공',
@@ -49,7 +40,7 @@ const initialStories: UserStory[] = [
     description: '모델 성능 대시보드 구축',
     priority: 3,
     storyPoints: 5,
-    status: 'COMPLETED',
+    status: 'DONE',
     assignee: '박민수',
     epic: '인프라',
     acceptanceCriteria: [
@@ -64,7 +55,7 @@ const initialStories: UserStory[] = [
     description: '데이터 라벨링 도구 개발',
     priority: 4,
     storyPoints: 8,
-    status: 'BACKLOG',
+    status: 'READY',
     epic: '데이터 관리',
     acceptanceCriteria: [
       '이미지 및 텍스트 데이터 라벨링 UI',
@@ -78,7 +69,7 @@ const initialStories: UserStory[] = [
     description: '진단서 자동 분류 기능',
     priority: 5,
     storyPoints: 13,
-    status: 'BACKLOG',
+    status: 'READY',
     epic: 'OCR 엔진',
     acceptanceCriteria: [
       '진단서 이미지에서 질병명 자동 추출',
@@ -92,7 +83,7 @@ const initialStories: UserStory[] = [
     description: '유사 케이스 검색 엔진',
     priority: 6,
     storyPoints: 8,
-    status: 'BACKLOG',
+    status: 'READY',
     epic: 'AI 모델',
     acceptanceCriteria: [
       '의미 기반 검색(Semantic Search) 기능',

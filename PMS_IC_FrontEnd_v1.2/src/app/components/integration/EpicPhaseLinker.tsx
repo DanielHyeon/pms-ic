@@ -33,8 +33,10 @@ export default function EpicPhaseLinker({
   const [isExpanded, setIsExpanded] = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
 
-  const { data: linkedEpics = [], isLoading: loadingLinked } = useEpicsByPhase(phaseId);
-  const { data: unlinkedEpics = [], isLoading: loadingUnlinked } = useUnlinkedEpics(projectId);
+  const { data: linkedEpicsData, isLoading: loadingLinked } = useEpicsByPhase(phaseId);
+  const linkedEpics = (linkedEpicsData || []) as Epic[];
+  const { data: unlinkedEpicsData, isLoading: loadingUnlinked } = useUnlinkedEpics(projectId);
+  const unlinkedEpics = (unlinkedEpicsData || []) as Epic[];
 
   const linkMutation = useLinkEpicToPhase();
   const unlinkMutation = useUnlinkEpicFromPhase();

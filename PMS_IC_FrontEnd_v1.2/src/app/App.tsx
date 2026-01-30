@@ -136,7 +136,7 @@ export default function App() {
         <Sidebar
           menuItems={menuItems}
           currentView={currentView}
-          onViewChange={setCurrentView}
+          onViewChange={(view: string) => setCurrentView(view as View)}
           userRole={currentUser.role}
         />
         

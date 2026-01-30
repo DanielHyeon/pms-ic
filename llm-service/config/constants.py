@@ -2,7 +2,7 @@
 LLM Service configuration constants
 Centralizes magic numbers and configuration values
 
-Reference: docs/PMS 최적화 방안.md
+Reference: docs/PMS Optimization Guide.md
 """
 
 from dataclasses import dataclass, field
@@ -215,7 +215,7 @@ class RAGConfig:
     """RAG search and quality configuration"""
     MIN_RELEVANCE_SCORE: float = 0.3
     QUALITY_THRESHOLD: float = 0.6
-    MAX_QUERY_RETRIES: int = 4  # 증가: 2 → 4 (Gemma 3 안정성 개선)
+    MAX_QUERY_RETRIES: int = 4  # Increased: 2 → 4 (Gemma 3 stability improvement)
     FUZZY_MATCH_THRESHOLD: int = 70
     DEFAULT_TOP_K: int = 5
     KEYWORD_MATCH_GOOD_RATIO: float = 0.5
@@ -225,8 +225,8 @@ class RAGConfig:
     MAX_RESPONSE_LENGTH: int = 4000
 
     # Timeout configuration (ms)
-    LLM_RESPONSE_TIMEOUT: int = 30000  # 30초
-    QUERY_TIMEOUT: int = 60000  # 1분
+    LLM_RESPONSE_TIMEOUT: int = 30000  # 30 seconds
+    QUERY_TIMEOUT: int = 60000  # 1 minute
 
 
 @dataclass(frozen=True)

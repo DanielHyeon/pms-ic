@@ -385,7 +385,9 @@ export default function ReportManagement({ userRole }: ReportManagementProps) {
                             <div className="flex items-center gap-2">
                               <span className="font-medium">{report.title}</span>
                               {report.llmGenerated && (
-                                <Sparkles className="h-4 w-4 text-purple-500" title="AI 생성" />
+                                <span title="AI 생성">
+                                  <Sparkles className="h-4 w-4 text-purple-500" />
+                                </span>
                               )}
                             </div>
                             <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">

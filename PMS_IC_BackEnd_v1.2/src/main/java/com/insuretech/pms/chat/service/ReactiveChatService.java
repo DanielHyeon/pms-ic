@@ -7,6 +7,7 @@ import com.insuretech.pms.chat.dto.ChatRequest;
 import com.insuretech.pms.chat.dto.ChatResponse;
 import com.insuretech.pms.chat.dto.ChatStreamRequest;
 import com.insuretech.pms.chat.dto.sse.SseEventBuilder;
+import com.insuretech.pms.chat.exception.ChatException;
 import com.insuretech.pms.chat.reactive.entity.R2dbcChatMessage;
 import com.insuretech.pms.chat.gateway.LlmGatewayService;
 import com.insuretech.pms.chat.gateway.dto.GatewayRequest;
@@ -14,7 +15,6 @@ import com.insuretech.pms.chat.tool.StreamingToolOrchestrator;
 import com.insuretech.pms.chat.tool.ToolContext;
 import com.insuretech.pms.chat.tool.ToolRegistry;
 import com.insuretech.pms.chat.gateway.dto.ToolDefinition;
-import com.insuretech.pms.chat.reactive.entity.R2dbcChatMessage;
 import com.insuretech.pms.chat.reactive.entity.R2dbcChatSession;
 import com.insuretech.pms.chat.reactive.repository.ReactiveChatMessageRepository;
 import com.insuretech.pms.chat.reactive.repository.ReactiveChatSessionRepository;
@@ -24,6 +24,7 @@ import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.reactive.TransactionalOperator;
+import org.springframework.util.StringUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -34,10 +35,18 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
+/**
+ * Reactive Chat Service providing AI chatbot functionality.
+ * Handles session management, message persistence, and LLM interactions.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ReactiveChatService {
+
+    private static final int MAX_CONTEXT_MESSAGES = 10;
+    private static final int MAX_MESSAGE_LENGTH = 10000;
+    private static final Duration CACHE_TTL = Duration.ofHours(1);
 
     private final ReactiveChatSessionRepository sessionRepository;
     private final ReactiveChatMessageRepository messageRepository;
@@ -49,16 +58,21 @@ public class ReactiveChatService {
     private final StreamingToolOrchestrator streamingToolOrchestrator;
     private final ToolRegistry toolRegistry;
 
+    /**
+     * Legacy streaming chat method.
+     * @deprecated Use {@link #streamChatV2(ChatStreamRequest, String)} instead.
+     */
+    @Deprecated
     public Flux<ChatChunk> streamChat(ChatRequest request, String userId) {
+        validateMessage(request.getMessage());
+
         AtomicReference<StringBuilder> contentAccumulator = new AtomicReference<>(new StringBuilder());
 
         return getOrCreateSession(request.getSessionId(), userId)
                 .flatMapMany(session -> {
-                    // Save user message
                     return saveUserMessage(session.getId(), request.getMessage())
                             .flatMapMany(userMessage -> {
-                                // Get recent messages for context
-                                return getRecentMessages(session.getId(), 10)
+                                return getRecentMessages(session.getId(), MAX_CONTEXT_MESSAGES)
                                         .collectList()
                                         .flatMapMany(recentMessages -> {
                                             AIChatContext context = buildContext(
@@ -76,7 +90,7 @@ public class ReactiveChatService {
                                                             saveAssistantMessage(session.getId(), fullContent)
                                                                     .subscribe(
                                                                             saved -> log.debug("Saved assistant message: {}", saved.getId()),
-                                                                            error -> log.error("Failed to save: {}", error.getMessage())
+                                                                            error -> log.error("Failed to save assistant message: {}", error.getMessage())
                                                                     );
                                                         }
                                                     });
@@ -84,18 +98,25 @@ public class ReactiveChatService {
                             });
                 })
                 .onErrorResume(e -> {
-                    log.error("Stream chat error: {}", e.getMessage());
+                    log.error("Stream chat error: {}", e.getMessage(), e);
                     return Flux.just(ChatChunk.error(
-                            request.getSessionId(), "error", "Chat error: " + e.getMessage()));
+                            request.getSessionId(), "error", sanitizeErrorMessage(e)));
                 });
     }
 
     /**
-     * Stream chat using Standard SSE Contract (v2)
+     * Stream chat using Standard SSE Contract (v2).
      * Events: meta, delta, done, error
-     * Supports tool calling when enabled
+     * Supports tool calling when enabled.
+     *
+     * @param request The chat stream request
+     * @param userId The authenticated user ID
+     * @return Flux of SSE events
      */
     public Flux<ServerSentEvent<String>> streamChatV2(ChatStreamRequest request, String userId) {
+        // Validate input
+        validateMessage(request.getMessage());
+
         String traceId = UUID.randomUUID().toString();
         AtomicReference<StringBuilder> contentAccumulator = new AtomicReference<>(new StringBuilder());
         AtomicReference<String> sessionIdRef = new AtomicReference<>();
@@ -103,13 +124,12 @@ public class ReactiveChatService {
         return getOrCreateSession(request.getSessionId(), userId)
                 .flatMapMany(session -> {
                     sessionIdRef.set(session.getId());
-                    log.info("StreamV2: traceId={}, session={}, user={}, tools={}",
-                            traceId, session.getId(), userId, request.isEnableTools());
+                    log.info("StreamV2: traceId={}, session={}, user={}, engine={}, tools={}",
+                            traceId, session.getId(), userId, request.getEngine(), request.isEnableTools());
 
                     return saveUserMessage(session.getId(), request.getMessage())
                             .flatMapMany(userMessage -> {
-                                // Get recent messages for context
-                                return getRecentMessages(session.getId(), 10)
+                                return getRecentMessages(session.getId(), MAX_CONTEXT_MESSAGES)
                                         .collectList()
                                         .flatMapMany(recentMessages -> {
                                             // Build gateway request
@@ -150,18 +170,152 @@ public class ReactiveChatService {
                                                                     traceId,
                                                                     request.getEngine()
                                                             ).subscribe(
-                                                                    saved -> log.debug("Saved assistant message: {}", saved.getId()),
-                                                                    error -> log.error("Failed to save: {}", error.getMessage())
+                                                                    saved -> log.debug("Saved assistant message: id={}, traceId={}",
+                                                                            saved.getId(), traceId),
+                                                                    error -> log.error("Failed to save assistant message: traceId={}, error={}",
+                                                                            traceId, error.getMessage())
                                                             );
                                                         }
-                                                    });
+                                                    })
+                                                    .doOnError(error -> log.error("Stream error: traceId={}, error={}",
+                                                            traceId, error.getMessage()));
                                         });
                             });
                 })
                 .onErrorResume(e -> {
-                    log.error("StreamV2 error: traceId={}, error={}", traceId, e.getMessage());
-                    return Flux.just(sseBuilder.error("STREAM_ERROR", e.getMessage(), traceId));
+                    log.error("StreamV2 error: traceId={}, error={}", traceId, e.getMessage(), e);
+                    return Flux.just(sseBuilder.error(
+                            mapErrorCode(e),
+                            sanitizeErrorMessage(e),
+                            traceId
+                    ));
                 });
+    }
+
+    /**
+     * Sends a non-streaming chat message and receives a complete response.
+     *
+     * @param request The chat request
+     * @param userId The authenticated user ID
+     * @return Mono containing the chat response
+     */
+    public Mono<ChatResponse> sendMessage(ChatRequest request, String userId) {
+        // Validate input
+        validateMessage(request.getMessage());
+
+        return getOrCreateSession(request.getSessionId(), userId)
+                .flatMap(session ->
+                        saveUserMessage(session.getId(), request.getMessage())
+                                .flatMap(userMessage ->
+                                        getRecentMessages(session.getId(), MAX_CONTEXT_MESSAGES)
+                                                .collectList()
+                                                .flatMap(recentMessages -> {
+                                                    AIChatContext context = buildContext(
+                                                            userId, request, toJpaMessages(recentMessages));
+
+                                                    return reactiveAIChatClient.chat(context)
+                                                            .flatMap(response -> saveAssistantMessage(session.getId(), response.getReply())
+                                                                    .then(cacheMessages(session.getId(), userMessage))
+                                                                    .thenReturn(response))
+                                                            .map(response -> {
+                                                                response.setSessionId(session.getId());
+                                                                return response;
+                                                            });
+                                                })
+                                )
+                )
+                .as(transactionalOperator::transactional)
+                .onErrorMap(e -> {
+                    if (e instanceof ChatException) {
+                        return e;
+                    }
+                    log.error("Send message error: {}", e.getMessage(), e);
+                    return ChatException.internalError("Failed to process message", null, e);
+                });
+    }
+
+    /**
+     * Retrieves chat history for a session.
+     *
+     * @param sessionId The session ID
+     * @return Flux of chat messages
+     */
+    public Flux<R2dbcChatMessage> getHistory(String sessionId) {
+        if (!StringUtils.hasText(sessionId)) {
+            return Flux.error(ChatException.sessionNotFound("null"));
+        }
+        return messageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+    }
+
+    /**
+     * Deletes a chat session and validates ownership.
+     *
+     * @param sessionId The session ID to delete
+     * @param userId The user ID requesting deletion
+     * @return Mono completing when deletion is done
+     */
+    public Mono<Void> deleteSession(String sessionId, String userId) {
+        if (!StringUtils.hasText(sessionId)) {
+            return Mono.error(ChatException.sessionNotFound("null"));
+        }
+
+        return sessionRepository.findByIdAndActiveTrue(sessionId)
+                .switchIfEmpty(Mono.error(ChatException.sessionNotFound(sessionId)))
+                .flatMap(session -> {
+                    // Validate ownership (unless guest or admin)
+                    if (!"guest".equals(userId) && !session.getUserId().equals(userId)) {
+                        log.warn("User {} attempted to delete session {} owned by {}",
+                                userId, sessionId, session.getUserId());
+                        return Mono.error(ChatException.forbidden("Cannot delete another user's session"));
+                    }
+
+                    return sessionRepository.deactivateSession(sessionId)
+                            .then(reactiveRedisTemplate.delete("chat:session:" + sessionId))
+                            .doOnSuccess(v -> log.info("Session deleted: sessionId={}, userId={}", sessionId, userId))
+                            .then();
+                });
+    }
+
+    /**
+     * Retrieves all active sessions for a user.
+     *
+     * @param userId The user ID
+     * @return Flux of chat sessions
+     */
+    public Flux<R2dbcChatSession> getUserSessions(String userId) {
+        if (!StringUtils.hasText(userId)) {
+            return Flux.empty();
+        }
+        return sessionRepository.findByUserIdAndActiveTrue(userId);
+    }
+
+    // ==================== Private Helper Methods ====================
+
+    private void validateMessage(String message) {
+        if (!StringUtils.hasText(message)) {
+            throw ChatException.messageEmpty();
+        }
+        if (message.length() > MAX_MESSAGE_LENGTH) {
+            throw ChatException.messageTooLong(MAX_MESSAGE_LENGTH);
+        }
+    }
+
+    private String sanitizeErrorMessage(Throwable e) {
+        // Don't expose internal error details to clients
+        if (e instanceof ChatException) {
+            return e.getMessage();
+        }
+        return "An error occurred while processing your request";
+    }
+
+    private String mapErrorCode(Throwable e) {
+        if (e instanceof ChatException chatEx) {
+            return chatEx.getErrorCode();
+        }
+        if (e instanceof IllegalArgumentException) {
+            return "CHAT_INVALID_REQUEST";
+        }
+        return "CHAT_INTERNAL_ERROR";
     }
 
     private ToolContext buildToolContext(String userId, String sessionId,
@@ -189,21 +343,31 @@ public class ReactiveChatService {
                                                List<R2dbcChatMessage> recentMessages) {
         List<ChatMessageDto> messages = new ArrayList<>();
 
-        // Add system prompt if needed
-        String systemPrompt = "You are a helpful assistant for insurance project management.";
-        if (request.isEnableTools() && toolRegistry.hasTools()) {
-            systemPrompt += " You have access to tools that can help you perform tasks. " +
-                    "Use them when appropriate to get real-time data.";
-        }
+        // Add system prompt
+        String systemPrompt = buildSystemPrompt(request);
         messages.add(ChatMessageDto.builder()
                 .role("system")
                 .content(systemPrompt)
                 .build());
 
+        // Add RAG context if available (before conversation history)
+        if (request.getRetrievedDocs() != null && !request.getRetrievedDocs().isEmpty()) {
+            String ragContext = String.join("\n\n", request.getRetrievedDocs());
+            messages.add(ChatMessageDto.builder()
+                    .role("system")
+                    .content("Context from retrieved documents:\n" + ragContext)
+                    .build());
+        }
+
         // Add conversation history
         for (R2dbcChatMessage msg : recentMessages) {
+            String role = msg.getRole() != null ? msg.getRole().toLowerCase() : "user";
+            // Validate role
+            if (!"user".equals(role) && !"assistant".equals(role) && !"system".equals(role)) {
+                role = "user";
+            }
             messages.add(ChatMessageDto.builder()
-                    .role(msg.getRole() != null ? msg.getRole().toLowerCase() : "user")
+                    .role(role)
                     .content(msg.getContent())
                     .build());
         }
@@ -213,15 +377,6 @@ public class ReactiveChatService {
                 .role("user")
                 .content(request.getMessage())
                 .build());
-
-        // Add RAG context if available
-        if (request.getRetrievedDocs() != null && !request.getRetrievedDocs().isEmpty()) {
-            String ragContext = String.join("\n\n", request.getRetrievedDocs());
-            messages.add(0, ChatMessageDto.builder()
-                    .role("system")
-                    .content("Context from retrieved documents:\n" + ragContext)
-                    .build());
-        }
 
         // Build tool definitions if enabled
         List<ToolDefinition> tools = null;
@@ -246,9 +401,14 @@ public class ReactiveChatService {
                             .toList());
         }
 
+        String engine = request.getEngine();
+        if (!StringUtils.hasText(engine)) {
+            engine = "auto";
+        }
+
         return GatewayRequest.builder()
                 .traceId(traceId)
-                .engine(request.getEngine() != null ? request.getEngine() : "auto")
+                .engine(engine)
                 .stream(true)
                 .messages(messages)
                 .tools(tools)
@@ -256,69 +416,26 @@ public class ReactiveChatService {
                 .build();
     }
 
-    private Mono<R2dbcChatMessage> saveAssistantMessageWithTrace(
-            String sessionId, String reply, String traceId, String engine) {
-        R2dbcChatMessage assistantMessage = R2dbcChatMessage.builder()
-                .id(UUID.randomUUID().toString())
-                .sessionId(sessionId)
-                .role(R2dbcChatMessage.Role.ASSISTANT.name())
-                .content(reply)
-                .traceId(traceId)
-                .engine(engine)
-                .build();
-        assistantMessage.setCreatedAt(LocalDateTime.now());
+    private String buildSystemPrompt(ChatStreamRequest request) {
+        StringBuilder prompt = new StringBuilder(
+                "You are a helpful assistant for insurance project management.");
 
-        return messageRepository.save(assistantMessage);
-    }
-
-    private java.util.Optional<String> extractDeltaText(String deltaJson) {
-        try {
-            // Simple extraction - look for "text" field in delta JSON
-            if (deltaJson.contains("\"text\":")) {
-                int start = deltaJson.indexOf("\"text\":\"") + 8;
-                int end = deltaJson.indexOf("\"", start);
-                if (start > 7 && end > start) {
-                    return java.util.Optional.of(deltaJson.substring(start, end)
-                            .replace("\\n", "\n")
-                            .replace("\\\"", "\"")
-                            .replace("\\\\", "\\"));
-                }
-            }
-        } catch (Exception e) {
-            log.trace("Failed to extract delta text: {}", e.getMessage());
+        if (request.isEnableTools() && toolRegistry.hasTools()) {
+            prompt.append(" You have access to tools that can help you perform tasks. ")
+                    .append("Use them when appropriate to get real-time data.");
         }
-        return java.util.Optional.empty();
-    }
 
-    public Mono<ChatResponse> sendMessage(ChatRequest request, String userId) {
-        return getOrCreateSession(request.getSessionId(), userId)
-                .flatMap(session ->
-                        saveUserMessage(session.getId(), request.getMessage())
-                                .flatMap(userMessage ->
-                                        getRecentMessages(session.getId(), 10)
-                                                .collectList()
-                                                .flatMap(recentMessages -> {
-                                                    AIChatContext context = buildContext(
-                                                            userId, request, toJpaMessages(recentMessages));
+        if (StringUtils.hasText(request.getUserRole())) {
+            prompt.append(" The user's role is: ").append(request.getUserRole()).append(".");
+        }
 
-                                                    return reactiveAIChatClient.chat(context)
-                                                            .flatMap(response -> saveAssistantMessage(session.getId(), response.getReply())
-                                                                    .then(cacheMessages(session.getId(), userMessage))
-                                                                    .thenReturn(response))
-                                                            .map(response -> {
-                                                                response.setSessionId(session.getId());
-                                                                return response;
-                                                            });
-                                                })
-                                )
-                )
-                .as(transactionalOperator::transactional);
+        return prompt.toString();
     }
 
     private Mono<R2dbcChatSession> getOrCreateSession(String sessionId, String userId) {
-        if (sessionId != null && !sessionId.isEmpty()) {
+        if (StringUtils.hasText(sessionId)) {
             return sessionRepository.findByIdAndActiveTrue(sessionId)
-                    .switchIfEmpty(Mono.error(new IllegalArgumentException("Session not found: " + sessionId)));
+                    .switchIfEmpty(Mono.error(ChatException.sessionNotFound(sessionId)));
         }
 
         R2dbcChatSession newSession = R2dbcChatSession.builder()
@@ -329,7 +446,9 @@ public class ReactiveChatService {
                 .build();
         newSession.setCreatedAt(LocalDateTime.now());
 
-        return sessionRepository.save(newSession);
+        return sessionRepository.save(newSession)
+                .doOnSuccess(session -> log.debug("Created new session: id={}, user={}",
+                        session.getId(), userId));
     }
 
     private Mono<R2dbcChatMessage> saveUserMessage(String sessionId, String message) {
@@ -356,6 +475,21 @@ public class ReactiveChatService {
         return messageRepository.save(assistantMessage);
     }
 
+    private Mono<R2dbcChatMessage> saveAssistantMessageWithTrace(
+            String sessionId, String reply, String traceId, String engine) {
+        R2dbcChatMessage assistantMessage = R2dbcChatMessage.builder()
+                .id(UUID.randomUUID().toString())
+                .sessionId(sessionId)
+                .role(R2dbcChatMessage.Role.ASSISTANT.name())
+                .content(reply)
+                .traceId(traceId)
+                .engine(engine)
+                .build();
+        assistantMessage.setCreatedAt(LocalDateTime.now());
+
+        return messageRepository.save(assistantMessage);
+    }
+
     private Flux<R2dbcChatMessage> getRecentMessages(String sessionId, int limit) {
         return messageRepository.findRecentBySessionId(sessionId, limit)
                 .sort((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()));
@@ -364,7 +498,7 @@ public class ReactiveChatService {
     private Mono<Boolean> cacheMessages(String sessionId, R2dbcChatMessage userMessage) {
         String redisKey = "chat:session:" + sessionId;
         return reactiveRedisTemplate.opsForList().rightPush(redisKey, userMessage.getContent())
-                .then(reactiveRedisTemplate.expire(redisKey, Duration.ofHours(1)));
+                .then(reactiveRedisTemplate.expire(redisKey, CACHE_TTL));
     }
 
     private AIChatContext buildContext(String userId, ChatRequest request, List<R2dbcChatMessage> recentMessages) {
@@ -379,21 +513,26 @@ public class ReactiveChatService {
     }
 
     private List<R2dbcChatMessage> toJpaMessages(List<R2dbcChatMessage> r2dbcMessages) {
-        // R2DBC messages are already in the correct format, just return them
+        // R2DBC messages are already in the correct format
         return r2dbcMessages;
     }
 
-    public Flux<R2dbcChatMessage> getHistory(String sessionId) {
-        return messageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
-    }
-
-    public Mono<Void> deleteSession(String sessionId) {
-        return sessionRepository.deactivateSession(sessionId)
-                .then(reactiveRedisTemplate.delete("chat:session:" + sessionId))
-                .then();
-    }
-
-    public Flux<R2dbcChatSession> getUserSessions(String userId) {
-        return sessionRepository.findByUserIdAndActiveTrue(userId);
+    private java.util.Optional<String> extractDeltaText(String deltaJson) {
+        try {
+            // Simple extraction - look for "text" field in delta JSON
+            if (deltaJson.contains("\"text\":")) {
+                int start = deltaJson.indexOf("\"text\":\"") + 8;
+                int end = deltaJson.indexOf("\"", start);
+                if (start > 7 && end > start) {
+                    return java.util.Optional.of(deltaJson.substring(start, end)
+                            .replace("\\n", "\n")
+                            .replace("\\\"", "\"")
+                            .replace("\\\\", "\\"));
+                }
+            }
+        } catch (Exception e) {
+            log.trace("Failed to extract delta text: {}", e.getMessage());
+        }
+        return java.util.Optional.empty();
     }
 }

@@ -92,7 +92,7 @@ function StoryItem({ story, onSelect, onMoveToSprint, canEdit }: StoryItemProps)
             {story.storyPoints} SP
           </span>
         )}
-        {canEdit && story.status === 'BACKLOG' && (
+        {canEdit && (story.status === 'IDEA' || story.status === 'REFINED' || story.status === 'READY') && (
           <button
             type="button"
             onClick={(e) => {
@@ -381,8 +381,8 @@ export default function EpicTreeView({
     });
   };
 
-  // Stories in backlog (not in any sprint)
-  const backlogStories = stories.filter((s) => s.status === 'BACKLOG' && !s.sprintId);
+  // Stories in backlog (not in any sprint) - IDEA, REFINED, or READY status without sprint assignment
+  const backlogStories = stories.filter((s) => (s.status === 'IDEA' || s.status === 'REFINED' || s.status === 'READY') && !s.sprintId);
 
   return (
     <div className="space-y-3">

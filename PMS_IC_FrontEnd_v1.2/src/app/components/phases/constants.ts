@@ -1,0 +1,106 @@
+import type { Phase } from './types';
+
+// Initial methodology phases for AI Insurance Claims project
+export const INITIAL_PHASES: Phase[] = [
+  {
+    id: '1',
+    name: '1단계: 업무 현황 진단/분석',
+    description: '지급심사 프로세스 현황 파악 및 AI 적용 타당성 검토',
+    status: 'completed',
+    progress: 100,
+    startDate: '2025-01-02',
+    endDate: '2025-02-15',
+    deliverables: [
+      { id: '1', name: 'AS-IS 프로세스 분석 보고서', status: 'approved', uploadDate: '2025-02-10', approver: 'PMO 총괄' },
+      { id: '2', name: 'KPI 정의서', status: 'approved', uploadDate: '2025-02-14', approver: 'PMO 총괄' },
+      { id: '3', name: '프로젝트 헌장', status: 'approved', uploadDate: '2025-02-15', approver: '프로젝트 스폰서' },
+    ],
+    kpis: [
+      { id: '1', name: '자동 심사 지급률', target: '70%', current: '-', status: 'onTrack' },
+      { id: '2', name: '심사 처리 시간 단축', target: '50%', current: '-', status: 'onTrack' },
+    ],
+  },
+  {
+    id: '2',
+    name: '2단계: 데이터 수집/정제',
+    description: '데이터 수집, 정제, 라벨링 및 피처 엔지니어링',
+    status: 'completed',
+    progress: 100,
+    startDate: '2025-02-16',
+    endDate: '2025-04-30',
+    deliverables: [
+      { id: '4', name: '데이터셋 인벤토리', status: 'approved', uploadDate: '2025-03-15', approver: 'PM' },
+      { id: '5', name: '개인정보 비식별화 결과 보고서', status: 'approved', uploadDate: '2025-04-20', approver: '정보보호팀장' },
+      { id: '6', name: '학습 데이터 품질 검증 보고서', status: 'approved', uploadDate: '2025-04-28', approver: 'PM' },
+    ],
+    kpis: [
+      { id: '3', name: '학습 데이터 확보량', target: '100,000건', current: '105,000건', status: 'achieved' },
+      { id: '4', name: '데이터 품질 점수', target: '95점', current: '97점', status: 'achieved' },
+    ],
+  },
+  {
+    id: '3',
+    name: '3단계: AI모델 설계/학습',
+    description: 'AI 모델 설계, 학습, 평가 및 하이브리드 로직 구축',
+    status: 'inProgress',
+    progress: 85,
+    startDate: '2025-05-01',
+    endDate: '2025-08-31',
+    deliverables: [
+      { id: '7', name: 'OCR 모델 v2.0 개발 보고서', status: 'review', uploadDate: '2025-07-15' },
+      { id: '8', name: '분류 모델 성능 평가서', status: 'review', uploadDate: '2025-08-10' },
+      { id: '9', name: '모델 학습 파이프라인 문서', status: 'draft' },
+      { id: '10', name: '하이퍼파라미터 최적화 보고서', status: 'pending' },
+    ],
+    kpis: [
+      { id: '5', name: 'OCR 인식률', target: '95%', current: '93.5%', status: 'atRisk' },
+      { id: '6', name: '분류 모델 정확도', target: '98%', current: '97.8%', status: 'onTrack' },
+      { id: '7', name: '모델 학습 시간', target: '<12시간', current: '10.5시간', status: 'achieved' },
+    ],
+  },
+  {
+    id: '4',
+    name: '4단계: 업무시스템 연동/운영 자동화',
+    description: '기존 업무시스템과 AI 통합 및 MLOps 구축',
+    status: 'pending',
+    progress: 0,
+    startDate: '2025-09-01',
+    endDate: '2025-10-31',
+    deliverables: [
+      { id: '11', name: 'API 명세서', status: 'pending' },
+      { id: '12', name: '통합 테스트 시나리오', status: 'pending' },
+      { id: '13', name: '레거시 시스템 연동 보고서', status: 'pending' },
+    ],
+    kpis: [],
+  },
+  {
+    id: '5',
+    name: '5단계: 효과 검증/운영고도화',
+    description: 'PoC 검증, 성능 평가 및 지속적 개선',
+    status: 'pending',
+    progress: 0,
+    startDate: '2025-11-01',
+    endDate: '2025-11-30',
+    deliverables: [
+      { id: '14', name: 'PoC 결과 보고서', status: 'pending' },
+      { id: '15', name: 'AS-IS vs TO-BE 비교 분석', status: 'pending' },
+      { id: '16', name: '현업 검증 피드백 종합', status: 'pending' },
+    ],
+    kpis: [],
+  },
+  {
+    id: '6',
+    name: '6단계: 조직/프로세스 변화관리',
+    description: '교육, 가이드라인, AI 거버넌스 체계 구축',
+    status: 'pending',
+    progress: 0,
+    startDate: '2025-12-01',
+    endDate: '2025-12-31',
+    deliverables: [
+      { id: '17', name: '사용자 매뉴얼', status: 'pending' },
+      { id: '18', name: '교육 일정 및 이수 현황', status: 'pending' },
+      { id: '19', name: '운영 가이드', status: 'pending' },
+    ],
+    kpis: [],
+  },
+];

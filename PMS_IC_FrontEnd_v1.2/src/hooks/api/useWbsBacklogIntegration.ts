@@ -311,7 +311,7 @@ export function usePhaseIntegration(phaseId: string, projectId?: string) {
       const totalFeatures = groupDetails.reduce((sum, g) => sum + g.features.length, 0);
       const linkedFeatures = totalFeatures; // All features in groups are linked
       const totalStories = groupDetails.reduce(
-        (sum, g) => sum + g.items.reduce((itemSum, i) => itemSum + i.stories.length, 0),
+        (sum, g) => sum + g.items.reduce((itemSum: number, i: { stories: UserStory[] }) => itemSum + i.stories.length, 0),
         0
       );
       const linkedStories = totalStories; // All stories returned from WbsItem are linked

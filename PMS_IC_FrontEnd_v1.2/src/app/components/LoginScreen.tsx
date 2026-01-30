@@ -89,7 +89,11 @@ const demoUsers: Record<string, { password: string; userInfo: UserInfo }> = {
   },
 };
 
-export default function LoginScreen() {
+interface LoginScreenProps {
+  onLogin?: (userInfo: UserInfo) => void;
+}
+
+export default function LoginScreen({ onLogin: onLoginProp }: LoginScreenProps = {}) {
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuthStore();
@@ -109,7 +113,11 @@ export default function LoginScreen() {
 
   const handleLogin = (userInfo: UserInfo, token?: string) => {
     login(userInfo, token);
-    navigate(from, { replace: true });
+    if (onLoginProp) {
+      onLoginProp(userInfo);
+    } else {
+      navigate(from, { replace: true });
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

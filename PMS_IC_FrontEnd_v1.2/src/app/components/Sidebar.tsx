@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, memo, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ChevronDown, ChevronRight, LucideIcon } from 'lucide-react';
 import { UserRole } from '../../stores/authStore';
@@ -7,11 +7,20 @@ import {
   getFilteredMenuConfig,
   MenuItem,
   MenuGroup,
-  MenuConfig,
 } from '../../config/menuConfig';
+
+interface LegacyMenuItem {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+}
 
 interface SidebarProps {
   userRole: UserRole;
+  // Legacy props for backwards compatibility with App.tsx state-based navigation
+  menuItems?: LegacyMenuItem[];
+  currentView?: string;
+  onViewChange?: React.Dispatch<React.SetStateAction<string>> | ((view: string) => void);
 }
 
 const roleColors: Record<UserRole, string> = {
@@ -36,8 +45,8 @@ const roleLabels: Record<UserRole, string> = {
   admin: 'Administrator',
 };
 
-// Menu item component for standalone items
-function MenuItemButton({
+// Menu item component for standalone items - memoized to prevent unnecessary re-renders
+const MenuItemButton = memo(function MenuItemButton({
   item,
   isActive,
   onClick,
@@ -52,21 +61,22 @@ function MenuItemButton({
     <button
       type="button"
       onClick={onClick}
-      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all text-sm ${
+      aria-current={isActive ? 'page' : undefined}
+      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${
         isActive
           ? 'bg-white/20 text-white shadow-lg backdrop-blur-sm'
           : 'text-white/70 hover:bg-white/10 hover:text-white'
       }`}
       title={item.description}
     >
-      <Icon size={18} />
+      <Icon size={18} aria-hidden="true" />
       <span className="truncate">{item.label}</span>
     </button>
   );
-}
+});
 
-// Sub-menu item component with tree line indicator
-function SubMenuItemButton({
+// Sub-menu item component with tree line indicator - memoized
+const SubMenuItemButton = memo(function SubMenuItemButton({
   item,
   isActive,
   isLast,
@@ -82,7 +92,7 @@ function SubMenuItemButton({
   return (
     <div className="relative flex items-center">
       {/* Tree line guide */}
-      <div className="absolute left-6 top-0 bottom-0 flex items-center">
+      <div className="absolute left-6 top-0 bottom-0 flex items-center" aria-hidden="true">
         {/* Vertical line - full height for non-last items, half for last */}
         <div
           className={`absolute left-0 w-px bg-white/30 ${
@@ -99,22 +109,23 @@ function SubMenuItemButton({
       <button
         type="button"
         onClick={onClick}
-        className={`flex-1 flex items-center gap-2.5 ml-10 pl-3 pr-3 py-2 rounded-lg transition-all text-sm ${
+        aria-current={isActive ? 'page' : undefined}
+        className={`flex-1 flex items-center gap-2.5 ml-10 pl-3 pr-3 py-2 rounded-lg transition-all text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50 ${
           isActive
             ? 'bg-white/20 text-white border-l-2 border-white'
             : 'text-white/70 hover:bg-white/10 hover:text-white'
         }`}
         title={item.description}
       >
-        <Icon size={16} />
+        <Icon size={16} aria-hidden="true" />
         <span className="truncate">{item.label}</span>
       </button>
     </div>
   );
-}
+});
 
-// Collapsible menu group component
-function MenuGroupSection({
+// Collapsible menu group component - memoized
+const MenuGroupSection = memo(function MenuGroupSection({
   group,
   expandedGroups,
   onToggle,
@@ -129,38 +140,52 @@ function MenuGroupSection({
 }) {
   const isExpanded = expandedGroups.has(group.id);
   const Icon = group.icon;
+  const panelId = `menu-panel-${group.id}`;
 
   // Check if any item in the group is active
-  const hasActiveItem = group.items.some((item) => {
-    if (item.path === '/') return currentPath === '/';
-    return currentPath.startsWith(item.path);
-  });
+  const hasActiveItem = useMemo(
+    () =>
+      group.items.some((item) => {
+        if (item.path === '/') return currentPath === '/';
+        return currentPath.startsWith(item.path);
+      }),
+    [group.items, currentPath]
+  );
+
+  const handleToggle = useCallback(() => {
+    onToggle(group.id);
+  }, [onToggle, group.id]);
 
   return (
     <div className="mb-1">
       {/* Group header */}
       <button
         type="button"
-        onClick={() => onToggle(group.id)}
-        className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg transition-all ${
+        onClick={handleToggle}
+        aria-expanded={isExpanded ? 'true' : 'false'}
+        aria-controls={panelId}
+        className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50 ${
           hasActiveItem
             ? 'bg-white/15 text-white'
             : 'text-white/80 hover:bg-white/10 hover:text-white'
         }`}
       >
         <div className="flex items-center gap-3">
-          <Icon size={18} />
+          <Icon size={18} aria-hidden="true" />
           <span className="text-sm font-medium">{group.label}</span>
         </div>
         {isExpanded ? (
-          <ChevronDown size={16} className="text-white/60" />
+          <ChevronDown size={16} className="text-white/60" aria-hidden="true" />
         ) : (
-          <ChevronRight size={16} className="text-white/60" />
+          <ChevronRight size={16} className="text-white/60" aria-hidden="true" />
         )}
       </button>
 
       {/* Group items (collapsible) with tree line */}
       <div
+        id={panelId}
+        role="region"
+        aria-label={`${group.label} submenu`}
         className={`overflow-hidden transition-all duration-200 ease-in-out ${
           isExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
         }`}
@@ -187,14 +212,17 @@ function MenuGroupSection({
       </div>
     </div>
   );
-}
+});
 
-export default function Sidebar({ userRole }: SidebarProps) {
+export default function Sidebar({ userRole, menuItems, currentView, onViewChange }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Get filtered menu config based on user role
-  const filteredMenu = getFilteredMenuConfig(userRole);
+  // Determine if using legacy prop-based navigation
+  const useLegacyNav = !!(menuItems && onViewChange);
+
+  // Get filtered menu config based on user role - memoized
+  const filteredMenu = useMemo(() => getFilteredMenuConfig(userRole), [userRole]);
 
   // Initialize expanded groups from defaultExpanded settings
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
@@ -218,9 +246,9 @@ export default function Sidebar({ userRole }: SidebarProps) {
         setExpandedGroups((prev) => new Set([...prev, group.id]));
       }
     });
-  }, [location.pathname]);
+  }, [location.pathname, filteredMenu.groups]);
 
-  const toggleGroup = (groupId: string) => {
+  const toggleGroup = useCallback((groupId: string) => {
     setExpandedGroups((prev) => {
       const next = new Set(prev);
       if (next.has(groupId)) {
@@ -230,11 +258,20 @@ export default function Sidebar({ userRole }: SidebarProps) {
       }
       return next;
     });
-  };
+  }, []);
 
-  const handleNavigate = (path: string) => {
-    navigate(path);
-  };
+  const handleNavigate = useCallback(
+    (path: string) => {
+      if (useLegacyNav && onViewChange) {
+        // Extract view name from path for legacy navigation
+        const viewName = path === '/' ? 'dashboard' : path.replace('/', '');
+        onViewChange(viewName);
+      } else {
+        navigate(path);
+      }
+    },
+    [useLegacyNav, onViewChange, navigate]
+  );
 
   return (
     <aside
@@ -254,7 +291,7 @@ export default function Sidebar({ userRole }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-3 space-y-1 overflow-y-auto sidebar-scrollbar">
+      <nav aria-label="Main navigation" className="flex-1 p-3 space-y-1 overflow-y-auto sidebar-scrollbar">
         {/* Standalone items (Dashboard) */}
         {filteredMenu.standalone.map((item) => {
           const isActive =

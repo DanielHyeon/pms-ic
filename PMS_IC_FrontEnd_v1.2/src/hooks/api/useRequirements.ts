@@ -13,16 +13,16 @@ export const requirementKeys = {
 export function useRequirements(projectId?: string) {
   return useQuery<Requirement[]>({
     queryKey: requirementKeys.list(projectId),
-    queryFn: () => apiService.getRequirements(projectId),
+    queryFn: () => apiService.getRequirements(projectId!),
     enabled: !!projectId,
   });
 }
 
-export function useRequirement(id: string) {
+export function useRequirement(projectId: string, requirementId: string) {
   return useQuery({
-    queryKey: requirementKeys.detail(id),
-    queryFn: () => apiService.getRequirement(id),
-    enabled: !!id,
+    queryKey: requirementKeys.detail(requirementId),
+    queryFn: () => apiService.getRequirement(projectId, requirementId),
+    enabled: !!projectId && !!requirementId,
   });
 }
 

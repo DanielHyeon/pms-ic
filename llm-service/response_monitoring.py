@@ -1,6 +1,6 @@
 """
 Response Monitoring and Metrics System
-응답 실패 유형별 모니터링 및 메트릭 수집
+Monitor response failure types and collect metrics
 """
 
 import logging
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ResponseMetrics:
-    """응답 메트릭"""
+    """Response metrics"""
     timestamp: datetime
     response_id: str
     query: str
@@ -32,7 +32,7 @@ class ResponseMetrics:
 
 @dataclass
 class FailureStats:
-    """실패 유형별 통계"""
+    """Statistics by failure type"""
     failure_type: str
     count: int = 0
     total_retries: int = 0
@@ -41,13 +41,13 @@ class FailureStats:
     examples: List[str] = field(default_factory=list)
 
     def add_example(self, query: str, max_examples: int = 5):
-        """예제 추가 (최대 5개)"""
+        """Add example (max 5)"""
         if len(self.examples) < max_examples:
             self.examples.append(query)
 
 
 class ResponseMonitor:
-    """응답 모니터링 시스템"""
+    """Response monitoring system"""
 
     def __init__(self, window_size_hours: int = 24):
         self.window_size = timedelta(hours=window_size_hours)
@@ -55,7 +55,7 @@ class ResponseMonitor:
         self.failure_stats: Dict[str, FailureStats] = defaultdict(lambda: FailureStats(failure_type="unknown"))
 
     def record_metric(self, metric: ResponseMetrics):
-        """메트릭 기록"""
+        """Record metric"""
         self.metrics.append(metric)
         logger.info(
             f"Recorded metric: response_id={metric.response_id}, "
@@ -64,7 +64,7 @@ class ResponseMonitor:
             f"processing_time={metric.processing_time_ms}ms"
         )
 
-        # 실패 통계 업데이트
+        # Update failure statistics
         if not metric.is_valid and metric.failure_type:
             stats = self.failure_stats[metric.failure_type]
             stats.count += 1
@@ -72,15 +72,15 @@ class ResponseMonitor:
             stats.add_example(metric.query)
 
     def get_stats(self, failure_type: Optional[str] = None) -> Dict:
-        """통계 조회"""
+        """Get statistics"""
         now = datetime.now()
         window_start = now - self.window_size
 
-        # 윈도우 내 메트릭만 필터링
+        # Filter metrics within window
         recent_metrics = [m for m in self.metrics if m.timestamp >= window_start]
 
         if failure_type:
-            # 특정 실패 유형의 통계
+            # Statistics for specific failure type
             type_stats = self.failure_stats.get(failure_type)
             if type_stats:
                 return {
@@ -93,7 +93,7 @@ class ResponseMonitor:
                 }
             return {}
 
-        # 전체 통계
+        # Overall statistics
         total = len(recent_metrics)
         valid = sum(1 for m in recent_metrics if m.is_valid)
         invalid = total - valid
@@ -104,7 +104,7 @@ class ResponseMonitor:
         avg_rag_docs = sum(m.rag_doc_count for m in recent_metrics) / total if total > 0 else 0
         avg_confidence = sum(m.confidence_score for m in recent_metrics) / total if total > 0 else 0
 
-        # 실패 유형별 분포
+        # Failure type distribution
         failure_distribution = {}
         for metric in recent_metrics:
             if not metric.is_valid:
@@ -127,14 +127,14 @@ class ResponseMonitor:
                     "total_retries": fs.total_retries,
                     "avg_retries_per_failure": round(fs.total_retries / fs.count, 2) if fs.count > 0 else 0,
                     "success_rate_after_retry": round(fs.success_rate_after_retry * 100, 2),
-                    "examples": fs.examples[:3]  # 상위 3개 예제
+                    "examples": fs.examples[:3]  # Top 3 examples
                 }
                 for ft, fs in self.failure_stats.items()
             }
         }
 
     def get_critical_patterns(self, threshold: float = 0.1) -> List[Dict]:
-        """위험한 패턴 감지 (실패율이 threshold 이상)"""
+        """Detect critical patterns (failure rate >= threshold)"""
         stats = self.get_stats()
         failure_distribution = stats.get("failure_distribution", {})
         total_invalid = stats.get("invalid_responses", 0)
@@ -153,19 +153,19 @@ class ResponseMonitor:
         return sorted(critical_patterns, key=lambda x: x["rate"], reverse=True)
 
     def _get_recommendation(self, failure_type: str) -> str:
-        """실패 유형별 권장 조치"""
+        """Get recommended action by failure type"""
         recommendations = {
-            "unable_to_answer": "RAG 문서 품질 검토, 쿼리 개선 전략 확인",
-            "incomplete_response": "MAX_TOKENS 증가, 컨텍스트 윈도우 확대",
-            "timeout_cutoff": "LLM_RESPONSE_TIMEOUT 증가, 배치 크기 감소",
-            "repetitive_response": "TEMPERATURE 감소, TOP_P 조정",
-            "malformed_response": "프롬프트 구조 검토, 모델 매개변수 재설정",
-            "empty_response": "LLM 서비스 상태 확인, GPU 메모리 체크"
+            "unable_to_answer": "Review RAG document quality, check query improvement strategy",
+            "incomplete_response": "Increase MAX_TOKENS, expand context window",
+            "timeout_cutoff": "Increase LLM_RESPONSE_TIMEOUT, reduce batch size",
+            "repetitive_response": "Decrease TEMPERATURE, adjust TOP_P",
+            "malformed_response": "Review prompt structure, reset model parameters",
+            "empty_response": "Check LLM service status, verify GPU memory"
         }
-        return recommendations.get(failure_type, "응답 생성 로직 검토 필요")
+        return recommendations.get(failure_type, "Review response generation logic")
 
     def export_metrics(self, filepath: str):
-        """메트릭 내보내기 (JSON)"""
+        """Export metrics (JSON)"""
         data = {
             "export_timestamp": datetime.now().isoformat(),
             "summary": self.get_stats(),
@@ -179,20 +179,20 @@ class ResponseMonitor:
         logger.info(f"Metrics exported to {filepath}")
 
     def reset(self):
-        """모니터 초기화"""
+        """Reset monitor"""
         self.metrics.clear()
         self.failure_stats.clear()
         logger.info("Monitor reset")
 
 
 class ResponseMonitoringLogger:
-    """응답 모니터링 로거 (상세 로깅)"""
+    """Response monitoring logger (detailed logging)"""
 
     def __init__(self, log_file: str = "/tmp/gemma3_response_monitoring.log"):
         self.log_file = log_file
         self.logger = logging.getLogger("response_monitoring")
 
-        # 파일 핸들러 설정
+        # Set up file handler
         handler = logging.FileHandler(log_file)
         formatter = logging.Formatter(
             "%(asctime)s | %(levelname)s | %(message)s",
@@ -209,7 +209,7 @@ class ResponseMonitoringLogger:
         validation_result,
         retry_count: int = 0
     ):
-        """응답 검증 결과 로깅"""
+        """Log response validation result"""
         self.logger.info(
             f"RESPONSE_VALIDATION | "
             f"id={response_id} | "
@@ -230,7 +230,7 @@ class ResponseMonitoringLogger:
         refined_query: str,
         failure_type: str
     ):
-        """재시도 시도 로깅"""
+        """Log retry attempt"""
         self.logger.info(
             f"RETRY_ATTEMPT | "
             f"id={response_id} | "
@@ -247,7 +247,7 @@ class ResponseMonitoringLogger:
         original_query: str,
         response_length: int
     ):
-        """회복 성공 로깅"""
+        """Log recovery success"""
         self.logger.info(
             f"RECOVERY_SUCCESS | "
             f"id={response_id} | "
@@ -262,7 +262,7 @@ class ResponseMonitoringLogger:
         max_retries: int,
         final_failure_type: str
     ):
-        """회복 실패 로깅"""
+        """Log recovery failure"""
         self.logger.info(
             f"RECOVERY_FAILED | "
             f"id={response_id} | "
@@ -271,7 +271,7 @@ class ResponseMonitoringLogger:
         )
 
     def get_log_tail(self, lines: int = 50) -> str:
-        """로그 마지막 N줄 조회"""
+        """Get last N lines of log"""
         try:
             with open(self.log_file, "r", encoding="utf-8") as f:
                 all_lines = f.readlines()
@@ -280,13 +280,13 @@ class ResponseMonitoringLogger:
             return f"Log file not found: {self.log_file}"
 
 
-# 전역 모니터 인스턴스
+# Global monitor instance
 _monitor: Optional[ResponseMonitor] = None
 _monitoring_logger: Optional[ResponseMonitoringLogger] = None
 
 
 def get_monitor() -> ResponseMonitor:
-    """전역 모니터 인스턴스 조회"""
+    """Get global monitor instance"""
     global _monitor
     if _monitor is None:
         _monitor = ResponseMonitor()
@@ -294,7 +294,7 @@ def get_monitor() -> ResponseMonitor:
 
 
 def get_monitoring_logger() -> ResponseMonitoringLogger:
-    """전역 모니터링 로거 인스턴스 조회"""
+    """Get global monitoring logger instance"""
     global _monitoring_logger
     if _monitoring_logger is None:
         _monitoring_logger = ResponseMonitoringLogger()

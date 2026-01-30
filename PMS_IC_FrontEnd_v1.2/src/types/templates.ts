@@ -56,6 +56,7 @@ export interface WbsGroupTemplate {
   description?: string;
   relativeOrder: number;
   defaultWeight: number;
+  estimatedHours?: number;
   items: WbsItemTemplate[];
 }
 
@@ -86,6 +87,7 @@ export interface PhaseTemplate {
   description?: string;
   relativeOrder: number; // Order within template set
   defaultDurationDays?: number;
+  defaultWeight?: number; // Weight for progress calculation
   wbsGroups: WbsGroupTemplate[];
   deliverables: DeliverableTemplate[];
   kpis: KpiTemplate[];

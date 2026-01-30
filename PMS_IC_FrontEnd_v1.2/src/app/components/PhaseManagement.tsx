@@ -1,34 +1,8 @@
 import { useState, useEffect } from 'react';
-import {
-  CheckCircle2,
-  Circle,
-  Clock,
-  FileText,
-  Upload,
-  Download,
-  AlertCircle,
-  Lock,
-  Check,
-  X,
-  Plus,
-  Pencil,
-  Trash2,
-  Settings,
-  FolderTree,
-  ListChecks,
-  LayoutTemplate,
-  Link2,
-  Layers,
-  ChevronDown,
-} from 'lucide-react';
-import { WbsTreeView, StoryLinkModal } from './wbs';
-import { TemplateLibrary, ApplyTemplateModal } from './templates';
-import { WbsBacklogIntegration } from './integration';
+import { Plus, LayoutTemplate } from 'lucide-react';
 import { useStories } from '../../hooks/api/useStories';
 import { usePhaseWbs } from '../../hooks/api/useWbs';
 import { WbsGroupWithItems, calculateWeightedProgress } from '../../types/wbs';
-import { useTemplateSets } from '../../hooks/api/useTemplates';
-import { TemplateSet } from '../../types/templates';
 import { UserRole } from '../App';
 import { apiService } from '../../services/api';
 import {
@@ -46,127 +20,41 @@ import {
 } from '../../hooks/api/usePhases';
 import { getRolePermissions } from '../../utils/rolePermissions';
 import {
-  Phase,
-  Deliverable,
-  KPI,
-  PhaseStatus,
   mapPhaseFromApi,
   mapDeliverableFromApi,
   mapKpiFromApi,
   mapPhaseStatusToApi,
   mapKpiStatusToApi,
   normalizeResponse,
-  getPhaseStatusColor,
-  getPhaseStatusLabel,
 } from '../../utils/phaseMappers';
 
-const initialPhases: Phase[] = [
-  {
-    id: '1',
-    name: '1단계: 업무 현황 진단/분석',
-    description: '지급심사 프로세스 현황 파악 및 AI 적용 타당성 검토',
-    status: 'completed',
-    progress: 100,
-    startDate: '2025-01-02',
-    endDate: '2025-02-15',
-    deliverables: [
-      { id: '1', name: 'AS-IS 프로세스 분석 보고서', status: 'approved', uploadDate: '2025-02-10', approver: 'PMO 총괄' },
-      { id: '2', name: 'KPI 정의서', status: 'approved', uploadDate: '2025-02-14', approver: 'PMO 총괄' },
-      { id: '3', name: '프로젝트 헌장', status: 'approved', uploadDate: '2025-02-15', approver: '프로젝트 스폰서' },
-    ],
-    kpis: [
-      { id: '1', name: '자동 심사 지급률', target: '70%', current: '-', status: 'onTrack' },
-      { id: '2', name: '심사 처리 시간 단축', target: '50%', current: '-', status: 'onTrack' },
-    ],
-  },
-  {
-    id: '2',
-    name: '2단계: 데이터 수집/정제',
-    description: '데이터 수집, 정제, 라벨링 및 피처 엔지니어링',
-    status: 'completed',
-    progress: 100,
-    startDate: '2025-02-16',
-    endDate: '2025-04-30',
-    deliverables: [
-      { id: '4', name: '데이터셋 인벤토리', status: 'approved', uploadDate: '2025-03-15', approver: 'PM' },
-      { id: '5', name: '개인정보 비식별화 결과 보고서', status: 'approved', uploadDate: '2025-04-20', approver: '정보보호팀장' },
-      { id: '6', name: '학습 데이터 품질 검증 보고서', status: 'approved', uploadDate: '2025-04-28', approver: 'PM' },
-    ],
-    kpis: [
-      { id: '3', name: '학습 데이터 확보량', target: '100,000건', current: '105,000건', status: 'achieved' },
-      { id: '4', name: '데이터 품질 점수', target: '95점', current: '97점', status: 'achieved' },
-    ],
-  },
-  {
-    id: '3',
-    name: '3단계: AI모델 설계/학습',
-    description: 'AI 모델 설계, 학습, 평가 및 하이브리드 로직 구축',
-    status: 'inProgress',
-    progress: 85,
-    startDate: '2025-05-01',
-    endDate: '2025-08-31',
-    deliverables: [
-      { id: '7', name: 'OCR 모델 v2.0 개발 보고서', status: 'review', uploadDate: '2025-07-15' },
-      { id: '8', name: '분류 모델 성능 평가서', status: 'review', uploadDate: '2025-08-10' },
-      { id: '9', name: '모델 학습 파이프라인 문서', status: 'draft' },
-      { id: '10', name: '하이퍼파라미터 최적화 보고서', status: 'pending' },
-    ],
-    kpis: [
-      { id: '5', name: 'OCR 인식률', target: '95%', current: '93.5%', status: 'atRisk' },
-      { id: '6', name: '분류 모델 정확도', target: '98%', current: '97.8%', status: 'onTrack' },
-      { id: '7', name: '모델 학습 시간', target: '<12시간', current: '10.5시간', status: 'achieved' },
-    ],
-  },
-  {
-    id: '4',
-    name: '4단계: 업무시스템 연동/운영 자동화',
-    description: '기존 업무시스템과 AI 통합 및 MLOps 구축',
-    status: 'pending',
-    progress: 0,
-    startDate: '2025-09-01',
-    endDate: '2025-10-31',
-    deliverables: [
-      { id: '11', name: 'API 명세서', status: 'pending' },
-      { id: '12', name: '통합 테스트 시나리오', status: 'pending' },
-      { id: '13', name: '레거시 시스템 연동 보고서', status: 'pending' },
-    ],
-    kpis: [],
-  },
-  {
-    id: '5',
-    name: '5단계: 효과 검증/운영고도화',
-    description: 'PoC 검증, 성능 평가 및 지속적 개선',
-    status: 'pending',
-    progress: 0,
-    startDate: '2025-11-01',
-    endDate: '2025-11-30',
-    deliverables: [
-      { id: '14', name: 'PoC 결과 보고서', status: 'pending' },
-      { id: '15', name: 'AS-IS vs TO-BE 비교 분석', status: 'pending' },
-      { id: '16', name: '현업 검증 피드백 종합', status: 'pending' },
-    ],
-    kpis: [],
-  },
-  {
-    id: '6',
-    name: '6단계: 조직/프로세스 변화관리',
-    description: '교육, 가이드라인, AI 거버넌스 체계 구축',
-    status: 'pending',
-    progress: 0,
-    startDate: '2025-12-01',
-    endDate: '2025-12-31',
-    deliverables: [
-      { id: '17', name: '사용자 매뉴얼', status: 'pending' },
-      { id: '18', name: '교육 일정 및 이수 현황', status: 'pending' },
-      { id: '19', name: '운영 가이드', status: 'pending' },
-    ],
-    kpis: [],
-  },
-];
+import {
+  INITIAL_PHASES,
+  PhaseList,
+  PhaseDetail,
+  ReadOnlyBanner,
+  UploadModal,
+  KpiModal,
+  PhaseModal,
+  SettingsModal,
+  type Phase,
+  type Deliverable,
+  type KPI,
+  type ApiPhase,
+  type PhaseFormData,
+  type KpiFormData,
+  type PhaseDetailTab,
+  type SettingsTabType,
+} from './phases';
 
 export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
-  const [phases, setPhases] = useState<Phase[]>(initialPhases);
-  const [selectedPhase, setSelectedPhase] = useState<Phase>(initialPhases[2]); // 현재 진행 중인 3단계
+  // Core state
+  const [phases, setPhases] = useState<Phase[]>(INITIAL_PHASES);
+  const [selectedPhase, setSelectedPhase] = useState<Phase>(INITIAL_PHASES[2]);
+  const [activeTab, setActiveTab] = useState<PhaseDetailTab>('deliverables');
+  const [pendingSelectPhaseId, setPendingSelectPhaseId] = useState<string | null>(null);
+
+  // Upload modal state
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedDeliverable, setSelectedDeliverable] = useState<Deliverable | null>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -174,41 +62,42 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
   const [newDeliverableName, setNewDeliverableName] = useState('');
   const [newDeliverableDescription, setNewDeliverableDescription] = useState('');
   const [newDeliverableType, setNewDeliverableType] = useState('DOCUMENT');
+
+  // KPI modal state
   const [showKpiModal, setShowKpiModal] = useState(false);
   const [editingKpi, setEditingKpi] = useState<KPI | null>(null);
-  const [kpiForm, setKpiForm] = useState({ name: '', target: '', current: '', status: 'onTrack' as KPI['status'] });
+  const [kpiForm, setKpiForm] = useState<KpiFormData>({
+    name: '',
+    target: '',
+    current: '',
+    status: 'onTrack',
+  });
+
+  // Phase modal state
   const [showPhaseModal, setShowPhaseModal] = useState(false);
-  // Tab state for Phase Detail view
-  const [activeTab, setActiveTab] = useState<'deliverables' | 'wbs' | 'integration'>('deliverables');
-  // Settings modal state
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
-  // Story link modal state
-  const [showStoryLinkModal, setShowStoryLinkModal] = useState(false);
-  // Template modal state
-  const [showTemplateModal, setShowTemplateModal] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState<TemplateSet | null>(null);
-  const [selectedWbsItemId, setSelectedWbsItemId] = useState<string>('');
-  const [selectedWbsItemName, setSelectedWbsItemName] = useState<string>('');
   const [editingPhase, setEditingPhase] = useState<Phase | null>(null);
-  const [pendingSelectPhaseId, setPendingSelectPhaseId] = useState<string | null>(null);
-  const [phaseForm, setPhaseForm] = useState({
+  const [phaseForm, setPhaseForm] = useState<PhaseFormData>({
     name: '',
     description: '',
-    status: 'pending' as PhaseStatus,
+    status: 'pending',
     startDate: '',
     endDate: '',
     progress: 0,
   });
-  // WBS category linking - maps methodology phase id to WBS category id
+
+  // Settings modal state
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTabType>('template');
   const [linkedCategories, setLinkedCategories] = useState<Record<string, string>>({});
-  const [settingsTab, setSettingsTab] = useState<'template' | 'category'>('template');
+
+  // Story link modal state
+  const [showStoryLinkModal, setShowStoryLinkModal] = useState(false);
+  const [selectedWbsItemId, setSelectedWbsItemId] = useState<string>('');
+  const [selectedWbsItemName, setSelectedWbsItemName] = useState<string>('');
 
   // TanStack Query hooks
   const { data: phasesData } = useAllPhases();
-
-  // Check if selectedPhase has a valid API ID (not hardcoded '1', '2', '3', etc.)
   const isValidApiPhaseId = selectedPhase.id && !/^[1-6]$/.test(selectedPhase.id);
-
   const { data: deliverables } = usePhaseDeliverables(isValidApiPhaseId ? selectedPhase.id : '');
   const { data: kpis } = usePhaseKpis(isValidApiPhaseId ? selectedPhase.id : '');
 
@@ -221,12 +110,8 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
   const updateKpiMutation = useUpdatePhaseKpi();
   const deleteKpiMutation = useDeletePhaseKpi();
 
-  // Fetch WBS groups for current phase (for linked WBS summary)
-  const { data: phaseWbsData, isLoading: isWbsLoading } = usePhaseWbs(
-    isValidApiPhaseId ? selectedPhase.id : ''
-  );
-
-  // Calculate WBS-based progress for the phase
+  // Fetch WBS groups for current phase
+  const { data: phaseWbsData } = usePhaseWbs(isValidApiPhaseId ? selectedPhase.id : '');
   const wbsGroups: WbsGroupWithItems[] = phaseWbsData || [];
   const wbsBasedProgress = wbsGroups.length > 0
     ? calculateWeightedProgress(wbsGroups.map(g => ({ weight: g.weight, progress: g.calculatedProgress })))
@@ -242,89 +127,57 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
     storyPoints: s.storyPoints,
   }));
 
-  // Story link handler
-  const handleLinkStory = (wbsItemId: string) => {
-    // Find the WBS item name (will be set by WbsTreeView)
-    setSelectedWbsItemId(wbsItemId);
-    setSelectedWbsItemName('WBS Item'); // Will be improved with actual name
-    setShowStoryLinkModal(true);
-  };
-
-  // Use centralized role permissions
+  // Permissions
   const permissions = getRolePermissions(userRole);
   const { canEdit, canApprove, canUpload, canManageKpi, canManagePhases } = permissions;
 
-  // Use extracted status utilities
-  const getStatusColor = getPhaseStatusColor;
-  const getStatusLabel = getPhaseStatusLabel;
-
-  // Update selectedPhase when API data loads to use actual phase IDs
+  // Sync phases with API data
   useEffect(() => {
     if (phasesData) {
-      const phaseData = normalizeResponse(phasesData, []);
-      const phasesArray = Array.isArray(phaseData) ? phaseData : [];
+      const phaseData = normalizeResponse<ApiPhase[]>(phasesData, []);
+      const phasesArray: ApiPhase[] = Array.isArray(phaseData) ? phaseData : [];
       if (phasesArray.length > 0) {
-        // If there's a pending phase to select (after template application), select it
         if (pendingSelectPhaseId) {
-          const newPhase = phasesArray.find((p: any) => p.id === pendingSelectPhaseId);
+          const newPhase = phasesArray.find((p: ApiPhase) => p.id === pendingSelectPhaseId);
           if (newPhase) {
-            const mappedPhase = ['completed', 'inProgress', 'pending'].includes(newPhase.status)
-              ? newPhase
-              : mapPhaseFromApi(newPhase);
+            const mappedPhase = mapPhaseFromApi(newPhase);
             setSelectedPhase(mappedPhase);
             setPendingSelectPhaseId(null);
             return;
           }
         }
-        // Find the phase that corresponds to the selected phase (by orderNum or index)
         const currentIndex = phases.findIndex((p) => p.id === selectedPhase.id);
         const apiPhase = phasesArray[currentIndex >= 0 ? currentIndex : 0];
         if (apiPhase && apiPhase.id !== selectedPhase.id) {
-          const mappedPhase = ['completed', 'inProgress', 'pending'].includes(apiPhase.status)
-            ? apiPhase
-            : mapPhaseFromApi(apiPhase);
+          const mappedPhase = mapPhaseFromApi(apiPhase);
           setSelectedPhase(mappedPhase);
         }
       }
     }
   }, [phasesData, pendingSelectPhaseId]);
 
-  // Always display 6 methodology phases, merge API data when available
+  // Synced phases (merge API data with methodology phases)
   const syncedPhases = (() => {
-    // Always use the 6 methodology phases as the base
-    const methodologyPhases = [...initialPhases];
-
+    const methodologyPhases = [...INITIAL_PHASES];
     if (!phasesData) return methodologyPhases;
 
-    const phaseData = normalizeResponse(phasesData, []);
-    const phasesArray = Array.isArray(phaseData) ? phaseData : [];
-
+    const phaseData = normalizeResponse<ApiPhase[]>(phasesData, []);
+    const phasesArray: ApiPhase[] = Array.isArray(phaseData) ? phaseData : [];
     if (!phasesArray.length) return methodologyPhases;
 
-    // Merge API data into methodology phases by index/orderNum
     return methodologyPhases.map((methodologyPhase, index) => {
-      // Find matching API phase by orderNum or index
-      const apiPhase = phasesArray.find(
-        (p: any) => p.orderNum === index + 1
-      ) || phasesArray[index];
-
+      const apiPhase = phasesArray.find((p: ApiPhase) => p.orderNum === index + 1) || phasesArray[index];
       if (apiPhase) {
-        const isUiPhase = ['completed', 'inProgress', 'pending'].includes(apiPhase.status);
-        const mappedPhase = isUiPhase ? apiPhase : mapPhaseFromApi(apiPhase);
-        const phaseDeliverables = isUiPhase
-          ? apiPhase.deliverables || []
-          : Array.isArray(apiPhase.deliverables)
+        const mappedPhase = mapPhaseFromApi(apiPhase);
+        const phaseDeliverables = Array.isArray(apiPhase.deliverables)
           ? apiPhase.deliverables.map(mapDeliverableFromApi)
           : [];
-        const phaseKpis = isUiPhase
-          ? apiPhase.kpis || []
-          : Array.isArray(apiPhase.kpis)
+        const phaseKpis = Array.isArray(apiPhase.kpis)
           ? apiPhase.kpis.map(mapKpiFromApi)
           : [];
-
         return {
-          ...methodologyPhase, // Keep methodology name and description
-          id: mappedPhase.id, // Use API id for data fetching
+          ...methodologyPhase,
+          id: mappedPhase.id,
           status: mappedPhase.status || methodologyPhase.status,
           progress: mappedPhase.progress ?? methodologyPhase.progress,
           startDate: mappedPhase.startDate || methodologyPhase.startDate,
@@ -333,12 +186,11 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
           kpis: phaseKpis.length > 0 ? phaseKpis : methodologyPhase.kpis,
         };
       }
-
       return methodologyPhase;
     });
   })();
 
-  // Merge deliverables and KPIs from dedicated queries
+  // Current phase with merged deliverables and KPIs
   const currentPhaseWithDetails: Phase = {
     ...selectedPhase,
     deliverables: deliverables
@@ -349,9 +201,8 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
       : selectedPhase.kpis,
   };
 
-  const handlePhaseSelect = (phase: Phase) => {
-    setSelectedPhase(phase);
-  };
+  // Handlers
+  const handlePhaseSelect = (phase: Phase) => setSelectedPhase(phase);
 
   const handleUpload = (deliverableId: string) => {
     const deliverable = selectedPhase.deliverables.find((d) => d.id === deliverableId);
@@ -368,28 +219,23 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
     if (isNewDeliverable && !newDeliverableName.trim()) return;
     if (!isNewDeliverable && !selectedDeliverable) return;
 
-    const formData = new FormData();
-    formData.append('file', uploadFile);
-    if (isNewDeliverable) {
-      formData.append('name', newDeliverableName.trim());
-      if (newDeliverableDescription.trim()) {
-        formData.append('description', newDeliverableDescription.trim());
-      }
-      formData.append('type', newDeliverableType);
-    } else if (selectedDeliverable) {
-      formData.append('deliverableId', selectedDeliverable.id);
-      formData.append('name', selectedDeliverable.name);
-    }
-
     try {
       await uploadDeliverableMutation.mutateAsync({
         phaseId: selectedPhase.id,
-        formData,
+        deliverableId: selectedDeliverable?.id,
+        file: uploadFile,
+        name: isNewDeliverable ? newDeliverableName.trim() : undefined,
+        description: isNewDeliverable && newDeliverableDescription.trim() ? newDeliverableDescription.trim() : undefined,
+        type: isNewDeliverable ? newDeliverableType : undefined,
       });
     } catch (error) {
       console.warn('Deliverable upload failed', error);
     }
 
+    closeUploadModal();
+  };
+
+  const closeUploadModal = () => {
     setShowUploadModal(false);
     setSelectedDeliverable(null);
     setUploadFile(null);
@@ -418,7 +264,6 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
         alert(`"${deliverable.name}" 다운로드를 시작합니다. (실제 환경에서는 파일이 다운로드됩니다)`);
         return;
       }
-
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -434,7 +279,6 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
 
   const handleSaveKpi = async () => {
     if (!kpiForm.name.trim()) return;
-
     const payload = {
       name: kpiForm.name.trim(),
       target: kpiForm.target.trim(),
@@ -444,16 +288,9 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
 
     try {
       if (editingKpi) {
-        await updateKpiMutation.mutateAsync({
-          phaseId: selectedPhase.id,
-          kpiId: editingKpi.id,
-          data: payload,
-        });
+        await updateKpiMutation.mutateAsync({ phaseId: selectedPhase.id, kpiId: editingKpi.id, data: payload });
       } else {
-        await createKpiMutation.mutateAsync({
-          phaseId: selectedPhase.id,
-          data: payload,
-        });
+        await createKpiMutation.mutateAsync({ phaseId: selectedPhase.id, data: payload });
       }
     } catch (error) {
       console.warn('KPI save failed', error);
@@ -463,9 +300,16 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
     setEditingKpi(null);
   };
 
+  const handleDeleteKpi = async (kpiId: string) => {
+    try {
+      await deleteKpiMutation.mutateAsync({ phaseId: selectedPhase.id, kpiId });
+    } catch (error) {
+      console.warn('KPI delete failed', error);
+    }
+  };
+
   const handleSavePhase = async () => {
     if (!phaseForm.name.trim()) return;
-
     const payload = {
       name: phaseForm.name.trim(),
       description: phaseForm.description.trim(),
@@ -473,21 +317,15 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
       startDate: phaseForm.startDate || undefined,
       endDate: phaseForm.endDate || undefined,
       progress: phaseForm.progress,
-      orderNum: editingPhase ? undefined : syncedPhases.length + 1,
+      orderNum: syncedPhases.length + 1,
     };
 
     try {
       if (editingPhase) {
-        await updatePhaseMutation.mutateAsync({
-          id: editingPhase.id,
-          data: payload,
-        });
+        await updatePhaseMutation.mutateAsync({ id: editingPhase.id, data: payload });
       } else {
         const projectId = 'proj-001';
-        await createPhaseMutation.mutateAsync({
-          projectId,
-          ...payload,
-        });
+        await createPhaseMutation.mutateAsync({ projectId, data: payload });
       }
     } catch (error) {
       console.warn('Phase save failed', error);
@@ -495,28 +333,24 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
 
     setShowPhaseModal(false);
     setEditingPhase(null);
-    setPhaseForm({
-      name: '',
-      description: '',
-      status: 'pending',
-      startDate: '',
-      endDate: '',
-      progress: 0,
-    });
+    setPhaseForm({ name: '', description: '', status: 'pending', startDate: '', endDate: '', progress: 0 });
   };
 
-  const handleDeletePhase = async (phaseId: string) => {
-    if (!confirm('이 단계를 삭제하시겠습니까?')) return;
+  const handleDeletePhase = async () => {
+    if (!editingPhase || !confirm('이 단계를 삭제하시겠습니까?')) return;
 
     try {
-      await deletePhaseMutation.mutateAsync(phaseId);
-      if (selectedPhase.id === phaseId && syncedPhases.length > 1) {
-        const remaining = syncedPhases.filter((p) => p.id !== phaseId);
+      await deletePhaseMutation.mutateAsync(editingPhase.id);
+      if (selectedPhase.id === editingPhase.id && syncedPhases.length > 1) {
+        const remaining = syncedPhases.filter((p) => p.id !== editingPhase.id);
         setSelectedPhase(remaining[0]);
       }
     } catch (error) {
       console.warn('Phase delete failed', error);
     }
+
+    setShowPhaseModal(false);
+    setEditingPhase(null);
   };
 
   const openPhaseModal = (phase?: Phase) => {
@@ -532,828 +366,183 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
       });
     } else {
       setEditingPhase(null);
-      setPhaseForm({
-        name: '',
-        description: '',
-        status: 'pending',
-        startDate: '',
-        endDate: '',
-        progress: 0,
-      });
+      setPhaseForm({ name: '', description: '', status: 'pending', startDate: '', endDate: '', progress: 0 });
     }
     setShowPhaseModal(true);
   };
 
+  const handleNewDeliverableUpload = () => {
+    setSelectedDeliverable(null);
+    setIsNewDeliverable(true);
+    setNewDeliverableName('');
+    setNewDeliverableDescription('');
+    setNewDeliverableType('DOCUMENT');
+    setUploadFile(null);
+    setShowUploadModal(true);
+  };
+
+  const handleAddKpi = () => {
+    setEditingKpi(null);
+    setKpiForm({ name: '', target: '', current: '', status: 'onTrack' });
+    setShowKpiModal(true);
+  };
+
+  const handleEditKpi = (kpi: KPI) => {
+    setEditingKpi(kpi);
+    setKpiForm({ name: kpi.name, target: kpi.target, current: kpi.current, status: kpi.status });
+    setShowKpiModal(true);
+  };
+
+  const handleLinkStory = (wbsItemId: string) => {
+    setSelectedWbsItemId(wbsItemId);
+    setSelectedWbsItemName('WBS Item');
+    setShowStoryLinkModal(true);
+  };
+
   return (
     <div className="p-6">
-      {!canEdit && (
-        <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-center gap-3">
-          <Lock className="text-amber-600" size={20} />
-          <div>
-            <p className="text-sm font-medium text-amber-900">읽기 전용 모드</p>
-            <p className="text-xs text-amber-700">현재 역할은 조회 권한만 가지고 있습니다.</p>
-          </div>
-        </div>
-      )}
+      {!canEdit && <ReadOnlyBanner />}
 
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold text-gray-900">단계별 프로젝트 관리</h2>
-          <p className="text-sm text-gray-500 mt-1">Waterfall 기반 거시적 프로세스 관리</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {canManagePhases && (
-            <>
-              <button
-                type="button"
-                onClick={() => setShowSettingsModal(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                <LayoutTemplate size={18} />
-                템플릿 설정
-              </button>
-              <button
-                type="button"
-                onClick={() => openPhaseModal()}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <Plus size={18} />
-                단계 추가
-              </button>
-            </>
-          )}
-        </div>
-      </div>
+      <Header
+        canManagePhases={canManagePhases}
+        onOpenSettings={() => setShowSettingsModal(true)}
+        onAddPhase={() => openPhaseModal()}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Phase List */}
-        <div className="space-y-3">
-          {syncedPhases.map((phase) => (
-            <div
-              key={phase.id}
-              className={`relative w-full text-left p-4 rounded-xl border-2 transition-all ${
-                selectedPhase.id === phase.id
-                  ? 'border-blue-500 bg-blue-50 shadow-md'
-                  : 'border-gray-200 bg-white hover:border-gray-300'
-              }`}
-            >
-              {canManagePhases && (
-                <button
-                  type="button"
-                  onClick={() => openPhaseModal(phase)}
-                  className="absolute top-3 right-3 p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors z-10"
-                  title="단계 설정"
-                >
-                  <Settings size={16} />
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => handlePhaseSelect(phase)}
-                className="w-full text-left"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="mt-1">
-                    {phase.status === 'completed' && <CheckCircle2 className="text-green-600" size={24} />}
-                    {phase.status === 'inProgress' && <Clock className="text-blue-600" size={24} />}
-                    {phase.status === 'pending' && <Circle className="text-gray-400" size={24} />}
-                  </div>
-                  <div className="flex-1 min-w-0 pr-8">
-                    <h3 className="font-medium text-gray-900 text-sm">{phase.name}</h3>
-                    <p className="text-xs text-gray-500 mt-1">{phase.description}</p>
-                    <div className="mt-3">
-                      <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
-                        <span>진행률</span>
-                        <span className="font-medium">{phase.progress}%</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full transition-all ${
-                            phase.status === 'completed'
-                              ? 'bg-green-500'
-                              : phase.status === 'inProgress'
-                              ? 'bg-blue-500'
-                              : 'bg-gray-400'
-                          }`}
-                          style={{ width: `${phase.progress}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </button>
-            </div>
-          ))}
-        </div>
+        <PhaseList
+          phases={syncedPhases}
+          selectedPhaseId={selectedPhase.id}
+          canManagePhases={canManagePhases}
+          onPhaseSelect={handlePhaseSelect}
+          onEditPhase={openPhaseModal}
+        />
 
-        {/* Phase Detail */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-start justify-between mb-6">
-              <div>
-                <h3 className="text-xl font-semibold text-gray-900">{currentPhaseWithDetails.name}</h3>
-                <p className="text-sm text-gray-500 mt-1">{currentPhaseWithDetails.description}</p>
-              </div>
-              <span
-                className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(
-                  currentPhaseWithDetails.status
-                )}`}
-              >
-                {getStatusLabel(currentPhaseWithDetails.status)}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-xs text-gray-500">시작일</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">{currentPhaseWithDetails.startDate}</p>
-              </div>
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-xs text-gray-500">종료일</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">{currentPhaseWithDetails.endDate}</p>
-              </div>
-            </div>
-
-            {/* Tab Navigation */}
-            <div className="flex border-b border-gray-200 mb-6">
-              <button
-                type="button"
-                onClick={() => setActiveTab('deliverables')}
-                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
-                  activeTab === 'deliverables'
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <ListChecks size={18} />
-                산출물 / KPI
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('wbs')}
-                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
-                  activeTab === 'wbs'
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <FolderTree size={18} />
-                WBS 관리
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('integration')}
-                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
-                  activeTab === 'integration'
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <Link2 size={18} />
-                통합
-              </button>
-            </div>
-
-            {/* Tab Content */}
-            {activeTab === 'integration' ? (
-              <WbsBacklogIntegration
-                phaseId={selectedPhase.id}
-                phaseName={selectedPhase.name}
-                projectId="proj-001"
-                canEdit={canEdit}
-              />
-            ) : activeTab === 'wbs' ? (
-              <WbsTreeView
-                phaseId={selectedPhase.id}
-                phaseName={selectedPhase.name}
-                phaseCode={String(syncedPhases.findIndex((p) => p.id === selectedPhase.id) + 1)}
-                canEdit={canEdit}
-                onLinkStory={handleLinkStory}
-              />
-            ) : (
-              <>
-                {/* Deliverables */}
-                <div className="mb-6">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="font-medium text-gray-900 flex items-center gap-2">
-                  <FileText size={18} />
-                  산출물 관리
-                </h4>
-                {canUpload && (
-                  <button
-                    onClick={() => {
-                      setSelectedDeliverable(null);
-                      setIsNewDeliverable(true);
-                      setNewDeliverableName('');
-                      setNewDeliverableDescription('');
-                      setNewDeliverableType('DOCUMENT');
-                      setUploadFile(null);
-                      setShowUploadModal(true);
-                    }}
-                    className="inline-flex items-center gap-1 px-2 py-1 text-xs border border-blue-200 text-blue-600 rounded hover:bg-blue-50"
-                  >
-                    <Plus size={14} />
-                    새 산출물 업로드
-                  </button>
-                )}
-              </div>
-              <div className="space-y-2">
-                {currentPhaseWithDetails.deliverables.map((deliverable) => (
-                  <div
-                    key={deliverable.id}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
-                  >
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">{deliverable.name}</p>
-                      {deliverable.uploadDate && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          업로드: {deliverable.uploadDate}
-                          {deliverable.approver && ` | 승인자: ${deliverable.approver}`}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`px-2 py-1 rounded text-xs font-medium border ${getStatusColor(
-                          deliverable.status
-                        )}`}
-                      >
-                        {getStatusLabel(deliverable.status)}
-                      </span>
-
-                      {deliverable.status === 'review' && canApprove && (
-                        <>
-                          <button
-                            onClick={() => handleApprove(deliverable.id, true)}
-                            className="p-2 text-green-600 hover:bg-green-100 rounded transition-colors"
-                            title="승인"
-                          >
-                            <Check size={16} />
-                          </button>
-                          <button
-                            onClick={() => handleApprove(deliverable.id, false)}
-                            className="p-2 text-red-600 hover:bg-red-100 rounded transition-colors"
-                            title="반려"
-                          >
-                            <X size={16} />
-                          </button>
-                        </>
-                      )}
-
-                      {(deliverable.status === 'pending' ||
-                        deliverable.status === 'draft' ||
-                        deliverable.status === 'rejected') &&
-                      canUpload ? (
-                        <button
-                          onClick={() => handleUpload(deliverable.id)}
-                          className="p-2 text-blue-600 hover:bg-blue-100 rounded transition-colors"
-                          title="업로드"
-                        >
-                          <Upload size={16} />
-                        </button>
-                      ) : (
-                        deliverable.uploadDate && (
-                          <button
-                            onClick={() => handleDownload(deliverable)}
-                            className="p-2 text-gray-600 hover:bg-gray-200 rounded transition-colors"
-                            title="다운로드"
-                          >
-                            <Download size={16} />
-                          </button>
-                        )
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* KPIs */}
-            {(currentPhaseWithDetails.kpis.length > 0 || canManageKpi) && (
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-medium text-gray-900 flex items-center gap-2">
-                    <AlertCircle size={18} />
-                    핵심 성과 지표 (KPI)
-                  </h4>
-                  {canManageKpi && (
-                    <button
-                      onClick={() => {
-                        setEditingKpi(null);
-                        setKpiForm({ name: '', target: '', current: '', status: 'onTrack' });
-                        setShowKpiModal(true);
-                      }}
-                      className="inline-flex items-center gap-1 px-2 py-1 text-xs border border-blue-200 text-blue-600 rounded hover:bg-blue-50"
-                    >
-                      <Plus size={14} />
-                      KPI 추가
-                    </button>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  {currentPhaseWithDetails.kpis.map((kpi) => (
-                    <div
-                      key={kpi.id}
-                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
-                    >
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-900">{kpi.name}</p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          목표: {kpi.target} | 현재: {kpi.current}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`px-2 py-1 rounded text-xs font-medium border ${getStatusColor(kpi.status)}`}
-                        >
-                          {getStatusLabel(kpi.status)}
-                        </span>
-                        {canManageKpi && (
-                          <>
-                            <button
-                              onClick={() => {
-                                setEditingKpi(kpi);
-                                setKpiForm({
-                                  name: kpi.name,
-                                  target: kpi.target,
-                                  current: kpi.current,
-                                  status: kpi.status,
-                                });
-                                setShowKpiModal(true);
-                              }}
-                              className="p-2 text-gray-600 hover:bg-gray-200 rounded transition-colors"
-                              title="수정"
-                            >
-                              <Pencil size={14} />
-                            </button>
-                            <button
-                              onClick={async () => {
-                                if (!confirm('해당 KPI를 삭제하시겠습니까?')) return;
-                                try {
-                                  await deleteKpiMutation.mutateAsync({
-                                    phaseId: selectedPhase.id,
-                                    kpiId: kpi.id,
-                                  });
-                                } catch (error) {
-                                  console.warn('KPI delete failed', error);
-                                }
-                              }}
-                              className="p-2 text-red-600 hover:bg-red-100 rounded transition-colors"
-                              title="삭제"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-              </>
-            )}
-          </div>
-
-          {currentPhaseWithDetails.status === 'inProgress' && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="text-amber-600 mt-0.5" size={20} />
-                <div>
-                  <p className="font-medium text-amber-900">주의 필요</p>
-                  <p className="text-sm text-amber-800 mt-1">
-                    OCR 인식률이 목표치 대비 1.5%p 낮습니다. 추가 데이터 확보 및 모델 튜닝이 필요합니다.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+        <PhaseDetail
+          phase={currentPhaseWithDetails}
+          phaseCode={String(syncedPhases.findIndex((p) => p.id === selectedPhase.id) + 1)}
+          activeTab={activeTab}
+          canEdit={canEdit}
+          canApprove={canApprove}
+          canUpload={canUpload}
+          canManageKpi={canManageKpi}
+          showStoryLinkModal={showStoryLinkModal}
+          selectedWbsItemId={selectedWbsItemId}
+          selectedWbsItemName={selectedWbsItemName}
+          storiesForLinking={storiesForLinking}
+          onTabChange={setActiveTab}
+          onUpload={handleUpload}
+          onDownload={handleDownload}
+          onApprove={handleApprove}
+          onNewDeliverableUpload={handleNewDeliverableUpload}
+          onAddKpi={handleAddKpi}
+          onEditKpi={handleEditKpi}
+          onDeleteKpi={handleDeleteKpi}
+          onLinkStory={handleLinkStory}
+          onCloseStoryLinkModal={() => setShowStoryLinkModal(false)}
+        />
       </div>
 
-      {/* Upload Modal */}
+      {/* Modals */}
       {showUploadModal && (selectedDeliverable || isNewDeliverable) && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              {isNewDeliverable ? '새 산출물 업로드' : '산출물 업로드'}
-            </h3>
-            <div className="mb-4">
-              {isNewDeliverable ? (
-                <div className="space-y-3 mb-4">
-                  <div>
-                    <label className="block text-sm text-gray-700 mb-1">문서명</label>
-                    <input
-                      value={newDeliverableName}
-                      onChange={(event) => setNewDeliverableName(event.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-700 mb-1">설명</label>
-                    <input
-                      value={newDeliverableDescription}
-                      onChange={(event) => setNewDeliverableDescription(event.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-700 mb-1">유형</label>
-                    <select
-                      value={newDeliverableType}
-                      onChange={(event) => setNewDeliverableType(event.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                    >
-                      <option value="DOCUMENT">문서</option>
-                      <option value="REPORT">보고서</option>
-                      <option value="PRESENTATION">발표자료</option>
-                      <option value="CODE">코드</option>
-                      <option value="OTHER">기타</option>
-                    </select>
-                  </div>
-                </div>
-              ) : (
-                selectedDeliverable && (
-                  <p className="text-sm text-gray-700 mb-2">
-                    <span className="font-medium">문서명:</span> {selectedDeliverable.name}
-                  </p>
-                )
-              )}
-              <label className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 transition-colors cursor-pointer block">
-                <input
-                  type="file"
-                  className="hidden"
-                  onChange={(event) => setUploadFile(event.target.files ? event.target.files[0] : null)}
-                />
-                <Upload className="mx-auto text-gray-400 mb-2" size={32} />
-                <p className="text-sm text-gray-600">
-                  {uploadFile ? uploadFile.name : '파일을 선택하거나 드래그하세요'}
-                </p>
-                <p className="text-xs text-gray-400 mt-1">PDF, DOCX, XLSX (최대 10MB)</p>
-              </label>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={handleConfirmUpload}
-                disabled={!uploadFile || (isNewDeliverable && !newDeliverableName.trim())}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-              >
-                업로드
-              </button>
-              <button
-                onClick={() => {
-                  setShowUploadModal(false);
-                  setSelectedDeliverable(null);
-                  setUploadFile(null);
-                  setIsNewDeliverable(false);
-                  setNewDeliverableName('');
-                  setNewDeliverableDescription('');
-                  setNewDeliverableType('DOCUMENT');
-                }}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                취소
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showKpiModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              {editingKpi ? 'KPI 수정' : 'KPI 추가'}
-            </h3>
-            <div className="space-y-4 mb-6">
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">지표명</label>
-                <input
-                  value={kpiForm.name}
-                  onChange={(event) => setKpiForm((prev) => ({ ...prev, name: event.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">목표</label>
-                <input
-                  value={kpiForm.target}
-                  onChange={(event) => setKpiForm((prev) => ({ ...prev, target: event.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">현재</label>
-                <input
-                  value={kpiForm.current}
-                  onChange={(event) => setKpiForm((prev) => ({ ...prev, current: event.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">상태</label>
-                <select
-                  value={kpiForm.status}
-                  onChange={(event) => setKpiForm((prev) => ({ ...prev, status: event.target.value as KPI['status'] }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                >
-                  <option value="onTrack">정상</option>
-                  <option value="atRisk">위험</option>
-                  <option value="achieved">달성</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={handleSaveKpi}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                저장
-              </button>
-              <button
-                onClick={() => {
-                  setShowKpiModal(false);
-                  setEditingKpi(null);
-                }}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                취소
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showPhaseModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              {editingPhase ? '단계 수정' : '새 단계 추가'}
-            </h3>
-            <div className="space-y-4 mb-6">
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">단계명 *</label>
-                <input
-                  value={phaseForm.name}
-                  onChange={(e) => setPhaseForm((prev) => ({ ...prev, name: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  placeholder="단계명을 입력하세요"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">설명</label>
-                <textarea
-                  value={phaseForm.description}
-                  onChange={(e) => setPhaseForm((prev) => ({ ...prev, description: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  rows={3}
-                  placeholder="단계 설명을 입력하세요"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-gray-700 mb-1">시작일</label>
-                  <input
-                    type="date"
-                    value={phaseForm.startDate}
-                    onChange={(e) => setPhaseForm((prev) => ({ ...prev, startDate: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-700 mb-1">종료일</label>
-                  <input
-                    type="date"
-                    value={phaseForm.endDate}
-                    onChange={(e) => setPhaseForm((prev) => ({ ...prev, endDate: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-gray-700 mb-1">상태</label>
-                  <select
-                    value={phaseForm.status}
-                    onChange={(e) => setPhaseForm((prev) => ({ ...prev, status: e.target.value as Phase['status'] }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  >
-                    <option value="pending">대기</option>
-                    <option value="inProgress">진행중</option>
-                    <option value="completed">완료</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-700 mb-1">진행률 (%)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={phaseForm.progress}
-                    onChange={(e) => setPhaseForm((prev) => ({ ...prev, progress: Number(e.target.value) }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={handleSavePhase}
-                disabled={!phaseForm.name.trim()}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-              >
-                {editingPhase ? '수정' : '추가'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowPhaseModal(false);
-                  setEditingPhase(null);
-                }}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                취소
-              </button>
-            </div>
-            {editingPhase && (
-              <div className="mt-4 pt-4 border-t border-gray-200">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (editingPhase) {
-                      handleDeletePhase(editingPhase.id);
-                      setShowPhaseModal(false);
-                      setEditingPhase(null);
-                    }
-                  }}
-                  className="w-full px-4 py-2 text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Trash2 size={16} />
-                  이 단계 삭제
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Story Link Modal */}
-      {showStoryLinkModal && (
-        <StoryLinkModal
-          wbsItemId={selectedWbsItemId}
-          wbsItemName={selectedWbsItemName}
-          stories={storiesForLinking}
-          onClose={() => setShowStoryLinkModal(false)}
+        <UploadModal
+          isNewDeliverable={isNewDeliverable}
+          selectedDeliverable={selectedDeliverable}
+          uploadFile={uploadFile}
+          newDeliverableName={newDeliverableName}
+          newDeliverableDescription={newDeliverableDescription}
+          newDeliverableType={newDeliverableType}
+          onFileChange={setUploadFile}
+          onNameChange={setNewDeliverableName}
+          onDescriptionChange={setNewDeliverableDescription}
+          onTypeChange={setNewDeliverableType}
+          onConfirm={handleConfirmUpload}
+          onClose={closeUploadModal}
         />
       )}
 
-      {/* Settings Modal - Template Management & Category Linking */}
-      {showSettingsModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">설정</h3>
-                <p className="text-sm text-gray-500 mt-1">단계별 프로젝트 관리 설정</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowSettingsModal(false)}
-                title="닫기"
-                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Settings Tabs */}
-            <div className="border-b border-gray-200 px-6">
-              <div className="flex gap-4">
-                <button
-                  type="button"
-                  onClick={() => setSettingsTab('template')}
-                  className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                    settingsTab === 'template'
-                      ? 'text-blue-600 border-blue-600'
-                      : 'text-gray-500 border-transparent hover:text-gray-700'
-                  }`}
-                >
-                  <LayoutTemplate size={18} />
-                  템플릿 관리
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSettingsTab('category')}
-                  className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                    settingsTab === 'category'
-                      ? 'text-blue-600 border-blue-600'
-                      : 'text-gray-500 border-transparent hover:text-gray-700'
-                  }`}
-                >
-                  <Layers size={18} />
-                  WBS 카테고리 연결
-                </button>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-6">
-              {settingsTab === 'template' ? (
-                <TemplateLibrary
-                  projectId="proj-001"
-                  targetPhaseId={selectedPhase.id}
-                  targetPhaseName={selectedPhase.name}
-                  methodologyPhases={syncedPhases.map((phase, index) => ({
-                    id: phase.id,
-                    name: phase.name,
-                    orderNum: index + 1,
-                  }))}
-                  canEdit={canEdit}
-                  onApplySuccess={() => {
-                    setShowSettingsModal(false);
-                    setActiveTab('wbs');
-                  }}
-                />
-              ) : (
-                <div className="space-y-6">
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                    <div className="flex items-start gap-3">
-                      <Layers size={20} className="text-amber-600 mt-0.5" />
-                      <div>
-                        <h4 className="font-medium text-amber-900">WBS 카테고리 연결</h4>
-                        <p className="text-sm text-amber-700 mt-1">
-                          각 방법론 단계를 일정 관리 페이지의 WBS 카테고리와 연결합니다.
-                          연결된 카테고리의 WBS 구조가 해당 단계에 표시됩니다.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    {syncedPhases.map((phase, index) => {
-                      const wbsCategories = normalizeResponse(phasesData, []) as Array<{ id: string; name: string }>;
-                      return (
-                        <div
-                          key={phase.id}
-                          className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg"
-                        >
-                          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-semibold text-sm">
-                            {index + 1}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-gray-900 truncate">{phase.name}</div>
-                            <div className="text-xs text-gray-500">{phase.description}</div>
-                          </div>
-                          <div className="relative w-64">
-                            <select
-                              value={linkedCategories[phase.id] || ''}
-                              onChange={(e) => setLinkedCategories(prev => ({
-                                ...prev,
-                                [phase.id]: e.target.value
-                              }))}
-                              title={`${phase.name} 카테고리 연결`}
-                              className="w-full appearance-none px-3 py-2 pr-10 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                            >
-                              <option value="">연결하지 않음</option>
-                              {wbsCategories.map((category) => (
-                                <option key={category.id} value={category.id}>
-                                  {category.name}
-                                </option>
-                              ))}
-                            </select>
-                            <ChevronDown
-                              size={16}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {Object.keys(linkedCategories).filter(k => linkedCategories[k]).length > 0 && (
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                      <h4 className="font-medium text-green-900 mb-2">연결 현황</h4>
-                      <ul className="text-sm text-green-800 space-y-1">
-                        {syncedPhases.filter(p => linkedCategories[p.id]).map(phase => {
-                          const wbsCategories = normalizeResponse(phasesData, []) as Array<{ id: string; name: string }>;
-                          const category = wbsCategories.find(c => c.id === linkedCategories[phase.id]);
-                          return (
-                            <li key={phase.id}>
-                              • {phase.name} → <strong>{category?.name || '알 수 없음'}</strong>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+      {showKpiModal && (
+        <KpiModal
+          isEditing={!!editingKpi}
+          formData={kpiForm}
+          onFormChange={setKpiForm}
+          onSave={handleSaveKpi}
+          onClose={() => {
+            setShowKpiModal(false);
+            setEditingKpi(null);
+          }}
+        />
       )}
 
+      {showPhaseModal && (
+        <PhaseModal
+          isEditing={!!editingPhase}
+          formData={phaseForm}
+          onFormChange={setPhaseForm}
+          onSave={handleSavePhase}
+          onDelete={editingPhase ? handleDeletePhase : undefined}
+          onClose={() => {
+            setShowPhaseModal(false);
+            setEditingPhase(null);
+          }}
+        />
+      )}
+
+      {showSettingsModal && (
+        <SettingsModal
+          selectedPhase={selectedPhase}
+          syncedPhases={syncedPhases}
+          phasesData={phasesData}
+          linkedCategories={linkedCategories}
+          settingsTab={settingsTab}
+          canEdit={canEdit}
+          onSetSettingsTab={setSettingsTab}
+          onSetLinkedCategories={setLinkedCategories}
+          onApplySuccess={() => {
+            setShowSettingsModal(false);
+            setActiveTab('wbs');
+          }}
+          onClose={() => setShowSettingsModal(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Header component
+interface HeaderProps {
+  canManagePhases: boolean;
+  onOpenSettings: () => void;
+  onAddPhase: () => void;
+}
+
+function Header({ canManagePhases, onOpenSettings, onAddPhase }: HeaderProps) {
+  return (
+    <div className="mb-6 flex items-center justify-between">
+      <div>
+        <h2 className="text-2xl font-semibold text-gray-900">단계별 프로젝트 관리</h2>
+        <p className="text-sm text-gray-500 mt-1">Waterfall 기반 거시적 프로세스 관리</p>
+      </div>
+      {canManagePhases && (
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <LayoutTemplate size={18} />
+            템플릿 설정
+          </button>
+          <button
+            type="button"
+            onClick={onAddPhase}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={18} />
+            단계 추가
+          </button>
+        </div>
+      )}
     </div>
   );
 }

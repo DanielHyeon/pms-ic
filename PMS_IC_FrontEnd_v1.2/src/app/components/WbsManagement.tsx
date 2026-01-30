@@ -33,6 +33,19 @@ interface WbsManagementProps {
 type TabType = 'wbs' | 'templates' | 'integration';
 type ViewMode = 'phase' | 'overview' | 'gantt';
 
+// Phase data type from API
+interface ApiPhaseData {
+  id: string;
+  name: string;
+  description?: string;
+  status?: string;
+  progress?: number;
+  startDate?: string;
+  endDate?: string;
+  code?: string;
+  [key: string]: unknown;
+}
+
 export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsManagementProps) {
   const [selectedPhaseId, setSelectedPhaseId] = useState<string>('');
   const [activeTab, setActiveTab] = useState<TabType>('wbs');
@@ -42,8 +55,9 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
   const [selectedWbsItemName, setSelectedWbsItemName] = useState<string>('');
 
   // API hooks
-  const { data: phasesData } = useAllPhases();
-  const { data: stories = [] } = useStories(projectId);
+  const { data: phasesRaw } = useAllPhases();
+  const phasesData = phasesRaw as ApiPhaseData[] | undefined;
+  const { data: stories = [] } = useStories();
 
   // Excel import/export hooks
   const downloadTemplateMutation = useDownloadWbsTemplate();
@@ -63,11 +77,11 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
     return phases.map(p => ({
       id: p.id,
       name: p.name,
-      description: p.description,
-      status: p.status,
+      description: p.description || '',
+      status: p.status || 'PENDING',
       progress: p.progress || 0,
-      startDate: p.startDate,
-      endDate: p.endDate,
+      startDate: p.startDate || '',
+      endDate: p.endDate || '',
     }));
   }, [phases]);
 
@@ -305,6 +319,7 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
                     <WbsBacklogIntegration
                       projectId={projectId}
                       phaseId={selectedPhaseId}
+                      phaseName={selectedPhase?.name || ''}
                       canEdit={canEdit}
                     />
                   )}
@@ -320,7 +335,13 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
         <StoryLinkModal
           wbsItemId={selectedWbsItemId}
           wbsItemName={selectedWbsItemName}
-          stories={stories}
+          stories={stories.map(s => ({
+            id: String(s.id),
+            title: s.title,
+            epicName: undefined,
+            status: s.status,
+            storyPoints: s.storyPoints,
+          }))}
           onClose={() => setShowStoryLinkModal(false)}
         />
       )}

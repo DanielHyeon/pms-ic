@@ -1,6 +1,6 @@
 """
 Timeout and Retry Handler for Gemma 3 12B Q5
-타임아웃 및 재시도 로직 구현
+Implements timeout and retry logic
 """
 
 import logging
@@ -17,27 +17,27 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class TimeoutRetryConfig:
-    """타임아웃 및 재시도 설정"""
+    """Timeout and retry configuration"""
     timeout_seconds: int = 30
     max_retries: int = 3
-    backoff_factor: float = 1.5  # 지수 백오프 계수
+    backoff_factor: float = 1.5  # Exponential backoff factor
     initial_delay_ms: int = 100
     max_delay_ms: int = 5000
-    jitter_enabled: bool = True  # 지터 추가
+    jitter_enabled: bool = True  # Add jitter
 
 
 class TimeoutException(Exception):
-    """타임아웃 예외"""
+    """Timeout exception"""
     pass
 
 
 class RetryableException(Exception):
-    """재시도 가능한 예외"""
+    """Retryable exception"""
     pass
 
 
 class TimeoutHandler:
-    """타임아웃 핸들러 (스레드 기반)"""
+    """Timeout handler (thread-based)"""
 
     def __init__(self, timeout_seconds: int):
         self.timeout_seconds = timeout_seconds
@@ -47,7 +47,7 @@ class TimeoutHandler:
         self.completed = False
 
     def run_with_timeout(self, func: Callable, *args, **kwargs) -> Any:
-        """타임아웃과 함께 함수 실행"""
+        """Execute function with timeout"""
         self.completed = False
         self.result = None
         self.exception = None
@@ -77,32 +77,32 @@ class TimeoutHandler:
 
 
 class RetryHandler:
-    """재시도 핸들러 (지수 백오프 + 지터)"""
+    """Retry handler (exponential backoff + jitter)"""
 
     def __init__(self, config: TimeoutRetryConfig):
         self.config = config
 
     def get_backoff_delay(self, attempt: int) -> float:
-        """재시도 대기 시간 계산 (밀리초)"""
+        """Calculate retry delay (milliseconds)"""
         import random
 
         delay = self.config.initial_delay_ms * (self.config.backoff_factor ** attempt)
         delay = min(delay, self.config.max_delay_ms)
 
         if self.config.jitter_enabled:
-            # 지터 추가: 0~delay 범위의 랜덤 값
-            jitter = random.uniform(0, delay * 0.1)  # 10% 지터
+            # Add jitter: random value in 0~10% of delay range
+            jitter = random.uniform(0, delay * 0.1)  # 10% jitter
             delay += jitter
 
-        return delay / 1000  # 초 단위로 변환
+        return delay / 1000  # Convert to seconds
 
     def should_retry(self, attempt: int, exception: Exception) -> bool:
-        """재시도 가능 여부 판단"""
+        """Determine if retry is possible"""
         if attempt >= self.config.max_retries:
             logger.info(f"Max retries ({self.config.max_retries}) reached")
             return False
 
-        # 특정 예외는 재시도하지 않음
+        # Do not retry for specific exceptions
         non_retryable_exceptions = (TypeError, ValueError, AttributeError, KeyError)
         if isinstance(exception, non_retryable_exceptions):
             logger.debug(f"Non-retryable exception: {type(exception).__name__}")
@@ -119,16 +119,16 @@ class RetryHandler:
         **kwargs
     ) -> Any:
         """
-        재시도 로직과 함께 함수 실행
+        Execute function with retry logic
 
         Args:
-            func: 실행할 함수
-            *args: 함수 인자
-            on_retry_callback: 재시도 시 호출할 콜백 (attempt_num, delay_seconds 전달)
-            **kwargs: 함수 키워드 인자
+            func: Function to execute
+            *args: Function arguments
+            on_retry_callback: Callback to invoke on retry (passes attempt_num, delay_seconds)
+            **kwargs: Function keyword arguments
 
         Returns:
-            함수 실행 결과
+            Function execution result
         """
         last_exception = None
 
@@ -144,7 +144,7 @@ class RetryHandler:
                 if not self.should_retry(attempt, e):
                     raise
 
-                # 재시도 대기
+                # Wait before retry
                 delay = self.get_backoff_delay(attempt)
                 logger.info(f"Retrying in {delay:.2f} seconds...")
 
@@ -153,12 +153,12 @@ class RetryHandler:
 
                 time.sleep(delay)
 
-        # 최대 재시도 횟수 도달
+        # Max retries reached
         raise last_exception
 
 
 class CombinedTimeoutRetry:
-    """타임아웃 + 재시도 결합 핸들러"""
+    """Combined timeout + retry handler"""
 
     def __init__(self, config: TimeoutRetryConfig):
         self.config = config
@@ -173,7 +173,7 @@ class CombinedTimeoutRetry:
         **kwargs
     ) -> Any:
         """
-        타임아웃과 재시도를 모두 적용하여 함수 실행
+        Execute function with both timeout and retry applied
         """
         def func_with_timeout(*args, **kwargs):
             return self.timeout_handler.run_with_timeout(func, *args, **kwargs)
@@ -188,7 +188,7 @@ class CombinedTimeoutRetry:
 
 def with_timeout_retry(config: TimeoutRetryConfig):
     """
-    데코레이터: 타임아웃과 재시도를 자동으로 적용
+    Decorator: Automatically apply timeout and retry
 
     Usage:
         @with_timeout_retry(TimeoutRetryConfig(timeout_seconds=30, max_retries=3))
@@ -207,7 +207,7 @@ def with_timeout_retry(config: TimeoutRetryConfig):
 @contextmanager
 def timeout_context(seconds: int):
     """
-    컨텍스트 매니저: 특정 시간 내에 코드 블록 실행
+    Context manager: Execute code block within specified time
 
     Usage:
         with timeout_context(30):
@@ -218,17 +218,17 @@ def timeout_context(seconds: int):
     def signal_handler(signum, frame):
         raise TimeoutException(f"Operation timed out after {seconds} seconds")
 
-    # 신호 기반 타임아웃 설정 (Unix only)
+    # Signal-based timeout setup (Unix only)
     try:
         signal.signal(signal.SIGALRM, signal_handler)
         signal.alarm(seconds)
         yield
     finally:
-        signal.alarm(0)  # 타임아웃 해제
+        signal.alarm(0)  # Cancel timeout
 
 
 class AdaptiveTimeoutRetry:
-    """적응형 타임아웃 및 재시도 핸들러"""
+    """Adaptive timeout and retry handler"""
 
     def __init__(self, initial_config: TimeoutRetryConfig):
         self.initial_config = initial_config
@@ -241,7 +241,7 @@ class AdaptiveTimeoutRetry:
         execution_time_seconds: float,
         timeout_occurred: bool = False
     ):
-        """실행 기록 저장"""
+        """Record execution history"""
         self.execution_history.append({
             "success": success,
             "execution_time": execution_time_seconds,
@@ -249,12 +249,12 @@ class AdaptiveTimeoutRetry:
             "timestamp": time.time()
         })
 
-        # 최근 10개 기록만 유지
+        # Keep only the last 10 records
         if len(self.execution_history) > 10:
             self.execution_history = self.execution_history[-10:]
 
     def adjust_config(self):
-        """실행 이력 기반 설정 조정"""
+        """Adjust configuration based on execution history"""
         if len(self.execution_history) < 3:
             return
 
@@ -262,13 +262,13 @@ class AdaptiveTimeoutRetry:
         timeout_count = sum(1 for h in recent_history if h["timeout_occurred"])
         avg_time = sum(h["execution_time"] for h in recent_history) / len(recent_history)
 
-        # 타임아웃이 빈번하면 타임아웃 시간 증가
+        # Increase timeout if timeouts are frequent
         if timeout_count >= 2:
             new_timeout = int(self.current_config.timeout_seconds * 1.5)
             logger.info(f"Increasing timeout from {self.current_config.timeout_seconds}s to {new_timeout}s")
             self.current_config.timeout_seconds = new_timeout
 
-        # 대부분 성공하면 타임아웃 시간 감소 (최대 요청 처리량 증가)
+        # Decrease timeout if mostly successful (increase max request throughput)
         success_count = sum(1 for h in recent_history if h["success"])
         if success_count == 3 and self.current_config.timeout_seconds > self.initial_config.timeout_seconds:
             new_timeout = max(self.initial_config.timeout_seconds,
@@ -282,7 +282,7 @@ class AdaptiveTimeoutRetry:
         *args,
         **kwargs
     ) -> Any:
-        """적응형 타임아웃과 재시도를 적용하여 실행"""
+        """Execute with adaptive timeout and retry"""
         handler = CombinedTimeoutRetry(self.current_config)
         start_time = time.time()
         timeout_occurred = False
@@ -315,10 +315,10 @@ class AdaptiveTimeoutRetry:
             raise
 
 
-# 기본 설정 (Gemma 3 12B Q5용)
+# Default configuration (for Gemma 3 12B Q5)
 DEFAULT_GEMMA3_TIMEOUT_RETRY_CONFIG = TimeoutRetryConfig(
-    timeout_seconds=30,  # 30초 타임아웃
-    max_retries=3,       # 최대 3회 재시도
+    timeout_seconds=30,  # 30 second timeout
+    max_retries=3,       # Max 3 retries
     backoff_factor=1.5,
     initial_delay_ms=100,
     max_delay_ms=5000,

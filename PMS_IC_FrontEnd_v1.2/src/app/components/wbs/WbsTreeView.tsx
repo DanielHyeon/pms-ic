@@ -64,10 +64,10 @@ interface WbsItemRowProps {
   isExpanded: boolean;
   onToggle: () => void;
   onEdit: (item: WbsItem) => void;
-  onDelete: (itemId: string) => void;
+  onDelete: (itemId: string, groupId: string) => void;
   onAddTask: (itemId: string) => void;
   onEditTask: (task: WbsTask) => void;
-  onDeleteTask: (taskId: string) => void;
+  onDeleteTask: (taskId: string, itemId: string) => void;
   onUpdateTaskProgress: (taskId: string, progress: number) => void;
   onLinkStory?: (wbsItemId: string) => void;
   onLinkTask?: (wbsTaskId: string) => void;
@@ -84,10 +84,10 @@ interface WbsGroupRowProps {
   onDelete: (groupId: string) => void;
   onAddItem: (groupId: string) => void;
   onEditItem: (item: WbsItem) => void;
-  onDeleteItem: (itemId: string) => void;
+  onDeleteItem: (itemId: string, groupId: string) => void;
   onAddTask: (itemId: string) => void;
   onEditTask: (task: WbsTask) => void;
-  onDeleteTask: (taskId: string) => void;
+  onDeleteTask: (taskId: string, itemId: string) => void;
   onUpdateTaskProgress: (taskId: string, progress: number) => void;
   onLinkStory?: (wbsItemId: string) => void;
   onLinkTask?: (wbsTaskId: string) => void;
@@ -317,7 +317,7 @@ function WbsItemRow({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onDelete(item.id);
+                  onDelete(item.id, item.groupId);
                 }}
                 className="p-1 text-gray-400 hover:text-red-600 rounded"
                 title="삭제"
@@ -341,7 +341,7 @@ function WbsItemRow({
                 task={task}
                 canEdit={canEdit}
                 onEdit={onEditTask}
-                onDelete={onDeleteTask}
+                onDelete={(taskId) => onDeleteTask(taskId, item.id)}
                 onUpdateProgress={onUpdateTaskProgress}
                 onLinkTask={onLinkTask}
               />
@@ -472,10 +472,10 @@ function WbsGroupRow({
                 isExpanded={expandedItems.has(item.id)}
                 onToggle={() => onToggleItem(item.id)}
                 onEdit={onEditItem}
-                onDelete={onDeleteItem}
+                onDelete={(itemId, groupId) => onDeleteItem(itemId, groupId)}
                 onAddTask={onAddTask}
                 onEditTask={onEditTask}
-                onDeleteTask={onDeleteTask}
+                onDeleteTask={(taskId, itemId) => onDeleteTask(taskId, itemId)}
                 onUpdateTaskProgress={onUpdateTaskProgress}
                 onLinkStory={onLinkStory}
                 onLinkTask={onLinkTask}
@@ -652,7 +652,7 @@ export default function WbsTreeView({
 
   const handleDeleteGroup = (groupId: string) => {
     if (!confirm('이 카테고리와 하위 항목이 모두 삭제됩니다. 계속하시겠습니까?')) return;
-    deleteGroupMutation.mutate(groupId);
+    deleteGroupMutation.mutate({ id: groupId, phaseId });
   };
 
   // Item handlers
@@ -713,9 +713,9 @@ export default function WbsTreeView({
     setShowItemModal(false);
   };
 
-  const handleDeleteItem = (itemId: string) => {
+  const handleDeleteItem = (itemId: string, groupId: string) => {
     if (!confirm('이 항목과 하위 작업이 모두 삭제됩니다. 계속하시겠습니까?')) return;
-    deleteItemMutation.mutate(itemId);
+    deleteItemMutation.mutate({ id: itemId, groupId });
   };
 
   // Task handlers
@@ -787,9 +787,9 @@ export default function WbsTreeView({
     setShowTaskModal(false);
   };
 
-  const handleDeleteTask = (taskId: string) => {
+  const handleDeleteTask = (taskId: string, itemId: string) => {
     if (!confirm('이 작업을 삭제하시겠습니까?')) return;
-    deleteTaskMutation.mutate(taskId);
+    deleteTaskMutation.mutate({ id: taskId, itemId });
   };
 
   const handleUpdateTaskProgress = (taskId: string, progress: number) => {

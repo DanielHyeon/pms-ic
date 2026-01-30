@@ -31,8 +31,8 @@ export function useCreatePhase() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: Parameters<typeof apiService.createPhase>[0]) =>
-      apiService.createPhase(data),
+    mutationFn: ({ projectId, data }: { projectId: string; data: Parameters<typeof apiService.createPhase>[1] }) =>
+      apiService.createPhase(projectId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: phaseKeys.lists() });
     },
@@ -75,8 +75,8 @@ export function useUploadDeliverable() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ phaseId, formData }: { phaseId: string; formData: FormData }) =>
-      apiService.uploadDeliverable(phaseId, formData),
+    mutationFn: (params: Parameters<typeof apiService.uploadDeliverable>[0]) =>
+      apiService.uploadDeliverable(params),
     onSuccess: (_, { phaseId }) => {
       queryClient.invalidateQueries({ queryKey: phaseKeys.deliverables(phaseId) });
     },
@@ -186,16 +186,24 @@ export function useApproveDeliverable() {
   });
 }
 
+// Phase type for internal use
+interface PhaseBasic {
+  id: string;
+  name: string;
+  [key: string]: unknown;
+}
+
 // Project-level deliverables hook - aggregates deliverables from all phases
 export function useProjectDeliverables(projectId?: string) {
   const { data: phases = [] } = usePhases(projectId);
+  const typedPhases = phases as PhaseBasic[];
 
   return useQuery({
     queryKey: [...phaseKeys.all, 'project-deliverables', { projectId }],
     queryFn: async () => {
-      if (!phases || phases.length === 0) return [];
+      if (!typedPhases || typedPhases.length === 0) return [];
 
-      const phaseIds = phases.map((p: { id: string }) => p.id);
+      const phaseIds = typedPhases.map((p) => p.id);
       const deliverablePromises = phaseIds.map((phaseId: string) =>
         apiService.getPhaseDeliverables(phaseId).catch(() => [])
       );
@@ -203,11 +211,11 @@ export function useProjectDeliverables(projectId?: string) {
       const results = await Promise.all(deliverablePromises);
 
       // Flatten and add phase info to each deliverable
-      const allDeliverables: any[] = [];
+      const allDeliverables: Array<{ phaseId: string; phaseName: string; [key: string]: unknown }> = [];
       results.forEach((deliverables, index) => {
-        const phase = phases[index];
+        const phase = typedPhases[index];
         if (Array.isArray(deliverables)) {
-          deliverables.forEach((d: any) => {
+          deliverables.forEach((d: Record<string, unknown>) => {
             allDeliverables.push({
               ...d,
               phaseId: phase.id,
@@ -219,6 +227,6 @@ export function useProjectDeliverables(projectId?: string) {
 
       return allDeliverables;
     },
-    enabled: !!projectId && phases.length > 0,
+    enabled: !!projectId && typedPhases.length > 0,
   });
 }

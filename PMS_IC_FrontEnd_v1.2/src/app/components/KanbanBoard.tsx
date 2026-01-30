@@ -26,7 +26,7 @@ const TaskCard = ({ task, canDrag, onEdit }: Omit<TaskCardProps, 'moveTask'>) =>
 
   return (
     <div
-      ref={canDrag ? drag : null}
+      ref={canDrag ? (drag as unknown as React.Ref<HTMLDivElement>) : undefined}
       onClick={() => canDrag && onEdit(task)}
       className={`bg-white rounded-lg border-2 p-4 transition-all hover:shadow-md ${
         task.isFirefighting ? 'border-red-400 bg-red-50' : 'border-gray-200'
@@ -92,7 +92,7 @@ const KanbanColumn = ({ column, moveTask, canDrag, onEditTask }: ColumnProps) =>
 
   return (
     <div
-      ref={drop}
+      ref={drop as unknown as React.Ref<HTMLDivElement>}
       className={`bg-gray-50 rounded-xl p-4 min-h-[600px] transition-colors ${
         isOver && canDrag ? 'bg-blue-50 ring-2 ring-blue-400' : ''
       }`}

@@ -17,6 +17,15 @@ import { useFeatures } from '../../../hooks/api/useFeatures';
 import EpicPhaseLinker from '../integration/EpicPhaseLinker';
 import FeatureGroupLinker from '../integration/FeatureGroupLinker';
 import StoryItemLinker from '../integration/StoryItemLinker';
+import type { WbsGroup, WbsItem } from '../../../types/wbs';
+import type { Epic, Feature } from '../../../types/backlog';
+
+// Phase type for this component
+interface Phase {
+  id: string;
+  name: string;
+  [key: string]: unknown;
+}
 
 interface WbsConnectionPanelProps {
   projectId: string;
@@ -38,11 +47,16 @@ export default function WbsConnectionPanel({
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
 
-  const { data: phases = [] } = usePhases(projectId);
-  const { data: wbsGroups = [] } = useWbsGroups(selectedPhaseId || undefined);
-  const { data: wbsItems = [] } = useWbsItems(selectedGroupId || undefined);
-  const { data: epics = [] } = useEpics(projectId);
-  const { data: features = [] } = useFeatures();
+  const { data: phasesData } = usePhases(projectId);
+  const phases = (phasesData || []) as Phase[];
+  const { data: wbsGroupsData } = useWbsGroups(selectedPhaseId || undefined);
+  const wbsGroups = (wbsGroupsData || []) as WbsGroup[];
+  const { data: wbsItemsData } = useWbsItems(selectedGroupId || undefined);
+  const wbsItems = (wbsItemsData || []) as WbsItem[];
+  const { data: epicsData } = useEpics(projectId);
+  const epics = (epicsData || []) as Epic[];
+  const { data: featuresData } = useFeatures();
+  const features = (featuresData || []) as Feature[];
 
   // Calculate connection statistics
   const linkedEpicsCount = epics.filter((e) => e.phaseId).length;
