@@ -26,6 +26,13 @@ public class DeliverableDto {
     private LocalDateTime uploadedAt;
     private LocalDateTime approvedAt;
 
+    // RAG indexing fields
+    private String ragStatus;
+    private String ragLastError;
+    private LocalDateTime ragUpdatedAt;
+    private Integer ragVersion;
+    private String ragDocId;
+
     public static DeliverableDto from(R2dbcDeliverable deliverable) {
         return DeliverableDto.builder()
                 .id(deliverable.getId())
@@ -40,6 +47,11 @@ public class DeliverableDto {
                 .approver(deliverable.getApprover())
                 .uploadedAt(deliverable.getCreatedAt())
                 .approvedAt(deliverable.getApprovedAt())
+                .ragStatus(deliverable.getRagStatus())
+                .ragLastError(deliverable.getRagLastError())
+                .ragUpdatedAt(deliverable.getRagUpdatedAt())
+                .ragVersion(deliverable.getRagVersion())
+                .ragDocId(deliverable.getRagDocId())
                 .build();
     }
 }

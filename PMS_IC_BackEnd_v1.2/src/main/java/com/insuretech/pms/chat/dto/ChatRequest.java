@@ -49,10 +49,9 @@ public class ChatRequest {
 
     /**
      * Project ID for filtering RAG results.
-     * Must be a valid UUID format if provided.
+     * Accepts UUID format or custom project ID format (e.g., proj-001).
      */
-    @Pattern(regexp = "^$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-            message = "Project ID must be a valid UUID format")
+    @Size(max = 50, message = "Project ID cannot exceed 50 characters")
     private String projectId;
 
     /**

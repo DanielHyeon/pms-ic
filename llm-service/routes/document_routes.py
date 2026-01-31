@@ -41,6 +41,41 @@ def add_documents():
         return jsonify({"error": str(e)}), 500
 
 
+@document_bp.route("/api/documents/<doc_id>", methods=["GET"])
+def get_document(doc_id):
+    """
+    Get document by ID.
+
+    Returns document metadata including:
+    - doc_id, title, file_type, file_path
+    - project_id, access_level
+    - status, approver, approved_at
+    - chunk_count, category
+    - exists: true
+
+    Returns 404 if document not found.
+    """
+    try:
+        model_service = get_model_service()
+        _, rag, _ = model_service.load_model()
+        if not rag:
+            return jsonify({"error": "RAG service not available"}), 503
+
+        doc = rag.get_document(doc_id)
+
+        if doc:
+            return jsonify(doc)
+        else:
+            return jsonify({
+                "error": f"Document {doc_id} not found",
+                "exists": False
+            }), 404
+
+    except Exception as e:
+        logger.error(f"Error getting document: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 @document_bp.route("/api/documents/<doc_id>", methods=["DELETE"])
 def delete_document(doc_id):
     """문서 삭제 API"""
@@ -59,6 +94,50 @@ def delete_document(doc_id):
 
     except Exception as e:
         logger.error(f"Error deleting document: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@document_bp.route("/api/documents/<doc_id>/metadata", methods=["PATCH"])
+def update_document_metadata(doc_id):
+    """
+    Update document metadata without re-indexing.
+
+    Request body (all fields optional):
+    {
+        "status": "APPROVED",
+        "approver": "user-123",
+        "approved_at": "2026-01-31T10:00:00",
+        "access_level": 3,
+        "title": "Updated Title"
+    }
+
+    Allowed fields:
+    - status, approver, approved_at, access_level
+    - title, file_path, file_type, project_id
+    - uploaded_by_user_id, uploaded_by_role, category
+    """
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"error": "Request body is required"}), 400
+
+        model_service = get_model_service()
+        _, rag, _ = model_service.load_model()
+        if not rag:
+            return jsonify({"error": "RAG service not available"}), 503
+
+        success = rag.update_document_metadata(doc_id, data)
+
+        if success:
+            return jsonify({
+                "message": f"Document {doc_id} metadata updated successfully",
+                "updated_fields": list(data.keys())
+            })
+        else:
+            return jsonify({"error": f"Failed to update document {doc_id}"}), 404
+
+    except Exception as e:
+        logger.error(f"Error updating document metadata: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 

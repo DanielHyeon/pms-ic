@@ -4,7 +4,7 @@ flask-cors==4.0.0
 numpy<2.0.0
 
 # Vector & Graph Databases
-neo4j>=5.20.0  # Primary: GraphRAG with Neo4j
+neo4j>=5.26.0  # Primary: GraphRAG with Neo4j (Cypher 25 & VECTOR type support)
 qdrant-client>=1.7.0  # Optional: Fallback vector DB
 
 sentence-transformers==2.3.1

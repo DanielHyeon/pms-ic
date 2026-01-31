@@ -1554,7 +1554,7 @@ export class ApiService {
         ...(this.token && { Authorization: `Bearer ${this.token}` }),
       };
 
-      const response = await fetch(`${API_BASE_URL}${V2}/chat/message`, {
+      let response = await fetch(`${API_BASE_URL}${V2}/chat/message`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -1566,6 +1566,23 @@ export class ApiService {
         }),
         signal: AbortSignal.timeout(120000), // 120 seconds for LLM response
       });
+
+      // If session not found (404), retry without sessionId to create new session
+      if (response.status === 404 && params.sessionId) {
+        console.warn('Session not found, creating new session...');
+        response = await fetch(`${API_BASE_URL}${V2}/chat/message`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            sessionId: null,
+            message: params.message,
+            projectId: params.projectId ?? null,
+            userRole: params.userRole ?? null,
+            userAccessLevel: params.userAccessLevel ?? null,
+          }),
+          signal: AbortSignal.timeout(120000),
+        });
+      }
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

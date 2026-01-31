@@ -10,6 +10,7 @@ Reference: docs/PMS 최적화 방안.md
 from typing import TypedDict, Literal, List, Optional, Dict, Any
 from langgraph.graph import StateGraph, END
 from llama_cpp import Llama
+from datetime import datetime
 import logging
 import re
 import os
@@ -36,11 +37,111 @@ from status_query_plan import (
 )
 from status_query_executor import get_status_query_executor, StatusQueryResult
 from source_policy_gate import get_source_policy_gate, get_status_summarization_prompt
+from text_to_sql import get_dynamic_query_executor, format_query_result
 from status_response_contract import (
     build_status_response, create_no_data_response, StatusResponseContract
 )
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# RAG Scope Decision & Fallback Helpers
+# =============================================================================
+
+DOC_SEEK_KEYWORDS = (
+    "문서", "가이드", "정책", "규정", "템플릿", "위키", "링크",
+    "노션", "컨플루언스", "어디", "보여줘", "찾아줘", "참조",
+    "근거", "자료", "원문", "파일", "경로", "위치"
+)
+
+PROJECT_FORCE_KEYWORDS = (
+    "이 프로젝트", "우리 프로젝트", "해당 프로젝트",
+    "프로젝트 내", "프로젝트에서", "현재 프로젝트", "본 프로젝트"
+)
+
+GENERAL_HOWTO_KEYWORDS = (
+    "뭐야", "무엇", "정의", "의미", "설명", "차이", "장단점",
+    "언제", "왜", "어떻게", "개념", "용어", "정리해줘", "알려줘"
+)
+
+
+def _contains_any(text: str, keywords: tuple) -> bool:
+    """Check if text contains any of the keywords"""
+    return any(k in text for k in keywords) if text else False
+
+
+def decide_search_project_id_for_howto(
+    query: str,
+    project_id: Optional[str],
+) -> Optional[str]:
+    """
+    Determine search scope for HOWTO_POLICY queries.
+    - Project/doc signal -> project_id (project-first)
+    - General concept question -> None (global, includes 'default')
+    """
+    q = (query or "").strip()
+    if not q:
+        return None
+
+    project_forced = _contains_any(q, PROJECT_FORCE_KEYWORDS)
+    if project_id and project_id in q:
+        project_forced = True
+
+    doc_seek = _contains_any(q, DOC_SEEK_KEYWORDS)
+    general_howto = _contains_any(q, GENERAL_HOWTO_KEYWORDS)
+
+    if project_forced or doc_seek:
+        return project_id
+    if general_howto:
+        return None
+    return None  # Default to global for better recall
+
+
+def max_relevance_score(results: List[Dict[str, Any]]) -> float:
+    """Get maximum relevance score from results"""
+    if not results:
+        return 0.0
+    return max((r.get("relevance_score", 0.0) for r in results), default=0.0)
+
+
+def should_fallback_to_global(
+    primary_project_id: Optional[str],
+    results: List[Dict[str, Any]],
+    min_results: int = 1,
+    min_max_score: float = 0.01,
+) -> bool:
+    """Determine if fallback to global search is needed"""
+    if primary_project_id is None:
+        return False
+    if not results or len(results) < min_results:
+        return True
+    return max_relevance_score(results) < min_max_score
+
+
+def merge_results_project_first(
+    project_results: List[Dict[str, Any]],
+    global_results: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Merge results with project-first priority, dedupe by metadata.doc_id"""
+    merged = []
+    seen = set()
+
+    for r in (project_results or []):
+        doc_id = (r.get("metadata") or {}).get("doc_id")
+        key = doc_id or r.get("chunk_id") or id(r)
+        if key not in seen:
+            seen.add(key)
+            merged.append(r)
+
+    for r in (global_results or []):
+        doc_id = (r.get("metadata") or {}).get("doc_id")
+        key = doc_id or r.get("chunk_id") or id(r)
+        if key not in seen:
+            seen.add(key)
+            merged.append(r)
+
+    return merged
 
 
 # =============================================================================
@@ -451,21 +552,63 @@ class TwoTrackWorkflow:
         return "document_query"
 
     def _execute_status_query_node(self, state: TwoTrackState) -> TwoTrackState:
-        """Node: Execute status query against database"""
+        """Node: Execute status query against database
+
+        Uses hybrid approach:
+        - STATUS_LIST queries: Use Text-to-SQL for dynamic query generation
+        - STATUS_METRIC queries: Use predefined metric executors
+        """
         start_time = time.time()
 
         project_id = state.get("project_id")
         user_access_level = state.get("user_access_level", 6)
+        query = state.get("message", "")
 
         if not project_id:
             logger.warning("No project_id for status query, using default")
             project_id = "proj-001"  # fallback
 
-        # Create a default plan (in future, can use LLM to generate plan)
-        plan = create_default_plan(project_id, user_access_level)
-
-        # Add metrics based on answer type classification
         answer_type_info = state.get("debug_info", {}).get("answer_type", {})
+        answer_type = answer_type_info.get("type", "status_metric")
+
+        logger.info(f"Executing status query: answer_type={answer_type}")
+
+        # Check if this is a LIST query that needs dynamic SQL
+        if answer_type == "status_list":
+            # Use Text-to-SQL for list queries
+            try:
+                dynamic_executor = get_dynamic_query_executor()
+                result = dynamic_executor.execute_natural_query(query, project_id)
+
+                if result.success and result.row_count > 0:
+                    # Format result and store
+                    formatted_response = format_query_result(result, query, "markdown")
+                    state["status_query_result"] = {
+                        "dynamic_query": True,
+                        "formatted_response": formatted_response,
+                        "data": result.data,
+                        "row_count": result.row_count,
+                        "sql_used": result.sql_used,
+                        "execution_time_ms": result.execution_time_ms,
+                    }
+                    state["status_query_plan"] = {"type": "dynamic", "query": query}
+
+                    logger.info(
+                        f"Dynamic query executed: {result.row_count} rows, "
+                        f"{result.execution_time_ms:.1f}ms"
+                    )
+                    state["metrics"]["status_query_time_ms"] = (time.time() - start_time) * 1000
+                    return state
+                else:
+                    logger.info(f"Dynamic query returned no results, falling back to metrics")
+                    # Fall through to metric-based approach
+
+            except Exception as e:
+                logger.warning(f"Dynamic query failed, falling back to metrics: {e}")
+                # Fall through to metric-based approach
+
+        # Metric-based approach for STATUS_METRIC or fallback
+        plan = create_default_plan(project_id, user_access_level)
 
         if metrics_requested := answer_type_info.get("metrics_requested", []):
             plan.metrics = list(set(plan.metrics + metrics_requested))
@@ -504,6 +647,32 @@ class TwoTrackWorkflow:
 
         project_id = state.get("project_id", "unknown")
         query_result_dict = state.get("status_query_result", {})
+
+        # Check if this is a dynamic query result (Text-to-SQL)
+        if query_result_dict.get("dynamic_query"):
+            # Dynamic query result - use pre-formatted response
+            formatted_response = query_result_dict.get("formatted_response", "")
+
+            # Create a minimal contract with the dynamic response
+            contract = StatusResponseContract()
+            contract.reference_time = datetime.now().strftime("%Y-%m-%d %H:%M KST")
+            contract.scope = f"프로젝트: {project_id}"
+            contract.data_source = "PostgreSQL 동적 쿼리"
+            contract._dynamic_response = formatted_response  # Store for later use
+
+            state["status_response_contract"] = {
+                "dynamic_response": formatted_response,
+                "row_count": query_result_dict.get("row_count", 0),
+                "data": query_result_dict.get("data", []),
+                "has_data": True,
+            }
+            state["debug_info"]["status_contract"] = {
+                "has_data": True,
+                "dynamic_query": True,
+                "row_count": query_result_dict.get("row_count", 0),
+            }
+            state["metrics"]["build_response_time_ms"] = (time.time() - start_time) * 1000
+            return state
 
         # Check if we have valid results
         if query_result_dict.get("errors") and not query_result_dict.get("metrics"):
@@ -553,6 +722,17 @@ class TwoTrackWorkflow:
         start_time = time.time()
 
         contract_dict = state.get("status_response_contract", {})
+
+        # Check if this is a dynamic query response
+        if contract_dict.get("dynamic_response"):
+            # Use the pre-formatted dynamic response
+            response_text = contract_dict["dynamic_response"]
+            confidence = 0.95
+            state["response"] = response_text
+            state["confidence"] = confidence
+            state["intent"] = "status_query"
+            state["metrics"]["summarize_time_ms"] = (time.time() - start_time) * 1000
+            return state
 
         # Reconstruct contract for text generation
         contract = StatusResponseContract()
@@ -694,7 +874,7 @@ class TwoTrackWorkflow:
         return track
 
     def _rag_search_node(self, state: TwoTrackState) -> TwoTrackState:
-        """Node: RAG search with access control filtering"""
+        """Node: RAG search with access control filtering + scope decision"""
         start_time = time.time()
 
         search_query = state.get("current_query") or state.get("message") or ""
@@ -704,8 +884,10 @@ class TwoTrackWorkflow:
         project_id = state.get("project_id")
         user_access_level = state.get("user_access_level", 6)
         user_role = state.get("user_role", "MEMBER")
+        answer_type = (state.get("answer_type") or "").strip().lower()
 
-        logger.info(f"RAG search (retry={retry_count}): {search_query[:50]}... (project={project_id}, level={user_access_level})")
+        logger.info(f"RAG search (retry={retry_count}): {search_query[:50]}... "
+                    f"(project={project_id}, level={user_access_level}, type={answer_type})")
 
         # Use pre-provided docs if available and first attempt
         if state.get("retrieved_docs") and retry_count == 0:
@@ -713,13 +895,26 @@ class TwoTrackWorkflow:
             state["metrics"]["rag_time_ms"] = (time.time() - start_time) * 1000
             return state
 
+        # ========================================
+        # Scope Decision (HOWTO_POLICY only)
+        # ========================================
+        if answer_type == "howto_policy":
+            primary_project_id = decide_search_project_id_for_howto(
+                query=search_query,
+                project_id=project_id,
+            )
+        else:
+            primary_project_id = project_id
+
         retrieved_docs = []
+        filtered = []
+        fallback_used = False
 
         if self.rag_service:
             try:
-                # Build filter metadata with access control
+                # Build filter metadata
                 filter_metadata = {
-                    "project_id": project_id,
+                    "project_id": primary_project_id,
                     "user_access_level": user_access_level,
                 }
 
@@ -738,10 +933,41 @@ class TwoTrackWorkflow:
                     if doc.get('relevance_score', 0) >= MIN_RELEVANCE_SCORE
                 ]
 
+                logger.info(f"RAG primary search: {len(filtered)} docs "
+                            f"(project_id={primary_project_id}, max_score={max_relevance_score(filtered):.4f})")
+
+                # ========================================
+                # 2-pass Fallback (HOWTO_POLICY only)
+                # ========================================
+                FALLBACK_MIN_SCORE = 0.01 if merge_method in ("rrf", "rrf_rerank") else 0.2
+
+                if answer_type == "howto_policy" and should_fallback_to_global(
+                    primary_project_id=primary_project_id,
+                    results=filtered,
+                    min_results=1,
+                    min_max_score=FALLBACK_MIN_SCORE,
+                ):
+                    fallback_filter = {
+                        "project_id": None,  # global (includes 'default')
+                        "user_access_level": user_access_level,
+                    }
+                    fallback_results = self.rag_service.search(
+                        search_query,
+                        top_k=5,
+                        filter_metadata=fallback_filter
+                    )
+                    fallback_filtered = [
+                        doc for doc in fallback_results
+                        if doc.get('relevance_score', 0) >= MIN_RELEVANCE_SCORE
+                    ]
+
+                    filtered = merge_results_project_first(filtered, fallback_filtered)
+                    fallback_used = True
+                    logger.info(f"RAG fallback: merged to {len(filtered)} docs "
+                                f"(fallback_count={len(fallback_filtered)})")
+
                 retrieved_docs = [doc['content'] for doc in filtered]
-                # Phase 1: Store raw results for evidence extraction
                 state["rag_results"] = filtered
-                logger.info(f"RAG found {len(retrieved_docs)} docs (filtered from {len(results)}, threshold={MIN_RELEVANCE_SCORE}, method={merge_method})")
 
             except Exception as e:
                 logger.error(f"RAG search failed: {e}")
@@ -760,8 +986,10 @@ class TwoTrackWorkflow:
         state["debug_info"]["rag_docs_count"] = len(retrieved_docs)
         state["debug_info"]["access_control"] = {
             "project_id": project_id,
+            "primary_project_id": primary_project_id,
             "user_role": user_role,
             "user_access_level": user_access_level,
+            "fallback_used": fallback_used,
         }
         state["metrics"]["rag_time_ms"] = (time.time() - start_time) * 1000
 

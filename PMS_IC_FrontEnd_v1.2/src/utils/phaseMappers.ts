@@ -20,6 +20,8 @@ export interface Phase {
   kpis: KPI[];
 }
 
+export type RagStatus = 'PENDING' | 'INDEXING' | 'READY' | 'FAILED';
+
 export interface Deliverable {
   id: string;
   name: string;
@@ -28,6 +30,12 @@ export interface Deliverable {
   approver?: string;
   fileName?: string;
   fileSize?: number;
+  // RAG indexing status fields
+  ragStatus?: RagStatus;
+  ragLastError?: string;
+  ragUpdatedAt?: string;
+  ragVersion?: number;
+  ragDocId?: string;
 }
 
 export interface KPI {
@@ -108,6 +116,12 @@ export const mapDeliverableFromApi = (deliverable: any): Deliverable => ({
   approver: deliverable.approver,
   fileName: deliverable.fileName,
   fileSize: deliverable.fileSize,
+  // RAG indexing status
+  ragStatus: deliverable.ragStatus as RagStatus | undefined,
+  ragLastError: deliverable.ragLastError,
+  ragUpdatedAt: deliverable.ragUpdatedAt,
+  ragVersion: deliverable.ragVersion,
+  ragDocId: deliverable.ragDocId,
 });
 
 export const mapKpiFromApi = (kpi: any): KPI => ({
@@ -181,4 +195,29 @@ export const getPhaseStatusLabel = (status: string): string => {
     atRisk: '위험',
   };
   return labels[status] || status;
+};
+
+// RAG status utilities
+export const getRagStatusColor = (status?: RagStatus): string => {
+  switch (status) {
+    case 'READY':
+      return 'text-green-600';
+    case 'INDEXING':
+    case 'PENDING':
+      return 'text-blue-600';
+    case 'FAILED':
+      return 'text-red-600';
+    default:
+      return 'text-gray-400';
+  }
+};
+
+export const getRagStatusLabel = (status?: RagStatus): string => {
+  const labels: Record<string, string> = {
+    READY: 'AI 검색 가능',
+    INDEXING: '인덱싱 중',
+    PENDING: '대기 중',
+    FAILED: '인덱싱 실패',
+  };
+  return status ? labels[status] || status : '';
 };

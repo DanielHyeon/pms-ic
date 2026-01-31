@@ -524,26 +524,28 @@ CREATE TABLE IF NOT EXISTS task.weekly_reports (
 -- ============================================
 
 CREATE TABLE IF NOT EXISTS chat.chat_sessions (
-    id VARCHAR(36) PRIMARY KEY,
-    user_id VARCHAR(36) NOT NULL,
-    title VARCHAR(255),
-    active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    id VARCHAR(50) PRIMARY KEY,
+    user_id VARCHAR(50) NOT NULL,
+    title VARCHAR(200),
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP,
-    created_by VARCHAR(36),
-    updated_by VARCHAR(36)
+    created_by VARCHAR(255),
+    updated_by VARCHAR(255)
 );
 
 CREATE TABLE IF NOT EXISTS chat.chat_messages (
-    id VARCHAR(36) PRIMARY KEY,
-    session_id VARCHAR(36) NOT NULL REFERENCES chat.chat_sessions(id) ON DELETE CASCADE,
+    id VARCHAR(50) PRIMARY KEY,
+    session_id VARCHAR(50) NOT NULL REFERENCES chat.chat_sessions(id) ON DELETE CASCADE,
     role VARCHAR(20) NOT NULL,
     content TEXT NOT NULL,
+    trace_id VARCHAR(100),
+    engine VARCHAR(50),
     metadata JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP,
-    created_by VARCHAR(36),
-    updated_by VARCHAR(36)
+    created_by VARCHAR(255),
+    updated_by VARCHAR(255)
 );
 
 -- ============================================
@@ -733,6 +735,7 @@ CREATE INDEX IF NOT EXISTS idx_tasks_sprint ON task.tasks(sprint_id);
 -- Chat indexes
 CREATE INDEX IF NOT EXISTS idx_chat_sessions_user ON chat.chat_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat.chat_messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_trace ON chat.chat_messages(trace_id);
 
 -- Lineage indexes
 CREATE INDEX IF NOT EXISTS idx_outbox_events_status ON lineage.outbox_events(status);

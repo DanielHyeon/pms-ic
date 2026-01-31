@@ -1,6 +1,6 @@
-import { FileText, Plus, Upload, Download, Check, X } from 'lucide-react';
+import { FileText, Plus, Upload, Download, Check, X, Brain, Loader2, AlertCircle, Clock } from 'lucide-react';
 import type { Deliverable } from './types';
-import { getPhaseStatusColor, getPhaseStatusLabel } from '../../../utils/phaseMappers';
+import { getPhaseStatusColor, getPhaseStatusLabel, getRagStatusColor, getRagStatusLabel, type RagStatus } from '../../../utils/phaseMappers';
 
 interface DeliverablesListProps {
   deliverables: Deliverable[];
@@ -91,10 +91,37 @@ function DeliverableRow({
 
   const canShowDownloadButton = deliverable.uploadDate && !canShowUploadButton;
 
+  // Get RAG status icon component
+  const getRagStatusIcon = (status?: RagStatus) => {
+    switch (status) {
+      case 'READY':
+        return <Brain size={14} className="text-green-600" />;
+      case 'INDEXING':
+        return <Loader2 size={14} className="text-blue-600 animate-spin" />;
+      case 'PENDING':
+        return <Clock size={14} className="text-blue-500" />;
+      case 'FAILED':
+        return <AlertCircle size={14} className="text-red-600" />;
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
       <div className="flex-1">
-        <p className="text-sm font-medium text-gray-900">{deliverable.name}</p>
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-medium text-gray-900">{deliverable.name}</p>
+          {/* RAG Status Indicator */}
+          {deliverable.ragStatus && (
+            <span
+              className={`inline-flex items-center gap-1 ${getRagStatusColor(deliverable.ragStatus)}`}
+              title={`${getRagStatusLabel(deliverable.ragStatus)}${deliverable.ragLastError ? `: ${deliverable.ragLastError}` : ''}`}
+            >
+              {getRagStatusIcon(deliverable.ragStatus)}
+            </span>
+          )}
+        </div>
         {deliverable.uploadDate && (
           <p className="text-xs text-gray-500 mt-1">
             업로드: {deliverable.uploadDate}

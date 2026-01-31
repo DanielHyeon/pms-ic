@@ -306,4 +306,62 @@ public class RAGIndexingService {
             return Collections.emptyMap();
         }
     }
+
+    /**
+     * Check if document exists in RAG system
+     *
+     * @param documentId Document ID to check
+     * @return true if exists, false otherwise
+     */
+    public boolean documentExists(String documentId) {
+        try {
+            String url = llmServiceUrl + "/api/documents/" + documentId;
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
+
+            return response != null && Boolean.TRUE.equals(response.get("exists"));
+
+        } catch (Exception e) {
+            // 404 means document doesn't exist
+            if (e.getMessage() != null && e.getMessage().contains("404")) {
+                return false;
+            }
+            log.error("Failed to check document existence: {}", documentId, e);
+            return false;
+        }
+    }
+
+    /**
+     * Update document metadata without re-indexing
+     *
+     * @param documentId Document ID
+     * @param metadata   Metadata to update (status, approver, approved_at, access_level, etc.)
+     * @return true if successful, false otherwise
+     */
+    public boolean updateDocumentMetadata(String documentId, Map<String, Object> metadata) {
+        try {
+            String url = llmServiceUrl + "/api/documents/" + documentId + "/metadata";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(metadata, headers);
+
+            // Use exchange with PATCH method
+            restTemplate.exchange(
+                    url,
+                    org.springframework.http.HttpMethod.PATCH,
+                    request,
+                    Map.class
+            );
+
+            log.info("Document metadata updated successfully: {}", documentId);
+            return true;
+
+        } catch (Exception e) {
+            log.error("Failed to update document metadata: {}", documentId, e);
+            return false;
+        }
+    }
 }

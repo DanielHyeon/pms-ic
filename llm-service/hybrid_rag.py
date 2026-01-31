@@ -219,7 +219,7 @@ class DocumentRAGProvider(RAGProvider):
         try:
             driver = self._get_driver()
             with driver.session() as session:
-                # Vector similarity search
+                # Vector similarity search (Neo4j 5.x)
                 cypher = """
                     CALL db.index.vector.queryNodes('document_embeddings', $top_k, $embedding)
                     YIELD node, score

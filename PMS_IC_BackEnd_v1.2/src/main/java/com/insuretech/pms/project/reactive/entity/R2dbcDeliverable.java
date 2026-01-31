@@ -62,6 +62,27 @@ public class R2dbcDeliverable extends R2dbcBaseEntity {
     @Column("approved_at")
     private LocalDateTime approvedAt;
 
+    // RAG indexing fields
+    @Column("rag_status")
+    @Builder.Default
+    private String ragStatus = "PENDING";
+
+    @Nullable
+    @Column("rag_last_error")
+    private String ragLastError;
+
+    @Nullable
+    @Column("rag_updated_at")
+    private LocalDateTime ragUpdatedAt;
+
+    @Column("rag_version")
+    @Builder.Default
+    private Integer ragVersion = 1;
+
+    @Nullable
+    @Column("rag_doc_id")
+    private String ragDocId;
+
     public enum DeliverableType {
         DOCUMENT,
         CODE,
@@ -75,5 +96,13 @@ public class R2dbcDeliverable extends R2dbcBaseEntity {
         IN_REVIEW,
         APPROVED,
         REJECTED
+    }
+
+    public enum RagStatus {
+        PENDING,
+        INDEXING,
+        READY,
+        FAILED,
+        DELETED
     }
 }

@@ -203,6 +203,7 @@ neo4j:
 # Lineage Event Streaming (Outbox Pattern)
 lineage:
   outbox:
+    enabled: ${LINEAGE_OUTBOX_ENABLED:true}
     batch-size: 100
     max-retries: 3
     poll-interval: 5000  # 5 seconds
@@ -210,6 +211,14 @@ lineage:
     cleanup-cron: "0 0 2 * * ?"  # Daily at 2 AM
   stream:
     name: lineage:events
+  # Redis Streams configuration for reliable event delivery
+  redis:
+    stream:
+      enabled: ${LINEAGE_REDIS_STREAM_ENABLED:true}
+      relay-interval: 3000  # 3 seconds (faster than polling)
+      relay-batch-size: 50
+      poll-timeout: 2000
+      batch-size: 10
 
 ---
 # Development Profile

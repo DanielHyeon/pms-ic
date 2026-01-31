@@ -194,7 +194,7 @@ class RAGServiceNeo4j:
                 except Exception as e:
                     logger.debug(f"Part ID migration: {e}")
 
-                # 2. 벡터 인덱스 생성
+                # 2. Vector index creation (Neo4j 5.x syntax)
                 try:
                     session.run("""
                         CREATE VECTOR INDEX chunk_embeddings IF NOT EXISTS
@@ -326,7 +326,7 @@ class RAGServiceNeo4j:
                     embedding_text = f"passage: {chunk_content}"
                     embedding = self.embedding_model.encode(embedding_text).tolist()
 
-                    # Chunk 노드 생성 (권한 정보 포함 for faster filtering)
+                    # Chunk node creation with access control metadata
                     # part_id defaults to GLOBAL for project-wide visibility (never NULL for safety)
                     session.run("""
                         MERGE (c:Chunk {chunk_id: $chunk_id})
@@ -454,16 +454,17 @@ class RAGServiceNeo4j:
 
             with self.driver.session() as session:
                 if use_graph_expansion:
-                    # GraphRAG: 벡터 검색 + 순차 컨텍스트 확장 + 권한 필터 + Part 필터
+                    # GraphRAG: vector search + sequential context expansion + access filter + Part filter
                     cypher_query = """
                         CALL db.index.vector.queryNodes('chunk_embeddings', $top_k_fetch, $embedding)
                         YIELD node AS c, score
 
-                        // Access control filter: project + role level + global 'default' docs
+                        // Access control filter: project + role level
                         // Part filter: for PL scope (allowed_part_ids)
                         // - GLOBAL part_id means visible to all project members (explicit, not NULL)
                         // - allowed_part_ids=NULL means no Part filtering (user sees all Parts)
-                        WHERE ($project_id IS NULL OR c.project_id = $project_id OR c.project_id = 'default')
+                        // Note: 'default' project docs are only included when no project_id is specified
+                        WHERE ($project_id IS NULL OR c.project_id = $project_id)
                           AND c.access_level <= $user_access_level
                           AND ($allowed_part_ids IS NULL OR c.part_id = $global_part_id OR c.part_id IN $allowed_part_ids)
 
@@ -477,10 +478,11 @@ class RAGServiceNeo4j:
                         OPTIONAL MATCH (d)-[:BELONGS_TO]->(cat:Category)
 
                         // 같은 카테고리의 다른 최신 문서 (권한 필터 적용)
+                        // Note: 'default' project docs are only included when no project_id is specified
                         OPTIONAL MATCH (cat)<-[:BELONGS_TO]-(related:Document)
                         WHERE related <> d
                           AND related.access_level <= $user_access_level
-                          AND ($project_id IS NULL OR related.project_id = $project_id OR related.project_id = 'default')
+                          AND ($project_id IS NULL OR related.project_id = $project_id)
 
                         RETURN
                             c.chunk_id AS chunk_id,
@@ -511,14 +513,15 @@ class RAGServiceNeo4j:
                         LIMIT $top_k
                     """
                 else:
-                    # 단순 벡터 검색 + 권한 필터 + Part 필터
+                    # Simple vector search + access filter + Part filter
                     cypher_query = """
                         CALL db.index.vector.queryNodes('chunk_embeddings', $top_k_fetch, $embedding)
                         YIELD node AS c, score
 
-                        // Access control filter + global 'default' docs + Part filter
+                        // Access control filter + Part filter
                         // GLOBAL part_id = visible to all project members (no NULL check for safety)
-                        WHERE ($project_id IS NULL OR c.project_id = $project_id OR c.project_id = 'default')
+                        // Note: 'default' project docs are only included when no project_id is specified
+                        WHERE ($project_id IS NULL OR c.project_id = $project_id)
                           AND c.access_level <= $user_access_level
                           AND ($allowed_part_ids IS NULL OR c.part_id = $global_part_id OR c.part_id IN $allowed_part_ids)
 
@@ -683,7 +686,8 @@ class RAGServiceNeo4j:
                 YIELD node AS c, score
 
                 // Part filter uses explicit GLOBAL marker (no NULL for safety)
-                WHERE ($project_id IS NULL OR c.project_id = $project_id OR c.project_id = 'default')
+                // Note: 'default' project docs are only included when no project_id is specified
+                WHERE ($project_id IS NULL OR c.project_id = $project_id)
                   AND c.access_level <= $user_access_level
                   AND ($allowed_part_ids IS NULL OR c.part_id = $global_part_id OR c.part_id IN $allowed_part_ids)
 
@@ -1135,6 +1139,124 @@ class RAGServiceNeo4j:
                 "status": "error",
                 "error": str(e),
             }
+
+    def get_document(self, doc_id: str) -> Optional[Dict]:
+        """
+        Get document by ID with all metadata.
+
+        Returns:
+            Document dict with metadata, or None if not found
+        """
+        try:
+            with self.driver.session() as session:
+                result = session.run("""
+                    MATCH (d:Document {doc_id: $doc_id})
+                    OPTIONAL MATCH (d)-[:HAS_CHUNK]->(c:Chunk)
+                    OPTIONAL MATCH (d)-[:BELONGS_TO]->(cat:Category)
+                    RETURN
+                        d.doc_id AS doc_id,
+                        d.title AS title,
+                        d.file_type AS file_type,
+                        d.file_path AS file_path,
+                        d.created_at AS created_at,
+                        d.project_id AS project_id,
+                        d.uploaded_by_user_id AS uploaded_by_user_id,
+                        d.uploaded_by_role AS uploaded_by_role,
+                        d.access_level AS access_level,
+                        d.status AS status,
+                        d.approver AS approver,
+                        d.approved_at AS approved_at,
+                        count(c) AS chunk_count,
+                        cat.name AS category
+                """, doc_id=doc_id)
+
+                record = result.single()
+                if not record:
+                    return None
+
+                return {
+                    "doc_id": record["doc_id"],
+                    "title": record["title"],
+                    "file_type": record["file_type"],
+                    "file_path": record["file_path"],
+                    "created_at": record["created_at"],
+                    "project_id": record["project_id"],
+                    "uploaded_by_user_id": record["uploaded_by_user_id"],
+                    "uploaded_by_role": record["uploaded_by_role"],
+                    "access_level": record["access_level"],
+                    "status": record["status"],
+                    "approver": record["approver"],
+                    "approved_at": record["approved_at"],
+                    "chunk_count": record["chunk_count"],
+                    "category": record["category"],
+                    "exists": True
+                }
+
+        except Exception as e:
+            logger.error(f"Failed to get document {doc_id}: {e}", exc_info=True)
+            return None
+
+    def update_document_metadata(self, doc_id: str, metadata: Dict) -> bool:
+        """
+        Update document metadata without re-indexing content.
+
+        This is useful for updating status, approval info, or other metadata
+        after the document has been indexed.
+
+        Args:
+            doc_id: Document ID
+            metadata: Dictionary of fields to update
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Build dynamic SET clause from metadata
+            allowed_fields = {
+                "status", "approver", "approved_at", "access_level",
+                "title", "file_path", "file_type", "project_id",
+                "uploaded_by_user_id", "uploaded_by_role", "category"
+            }
+
+            update_fields = {k: v for k, v in metadata.items() if k in allowed_fields}
+
+            if not update_fields:
+                logger.warning(f"No valid fields to update for document {doc_id}")
+                return False
+
+            with self.driver.session() as session:
+                # Build SET clause dynamically
+                set_clauses = ", ".join([f"d.{k} = ${k}" for k in update_fields.keys()])
+
+                query = f"""
+                    MATCH (d:Document {{doc_id: $doc_id}})
+                    SET {set_clauses}
+                    RETURN d.doc_id AS updated_doc_id
+                """
+
+                params = {"doc_id": doc_id, **update_fields}
+                result = session.run(query, params)
+
+                record = result.single()
+                if record and record["updated_doc_id"]:
+                    logger.info(f"✅ Updated metadata for document {doc_id}: {list(update_fields.keys())}")
+
+                    # Also update chunks if access_level changed
+                    if "access_level" in update_fields:
+                        session.run("""
+                            MATCH (d:Document {doc_id: $doc_id})-[:HAS_CHUNK]->(c:Chunk)
+                            SET c.access_level = $access_level
+                        """, doc_id=doc_id, access_level=update_fields["access_level"])
+                        logger.info(f"  - Also updated chunk access levels")
+
+                    return True
+                else:
+                    logger.warning(f"Document {doc_id} not found for metadata update")
+                    return False
+
+        except Exception as e:
+            logger.error(f"Failed to update document metadata {doc_id}: {e}", exc_info=True)
+            return False
 
     def close(self):
         """Neo4j 드라이버 종료"""

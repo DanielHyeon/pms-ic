@@ -80,7 +80,12 @@ STATUS_METRIC_PATTERNS = [
     (r"(진행률|완료율|진척률|달성률)", "rate_metric"),
     (r"(몇\s*%|몇\s*퍼센트|얼마나.*완료|얼마나.*진행)", "percentage_query"),
     (r"(완료|진행|미착수|대기).*(몇\s*개|몇\s*건|개수|숫자)", "count_query"),
-    (r"(프로젝트|스프린트).*(현황|상태|진행|요약)", "entity_status"),
+    (r"(프로젝트|스프린트).*(현황|상태|진행|요약|일정)", "entity_status"),
+
+    # Schedule/Timeline queries (Korean) - actual project schedule data
+    (r"(프로젝트|스프린트)?\s*일정.*(알려|보여|어떻게|뭐)", "schedule_query"),
+    (r"일정이?\s*(어떻게|뭐야|어때)", "schedule_status"),
+    (r"(마감|데드라인|기한).*(언제|알려|보여)", "deadline_query"),
 
     # Specific metrics
     (r"(wip|재공|작업중).*(현황|상태|몇)", "wip_status"),
@@ -115,6 +120,13 @@ STATUS_LIST_PATTERNS = [
     (r"(남은|미완료|해야\s*할).*(일|작업|태스크|스토리|거|것)", "remaining_tasks"),
     (r"(이슈|문제|리스크).*(목록|리스트|뭐|있어|알려)?", "issue_list"),
     (r"(뭐|무엇|어떤).*(남았|해야|진행중)", "what_remains"),
+
+    # Backlog queries - need actual item list
+    (r"(제품\s*)?백로그.*(목록|리스트|뭐|있어|알려|보여)?", "backlog_list"),
+    (r"(남은|현재).*(제품\s*)?백로그", "remaining_backlog"),
+    (r"백로그\s*(항목|아이템)", "backlog_items"),
+    (r"(스토리|story).*(목록|리스트|뭐|있어|보여)", "story_list"),
+    (r"(진행중|진행\s*중|IN_PROGRESS).*(스토리|항목|뭐)", "in_progress_list"),
 
     # Activity
     (r"(최근|오늘|어제).*(변경|수정|업데이트|활동)", "recent_activity"),
@@ -177,6 +189,7 @@ AGGREGATION_SIGNALS = [
     r"(있어|없어)\?$",
     r"(어때|어떻게)\?$",
     r"괜찮",
+    r"(프로젝트|스프린트)?\s*일정",  # Schedule inquiry signal
 ]
 
 # HOWTO signals -> lean toward HOWTO (methodology questions)
@@ -527,7 +540,8 @@ class AnswerTypeClassifier:
         entity_keywords = [
             "프로젝트", "스프린트", "에픽", "피처", "스토리", "태스크",
             "project", "sprint", "epic", "feature", "story", "task",
-            "백로그", "backlog", "이슈", "issue", "리스크", "risk"
+            "백로그", "backlog", "이슈", "issue", "리스크", "risk",
+            "일정", "schedule", "마감", "데드라인", "deadline"
         ]
         query_lower = query.lower()
         return any(kw in query_lower for kw in entity_keywords)
