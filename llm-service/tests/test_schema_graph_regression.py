@@ -438,6 +438,37 @@ class TestSecurityBypassPrevention:
             assert any("bypass" in e.message.lower() for e in errors), \
                 f"Error message should mention bypass: {query}"
 
+    def test_comment_bypass_detected(self):
+        """Comment-based bypass (OR/**/1=1) should be detected."""
+        from text2query.query_validator import detect_bypass_patterns
+
+        comment_bypass_queries = [
+            "SELECT * FROM task.tasks WHERE project_id = '1' OR/**/1=1",
+            "SELECT * FROM task.tasks WHERE project_id = '1' OR/* comment */1=1",
+            "SELECT * FROM task.tasks WHERE project_id = '1' OR--\n1=1",
+            "SELECT * FROM task.tasks WHERE project_id = '1' OR/**/ TRUE",
+        ]
+
+        for query in comment_bypass_queries:
+            errors = detect_bypass_patterns(query)
+            assert len(errors) > 0, f"Should detect comment bypass in: {query}"
+
+    def test_additional_or_patterns_detected(self):
+        """Additional OR tautology patterns (2>1, EXISTS) should be detected."""
+        from text2query.query_validator import detect_bypass_patterns
+
+        additional_bypass_queries = [
+            "SELECT * FROM task.tasks WHERE project_id = '1' OR 2>1",
+            "SELECT * FROM task.tasks WHERE project_id = '1' OR 1<2",
+            "SELECT * FROM task.tasks WHERE project_id = '1' OR 5>=3",
+            "SELECT * FROM task.tasks WHERE project_id = '1' OR EXISTS(SELECT 1)",
+            "SELECT * FROM task.tasks WHERE project_id = '1' OR COALESCE(1,0)=1",
+        ]
+
+        for query in additional_bypass_queries:
+            errors = detect_bypass_patterns(query)
+            assert len(errors) > 0, f"Should detect bypass in: {query}"
+
     def test_legitimate_or_not_blocked(self):
         """Legitimate OR conditions should not be blocked."""
         from text2query.query_validator import detect_bypass_patterns
@@ -495,6 +526,21 @@ class TestSecurityBypassPrevention:
             errors = validate_column_denylist(query, tables)
             assert len(errors) > 0, f"Should block sensitive column: {query}"
 
+    def test_union_column_bypass_blocked(self):
+        """UNION SELECT with sensitive columns should be blocked."""
+        from text2query.query_validator import validate_column_denylist
+
+        union_bypass_queries = [
+            # Second SELECT has sensitive column
+            ("SELECT id FROM auth.users UNION SELECT password_hash FROM auth.users", ["auth.users"]),
+            # Third SELECT has sensitive column
+            ("SELECT id FROM auth.users UNION SELECT name FROM auth.users UNION SELECT password FROM auth.users", ["auth.users"]),
+        ]
+
+        for query, tables in union_bypass_queries:
+            errors = validate_column_denylist(query, tables)
+            assert len(errors) > 0, f"Should block UNION bypass: {query}"
+
     def test_safe_columns_allowed(self):
         """Selecting safe columns should be allowed."""
         from text2query.query_validator import validate_column_denylist
@@ -548,6 +594,60 @@ class TestSecurityBypassPrevention:
 
         valid, error = check_project_scope_integrity(query, alias_map, scoped_tables)
         assert valid is True, f"Valid scope should pass: {error}"
+
+    def test_legitimate_cte_not_blocked(self):
+        """Valid CTE with proper project_id scope should NOT be blocked (golden test)."""
+        from text2query.query_validator import check_project_scope_integrity, extract_table_aliases
+
+        # Legitimate CTE query - top-level has project_id scope
+        cte_query = """
+        WITH task_summary AS (
+            SELECT user_story_id, COUNT(*) AS cnt
+            FROM task.tasks
+            GROUP BY user_story_id
+        )
+        SELECT ts.user_story_id, ts.cnt, us.title
+        FROM task_summary ts
+        JOIN task.user_stories us ON ts.user_story_id = us.id
+        WHERE us.project_id = '12345'
+        LIMIT 50
+        """
+
+        alias_map = extract_table_aliases(cte_query)
+        scoped_tables = ["task.tasks", "task.user_stories"]
+
+        valid, error = check_project_scope_integrity(cte_query, alias_map, scoped_tables)
+        # Should pass because top-level WHERE has project_id filter
+        assert valid is True, f"Legitimate CTE should NOT be blocked: {error}"
+
+    def test_legitimate_cte_without_inner_where_not_blocked(self):
+        """Valid CTE without inner WHERE should pass (golden test).
+
+        Known limitation: CTEs with WHERE in the inner query may trigger false
+        positives because the validator finds the first WHERE clause.
+        """
+        from text2query.query_validator import check_project_scope_integrity, extract_table_aliases
+
+        # Business use case: task counts grouped by assignee
+        # Note: NO WHERE in the inner CTE to avoid false positive
+        cte_query = """
+        WITH assignee_counts AS (
+            SELECT assignee_id, COUNT(*) AS task_count
+            FROM task.tasks
+            GROUP BY assignee_id
+        )
+        SELECT u.username, ac.task_count
+        FROM assignee_counts ac
+        JOIN auth.users u ON ac.assignee_id = u.id
+        WHERE project_id = :project_id
+        LIMIT 100
+        """
+
+        alias_map = extract_table_aliases(cte_query)
+        scoped_tables = ["task.tasks", "auth.users"]
+
+        valid, error = check_project_scope_integrity(cte_query, alias_map, scoped_tables)
+        assert valid is True, f"Legitimate CTE should pass: {error}"
 
 
 class TestValidatorIntegration:

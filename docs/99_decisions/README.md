@@ -1,6 +1,6 @@
 # Architecture Decision Records (ADR)
 
-> **Version**: 1.0 | **Last Updated**: 2026-01-31
+> **Version**: 1.1 | **Last Updated**: 2026-02-02
 
 ---
 
@@ -66,6 +66,7 @@ When should this decision be revisited?
 | [ADR-002](./ADR-002-outbox-pattern.md) | PostgreSQL to Neo4j Sync via Outbox | Accepted | 2026-01-31 |
 | [ADR-003](./ADR-003-two-track-llm.md) | Two-Track LLM Workflow | Accepted | 2026-01-31 |
 | [ADR-004](./ADR-004-project-scoped-rbac.md) | Project-Scoped RBAC | Accepted | 2026-01-26 |
+| [ADR-005](./ADR-005-query-validation-security.md) | Query Validation Security Layer | Accepted | 2026-02-02 |
 
 ---
 

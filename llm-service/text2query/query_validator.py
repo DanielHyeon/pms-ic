@@ -72,6 +72,20 @@ OR_BYPASS_PATTERNS: List[Tuple[str, str]] = [
     # Parenthesized bypasses
     (r"\bOR\s*\(\s*1\s*=\s*1\s*\)", "Parenthesized OR 1=1 bypass detected"),
     (r"\bOR\s*\(\s*TRUE\s*\)", "Parenthesized OR TRUE bypass detected"),
+    # Comparison tautologies (always-true comparisons)
+    (r"\bOR\s+\d+\s*>\s*\d+\b", "Comparison tautology detected"),  # OR 2>1
+    (r"\bOR\s+\d+\s*<\s*\d+\b", "Comparison tautology detected"),  # OR 1<2
+    (r"\bOR\s+\d+\s*>=\s*\d+\b", "Comparison tautology detected"),  # OR 2>=1
+    (r"\bOR\s+\d+\s*<=\s*\d+\b", "Comparison tautology detected"),  # OR 1<=2
+    (r"\bOR\s+\d+\s*<>\s*\d+\b", "Comparison tautology detected"),  # OR 1<>2
+    (r"\bOR\s+\d+\s*!=\s*\d+\b", "Comparison tautology detected"),  # OR 1!=2
+    # Subquery-based tautologies
+    (r"\bOR\s+EXISTS\s*\(\s*SELECT\s+1\b", "EXISTS tautology detected"),  # OR EXISTS(SELECT 1)
+    (r"\bOR\s+EXISTS\s*\(\s*SELECT\s+\*\b", "EXISTS tautology detected"),  # OR EXISTS(SELECT *)
+    # Function-based bypasses
+    (r"\bOR\s+COALESCE\s*\(", "COALESCE bypass attempt detected"),
+    (r"\bOR\s+NULLIF\s*\(", "NULLIF bypass attempt detected"),
+    (r"\bOR\s+CASE\s+WHEN\s+TRUE\b", "CASE bypass attempt detected"),
 ]
 
 # Column-level denylist: (table, column) pairs that must never be selected
@@ -116,12 +130,14 @@ def normalize_sql(query: str) -> str:
     Normalize SQL query for consistent security analysis.
 
     - Removes comments (already blocked, but defense-in-depth)
+    - Replaces comments with SPACE to preserve token boundaries (prevents OR/**/1=1 bypass)
     - Normalizes whitespace
     - Preserves string literals for accurate pattern matching
     """
-    # Remove SQL comments if they somehow got through
-    normalized = re.sub(r'--.*$', '', query, flags=re.MULTILINE)
-    normalized = re.sub(r'/\*.*?\*/', '', normalized, flags=re.DOTALL)
+    # Remove SQL comments - REPLACE WITH SPACE to preserve token boundaries
+    # This prevents bypass like "OR/**/1=1" becoming "OR1=1" (no space)
+    normalized = re.sub(r'--.*$', ' ', query, flags=re.MULTILINE)
+    normalized = re.sub(r'/\*.*?\*/', ' ', normalized, flags=re.DOTALL)
 
     # Normalize whitespace (collapse multiple spaces, preserve structure)
     normalized = re.sub(r'\s+', ' ', normalized)
@@ -315,16 +331,23 @@ def validate_column_denylist(query: str, tables: List[str]) -> List[ValidationEr
     Validate that query doesn't select denied columns.
 
     Blocks access to sensitive columns like password_hash, etc.
+    Checks ALL SELECT clauses including those in UNION queries.
     """
     errors = []
     normalized = normalize_sql(query).lower()
 
-    # Extract SELECT clause
-    select_match = re.search(r'\bselect\b(.+?)\bfrom\b', normalized, re.IGNORECASE | re.DOTALL)
-    if not select_match:
+    # Extract ALL SELECT clauses (handles UNION queries)
+    # Pattern: SELECT ... FROM or SELECT ... UNION or SELECT ... at end
+    select_clauses = re.findall(
+        r'\bselect\b(.+?)(?:\bfrom\b|\bunion\b|\)|\Z)',
+        normalized,
+        re.IGNORECASE | re.DOTALL
+    )
+    if not select_clauses:
         return errors
 
-    select_clause = select_match.group(1)
+    # Combine all SELECT clauses for checking
+    select_clause = ' '.join(select_clauses)
 
     # Check for wildcard with sensitive tables
     if '*' in select_clause:

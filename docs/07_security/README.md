@@ -1,6 +1,6 @@
 # Security Architecture
 
-> **Version**: 1.0 | **Status**: Final | **Last Updated**: 2026-01-31
+> **Version**: 1.1 | **Status**: Final | **Last Updated**: 2026-02-02
 
 ---
 
@@ -20,6 +20,7 @@
 | [access_control.md](./access_control.md) | RBAC implementation |
 | [data_isolation.md](./data_isolation.md) | Project-scoped data access |
 | [audit_logging.md](./audit_logging.md) | Security audit trails |
+| [query_validation.md](./query_validation.md) | SQL/Cypher query validation (LLM) |
 
 ---
 
@@ -48,6 +49,17 @@
 │                     Data Access Layer                                │
 │                                                                     │
 │  Service → Repository → Data (filtered by project)                  │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                     LLM Query Validation Layer                       │
+│                                                                     │
+│  AI Query → QueryValidator (4-layer) → Safe Execution               │
+│  - Bypass detection (OR 1=1, comments, tautologies)                 │
+│  - Project scope enforcement                                        │
+│  - Forbidden tables/columns blocking                                │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -150,4 +162,4 @@
 
 ---
 
-*Last Updated: 2026-01-31*
+*Last Updated: 2026-02-02*
