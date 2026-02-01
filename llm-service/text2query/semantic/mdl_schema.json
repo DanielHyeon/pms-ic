@@ -1,0 +1,101 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PMS Metadata Definition Language",
+  "type": "object",
+  "properties": {
+    "catalog": {
+      "type": "string",
+      "description": "Database catalog name"
+    },
+    "schema": {
+      "type": "string",
+      "description": "Database schema name"
+    },
+    "models": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/Model" }
+    },
+    "relationships": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/Relationship" }
+    },
+    "metrics": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/Metric" }
+    }
+  },
+  "definitions": {
+    "Model": {
+      "type": "object",
+      "required": ["name", "tableReference", "columns"],
+      "properties": {
+        "name": { "type": "string" },
+        "displayName": { "type": "string" },
+        "description": { "type": "string" },
+        "tableReference": {
+          "type": "object",
+          "properties": {
+            "schema": { "type": "string" },
+            "table": { "type": "string" }
+          }
+        },
+        "columns": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/Column" }
+        },
+        "primaryKey": { "type": "string" },
+        "projectScoped": { "type": "boolean" }
+      }
+    },
+    "Column": {
+      "type": "object",
+      "required": ["name", "type"],
+      "properties": {
+        "name": { "type": "string" },
+        "displayName": { "type": "string" },
+        "type": { "type": "string" },
+        "description": { "type": "string" },
+        "notNull": { "type": "boolean" },
+        "expression": { "type": "string" }
+      }
+    },
+    "Relationship": {
+      "type": "object",
+      "required": ["name", "models", "joinType", "condition"],
+      "properties": {
+        "name": { "type": "string" },
+        "models": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "joinType": {
+          "enum": ["ONE_TO_ONE", "ONE_TO_MANY", "MANY_TO_ONE", "MANY_TO_MANY"]
+        },
+        "condition": { "type": "string" }
+      }
+    },
+    "Metric": {
+      "type": "object",
+      "required": ["name", "baseModel", "measure"],
+      "properties": {
+        "name": { "type": "string" },
+        "displayName": { "type": "string" },
+        "description": { "type": "string" },
+        "baseModel": { "type": "string" },
+        "dimension": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "measure": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "timeGrain": {
+          "enum": ["DAY", "WEEK", "MONTH", "QUARTER", "YEAR"]
+        }
+      }
+    }
+  }
+}

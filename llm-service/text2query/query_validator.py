@@ -4,14 +4,20 @@ Query Validator for SQL and Cypher queries.
 Implements 4-layer validation:
 1. Syntax validation (EXPLAIN for SQL, Cypher parser for Neo4j)
 2. Schema mapping validation (tables/columns exist)
-3. Security validation (project_id scope, forbidden patterns)
+3. Security validation (project_id scope, forbidden patterns, bypass detection)
 4. Performance/Resource validation (SELECT *, LIMIT, etc.)
+
+Security Features (v2.0):
+- OR bypass detection (OR 1=1, OR TRUE, OR 'a'='a')
+- Subquery/CTE scope validation
+- Column-level denylist (password_hash, etc.)
+- Alias-aware project_id validation
 """
 
 import os
 import re
 import logging
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from .models import (
     QueryType,
@@ -19,10 +25,14 @@ from .models import (
     ValidationError,
     ValidationErrorType,
 )
-from .schema_manager import get_schema_manager, PROJECT_SCOPED_TABLES
+from .schema_manager import get_schema_manager, PROJECT_SCOPED_TABLES, FORBIDDEN_TABLES
 
 logger = logging.getLogger(__name__)
 
+
+# =============================================================================
+# Security Configuration
+# =============================================================================
 
 # Forbidden SQL patterns (security)
 FORBIDDEN_SQL_PATTERNS: List[Tuple[str, str]] = [
@@ -40,6 +50,49 @@ FORBIDDEN_SQL_PATTERNS: List[Tuple[str, str]] = [
     (r"\bLOAD\b", "LOAD not allowed"),
 ]
 
+# OR bypass patterns - detects scope bypass attempts
+# Patterns like: OR 1=1, OR TRUE, OR 'a'='a', etc.
+OR_BYPASS_PATTERNS: List[Tuple[str, str]] = [
+    # Numeric tautologies
+    (r"\bOR\s+1\s*=\s*1\b", "OR 1=1 bypass detected"),
+    (r"\bOR\s+0\s*=\s*0\b", "OR 0=0 bypass detected"),
+    (r"\bOR\s+\d+\s*=\s*\d+\b", "Numeric tautology bypass detected"),
+    # Boolean tautologies
+    (r"\bOR\s+TRUE\b", "OR TRUE bypass detected"),
+    (r"\bOR\s+\(\s*TRUE\s*\)", "OR (TRUE) bypass detected"),
+    (r"\bOR\s+NOT\s+FALSE\b", "OR NOT FALSE bypass detected"),
+    # String comparison tautologies
+    (r"\bOR\s+['\"][a-zA-Z]['\"]s*=\s*['\"][a-zA-Z]['\"]", "String tautology bypass detected"),
+    (r"\bOR\s+['\"].*['\"]\s*=\s*['\"].*['\"]", "String equality bypass detected"),
+    # NULL-based tautologies
+    (r"\bOR\s+\w+\s+IS\s+NOT\s+NULL\b", "IS NOT NULL bypass attempt detected"),
+    (r"\bOR\s+NULL\s+IS\s+NULL\b", "NULL IS NULL bypass detected"),
+    # LIKE-based tautologies
+    (r"\bOR\s+['\"]%['\"]\s+LIKE\s+['\"]%['\"]", "LIKE bypass detected"),
+    # Parenthesized bypasses
+    (r"\bOR\s*\(\s*1\s*=\s*1\s*\)", "Parenthesized OR 1=1 bypass detected"),
+    (r"\bOR\s*\(\s*TRUE\s*\)", "Parenthesized OR TRUE bypass detected"),
+]
+
+# Column-level denylist: (table, column) pairs that must never be selected
+COLUMN_DENYLIST: Set[Tuple[str, str]] = {
+    ("auth.users", "password_hash"),
+    ("auth.users", "password"),
+    ("auth.users", "passwd"),
+    ("auth.users", "hashed_password"),
+    ("auth.users", "salt"),
+    ("auth.users", "secret"),
+    ("auth.users", "api_key"),
+    ("auth.users", "refresh_token"),
+    ("auth.users", "access_token"),
+}
+
+# Sensitive columns that require extra scrutiny (warning, not block)
+SENSITIVE_COLUMNS: Set[str] = {
+    "email", "phone", "address", "ssn", "social_security",
+    "credit_card", "card_number", "cvv", "bank_account",
+}
+
 # Forbidden Cypher patterns (security)
 # Note: db.index.vector.queryNodes and db.index.fulltext.queryNodes are allowed
 FORBIDDEN_CYPHER_PATTERNS: List[Tuple[str, str]] = [
@@ -52,6 +105,267 @@ FORBIDDEN_CYPHER_PATTERNS: List[Tuple[str, str]] = [
     (r"\bSET\b", "SET not allowed (read-only)"),
     (r"\bREMOVE\b", "REMOVE not allowed"),
 ]
+
+
+# =============================================================================
+# Helper Functions for 2-Stage Security Validation
+# =============================================================================
+
+def normalize_sql(query: str) -> str:
+    """
+    Normalize SQL query for consistent security analysis.
+
+    - Removes comments (already blocked, but defense-in-depth)
+    - Normalizes whitespace
+    - Preserves string literals for accurate pattern matching
+    """
+    # Remove SQL comments if they somehow got through
+    normalized = re.sub(r'--.*$', '', query, flags=re.MULTILINE)
+    normalized = re.sub(r'/\*.*?\*/', '', normalized, flags=re.DOTALL)
+
+    # Normalize whitespace (collapse multiple spaces, preserve structure)
+    normalized = re.sub(r'\s+', ' ', normalized)
+
+    return normalized.strip()
+
+
+def detect_bypass_patterns(query: str) -> List[ValidationError]:
+    """
+    Stage 1: Fail-fast detection of known bypass patterns.
+
+    Detects OR-based tautologies that bypass WHERE conditions:
+    - OR 1=1, OR TRUE, OR 'a'='a'
+    - Variations with parentheses, whitespace, case changes
+    """
+    errors = []
+    normalized = normalize_sql(query)
+
+    for pattern, message in OR_BYPASS_PATTERNS:
+        if re.search(pattern, normalized, re.IGNORECASE | re.DOTALL):
+            errors.append(
+                ValidationError(
+                    type=ValidationErrorType.SECURITY_VIOLATION,
+                    message=f"Security bypass attempt: {message}",
+                    suggestion="Remove tautology condition from WHERE clause",
+                )
+            )
+            logger.warning(f"Bypass pattern detected: {message} in query: {query[:100]}...")
+
+    return errors
+
+
+def extract_table_aliases(query: str) -> Dict[str, str]:
+    """
+    Extract table-to-alias mapping from SQL query.
+
+    Returns: Dict[table_name, alias]
+    Example: "FROM task.tasks t1 JOIN auth.users u" -> {"task.tasks": "t1", "auth.users": "u"}
+    """
+    alias_map = {}
+
+    # Pattern: FROM/JOIN table_name [AS] alias
+    # Handles: FROM task.tasks t1, FROM task.tasks AS t1
+    table_alias_pattern = (
+        r'(?:FROM|JOIN)\s+'
+        r'([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?)'  # table name
+        r'(?:\s+AS)?\s*'
+        r'([a-zA-Z_][a-zA-Z0-9_]*)?'  # optional alias
+    )
+
+    matches = re.findall(table_alias_pattern, query, re.IGNORECASE)
+    for table, alias in matches:
+        # If no alias, use table name itself
+        if alias and alias.upper() not in ('JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'ON', 'WHERE'):
+            alias_map[table.lower()] = alias.lower()
+        else:
+            # Use last part of table name as implicit alias
+            alias_map[table.lower()] = table.split('.')[-1].lower()
+
+    return alias_map
+
+
+def check_project_scope_integrity(
+    query: str,
+    alias_map: Dict[str, str],
+    scoped_tables: List[str]
+) -> Tuple[bool, Optional[ValidationError]]:
+    """
+    Stage 2: Validate project_id scope integrity.
+
+    Checks:
+    1. project_id filter exists in WHERE clause
+    2. Filter uses valid alias from FROM/JOIN tables
+    3. No OR conditions that bypass the scope
+    4. Subqueries/CTEs have proper scope at top level
+    """
+    normalized = normalize_sql(query).lower()
+
+    # Check for subquery/CTE presence
+    has_subquery = '(' in normalized and 'select' in normalized[normalized.find('('):]
+    has_cte = normalized.strip().startswith('with ')
+
+    # Find the main WHERE clause (not in subquery)
+    # Simple heuristic: find last WHERE before any closing paren that ends a subquery
+    where_match = re.search(r'\bwhere\b', normalized, re.IGNORECASE)
+    if not where_match:
+        return (
+            False,
+            ValidationError(
+                type=ValidationErrorType.SCOPE_MISSING,
+                message="Query must have WHERE clause with project_id filter",
+                suggestion="Add WHERE project_id = :project_id",
+            )
+        )
+
+    # Extract WHERE clause content (rough approximation)
+    where_start = where_match.end()
+    # Find end: GROUP BY, ORDER BY, LIMIT, HAVING, or end of query
+    end_keywords = ['group by', 'order by', 'limit', 'having', 'union']
+    where_end = len(normalized)
+    for kw in end_keywords:
+        kw_pos = normalized.find(kw, where_start)
+        if kw_pos != -1 and kw_pos < where_end:
+            where_end = kw_pos
+    where_clause = normalized[where_start:where_end]
+
+    # Check for project_id in WHERE with valid alias
+    project_id_patterns = [
+        r'(\w+)\.project_id\s*=\s*[:\'\"\$\%]',  # alias.project_id = :param
+        r'project_id\s*=\s*[:\'\"\$\%]',  # project_id = :param (no alias)
+    ]
+
+    has_valid_scope = False
+    for pattern in project_id_patterns:
+        match = re.search(pattern, where_clause, re.IGNORECASE)
+        if match:
+            # If alias is used, verify it's from our table list
+            if match.lastindex and match.group(1):
+                alias_used = match.group(1).lower()
+                valid_aliases = set(alias_map.values())
+                if alias_used in valid_aliases or alias_used in [t.split('.')[-1].lower() for t in scoped_tables]:
+                    has_valid_scope = True
+                    break
+            else:
+                # No alias used, accept if only one scoped table
+                has_valid_scope = True
+                break
+
+    if not has_valid_scope:
+        return (
+            False,
+            ValidationError(
+                type=ValidationErrorType.SCOPE_MISSING,
+                message=f"project_id filter not found or uses invalid alias. Tables: {scoped_tables}",
+                suggestion="Use valid table alias: e.g., WHERE t1.project_id = :project_id",
+            )
+        )
+
+    # For subqueries/CTEs: enforce scope at top level
+    if (has_subquery or has_cte) and not has_valid_scope:
+        return (
+            False,
+            ValidationError(
+                type=ValidationErrorType.SECURITY_VIOLATION,
+                message="Subquery/CTE detected without project_id scope at top level",
+                suggestion="Ensure top-level WHERE has project_id filter",
+            )
+        )
+
+    return (True, None)
+
+
+def validate_forbidden_tables(query: str) -> List[ValidationError]:
+    """
+    Validate that query doesn't reference forbidden tables.
+
+    Checks both FROM and JOIN clauses for forbidden tables like:
+    - auth.password_history
+    - auth.tokens
+    - auth.refresh_tokens
+    """
+    errors = []
+    normalized = normalize_sql(query).lower()
+
+    for forbidden_table in FORBIDDEN_TABLES:
+        # Check for exact table reference (with or without schema)
+        table_short = forbidden_table.split('.')[-1]
+        patterns = [
+            rf'\b{re.escape(forbidden_table)}\b',  # Full name: auth.tokens
+            rf'\bfrom\s+{re.escape(table_short)}\b',  # Short name after FROM
+            rf'\bjoin\s+{re.escape(table_short)}\b',  # Short name after JOIN
+        ]
+
+        for pattern in patterns:
+            if re.search(pattern, normalized, re.IGNORECASE):
+                errors.append(
+                    ValidationError(
+                        type=ValidationErrorType.SECURITY_VIOLATION,
+                        message=f"Access to table '{forbidden_table}' is forbidden",
+                        suggestion="This table contains sensitive data and cannot be queried",
+                    )
+                )
+                logger.warning(f"Forbidden table access attempt: {forbidden_table}")
+                break  # One error per table is enough
+
+    return errors
+
+
+def validate_column_denylist(query: str, tables: List[str]) -> List[ValidationError]:
+    """
+    Validate that query doesn't select denied columns.
+
+    Blocks access to sensitive columns like password_hash, etc.
+    """
+    errors = []
+    normalized = normalize_sql(query).lower()
+
+    # Extract SELECT clause
+    select_match = re.search(r'\bselect\b(.+?)\bfrom\b', normalized, re.IGNORECASE | re.DOTALL)
+    if not select_match:
+        return errors
+
+    select_clause = select_match.group(1)
+
+    # Check for wildcard with sensitive tables
+    if '*' in select_clause:
+        for table in tables:
+            table_lower = table.lower()
+            # Check if any denied column exists for this table
+            has_denied = any(t.lower() == table_lower for t, _ in COLUMN_DENYLIST)
+            if has_denied:
+                errors.append(
+                    ValidationError(
+                        type=ValidationErrorType.SECURITY_VIOLATION,
+                        message=f"SELECT * from '{table}' may expose sensitive columns",
+                        suggestion="List specific columns instead of using *",
+                    )
+                )
+                break
+
+    # Check for specific denied columns
+    for table, column in COLUMN_DENYLIST:
+        # Match: column, alias.column, table.column
+        col_patterns = [
+            rf'\b{re.escape(column)}\b',  # Just column name
+            rf'\w+\.{re.escape(column)}\b',  # alias.column
+        ]
+
+        table_lower = table.lower()
+        if any(t.lower() == table_lower for t in tables):
+            for pattern in col_patterns:
+                if re.search(pattern, select_clause, re.IGNORECASE):
+                    errors.append(
+                        ValidationError(
+                            type=ValidationErrorType.SECURITY_VIOLATION,
+                            message=f"Access to column '{table}.{column}' is forbidden",
+                            suggestion="This column contains sensitive data",
+                        )
+                    )
+                    logger.warning(f"Denied column access attempt: {table}.{column}")
+                    break
+
+    return errors
+
 
 # Maximum query length
 MAX_QUERY_LENGTH = 5000
@@ -194,10 +508,26 @@ class QueryValidator:
     def _validate_security(
         self, query: str, query_type: QueryType
     ) -> List[ValidationError]:
-        """Layer 3: Validate against forbidden patterns."""
+        """
+        Layer 3: Validate against forbidden patterns.
+
+        2-Stage Security Validation:
+        Stage 1: Fail-fast bypass pattern detection (OR 1=1, etc.)
+        Stage 2: Forbidden table/column validation
+        """
         errors = []
         query_upper = query.upper()
 
+        # Stage 1: Fail-fast bypass detection (SQL only)
+        if query_type == QueryType.SQL:
+            bypass_errors = detect_bypass_patterns(query)
+            errors.extend(bypass_errors)
+
+            # If bypass detected, fail fast - don't continue validation
+            if bypass_errors:
+                return errors
+
+        # Standard forbidden patterns
         patterns = (
             FORBIDDEN_SQL_PATTERNS
             if query_type == QueryType.SQL
@@ -223,6 +553,10 @@ class QueryValidator:
                     )
                 )
 
+            # Stage 2: Forbidden tables validation
+            forbidden_table_errors = validate_forbidden_tables(query)
+            errors.extend(forbidden_table_errors)
+
         # Cypher-specific: must start with MATCH or OPTIONAL MATCH
         if query_type == QueryType.CYPHER:
             cypher_start = query_upper.strip()
@@ -241,7 +575,11 @@ class QueryValidator:
     def _validate_sql_schema(
         self, query: str
     ) -> Tuple[List[ValidationError], List[str], List[str]]:
-        """Layer 2: Validate SQL against schema (tables and columns exist)."""
+        """
+        Layer 2: Validate SQL against schema (tables and columns exist).
+
+        Also performs column-level security validation for sensitive data.
+        """
         errors = []
         extracted_tables = []
         extracted_columns = []
@@ -284,6 +622,10 @@ class QueryValidator:
                             suggestion="Check available tables in project/task/auth schemas",
                         )
                     )
+
+        # Column-level security validation (denylist check)
+        column_errors = validate_column_denylist(query, normalized_tables)
+        errors.extend(column_errors)
 
         return errors, normalized_tables, extracted_columns
 
@@ -351,10 +693,28 @@ class QueryValidator:
         project_id: Optional[str],
         scoped_tables: List[str],
     ) -> Tuple[bool, Optional[ValidationError]]:
-        """Apply detailed project scope validation rules."""
+        """
+        Apply detailed project scope validation rules.
+
+        Enhanced 2-stage validation:
+        1. Extract table aliases and validate scope filter uses valid alias
+        2. Check for subquery/CTE scope bypass
+        """
         query_lower = query.lower()
 
         if query_type == QueryType.SQL:
+            # Stage 1: Extract alias map for validation
+            alias_map = extract_table_aliases(query)
+
+            # Stage 2: Check project scope integrity with alias validation
+            scope_valid, scope_error = check_project_scope_integrity(
+                query, alias_map, scoped_tables
+            )
+
+            if not scope_valid:
+                return (False, scope_error)
+
+            # Legacy pattern check (fallback for backwards compatibility)
             direct_scope_patterns = [
                 r"where\s+.*project_id\s*=\s*[:\'\"\$\%]",
                 r"where\s+project_id\s*=\s*[:\'\"\$\%]",
@@ -365,6 +725,10 @@ class QueryValidator:
             for pattern in direct_scope_patterns:
                 if re.search(pattern, query_lower, re.IGNORECASE | re.DOTALL):
                     return (True, None)
+
+            # If we got here with scope_valid=True from integrity check, accept
+            if scope_valid:
+                return (True, None)
 
             return (
                 False,

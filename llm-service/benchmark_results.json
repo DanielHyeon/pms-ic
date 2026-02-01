@@ -1,0 +1,913 @@
+{
+  "timestamp": "2026-02-01T16:55:31.865742",
+  "total_tests": 48,
+  "intent_accuracy": 1.0,
+  "table_relevance_score": 0.8534722222222221,
+  "keyword_match_score": 0.5538194444444445,
+  "validation_pass_rate": 0.6458333333333334,
+  "avg_duration_ms": 66.67777895927429,
+  "by_difficulty": {
+    "simple": 1.0,
+    "moderate": 1.0,
+    "complex": 1.0
+  },
+  "by_category": {
+    "task": 1.0,
+    "edge": 1.0,
+    "user": 1.0,
+    "sprint": 1.0,
+    "report": 1.0,
+    "project": 1.0,
+    "document": 1.0,
+    "general": 1.0
+  },
+  "results": [
+    {
+      "test_id": "sql_ko_1",
+      "question": "프로젝트별 완료율을 보여줘",
+      "expected_intent": "TEXT_TO_SQL",
+      "actual_intent": "TEXT_TO_SQL",
+      "intent_correct": true,
+      "intent_confidence": 0.6,
+      "tables_expected": [
+        "task.tasks",
+        "project.projects"
+      ],
+      "tables_found": [
+        "project.projects",
+        "task.tasks"
+      ],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 1.0,
+      "validation_passed": false,
+      "error": null,
+      "duration_ms": 2380.589485168457
+    },
+    {
+      "test_id": "sql_ko_2",
+      "question": "차단된 태스크 몇 개야?",
+      "expected_intent": "TEXT_TO_SQL",
+      "actual_intent": "TEXT_TO_SQL",
+      "intent_correct": true,
+      "intent_confidence": 0.3,
+      "tables_expected": [
+        "task.tasks"
+      ],
+      "tables_found": [
+        "task.tasks"
+      ],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 1.0,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 12.20560073852539
+    },
+    {
+      "test_id": "sql_ko_3",
+      "question": "이번 스프린트에 진행중인 스토리 목록",
+      "expected_intent": "TEXT_TO_SQL",
+      "actual_intent": "TEXT_TO_SQL",
+      "intent_correct": true,
+      "intent_confidence": 0.6,
+      "tables_expected": [
+        "task.user_stories",
+        "task.sprints"
+      ],
+      "tables_found": [
+        "task.sprints",
+        "task.user_stories"
+      ],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 1.0,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 12.389421463012695
+    },
+    {
+      "test_id": "sql_ko_4",
+      "question": "담당자별 태스크 수",
+      "expected_intent": "TEXT_TO_SQL",
+      "actual_intent": "TEXT_TO_SQL",
+      "intent_correct": true,
+      "intent_confidence": 0.6,
+      "tables_expected": [
+        "task.tasks",
+        "auth.users"
+      ],
+      "tables_found": [
+        "task.tasks",
+        "auth.users",
+        "task.user_stories"
+      ],
+      "tables_match_score": 0.6666666666666666,
+      "keyword_match_score": 1.0,
+      "validation_passed": false,
+      "error": null,
+      "duration_ms": 1.451730728149414
+    },
+    {
+      "test_id": "sql_ko_5",
+      "question": "지난 주 완료된 스토리 포인트 합계",
+      "expected_intent": "TEXT_TO_SQL",
+      "actual_intent": "TEXT_TO_SQL",
+      "intent_correct": true,
+      "intent_confidence": 0.44999999999999996,
+      "tables_expected": [
+        "task.user_stories"
+      ],
+      "tables_found": [
+        "task.user_stories",
+        "task.tasks"
+      ],
+      "tables_match_score": 0.5,
+      "keyword_match_score": 0.75,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 11.948823928833008
+    },
+    {
+      "test_id": "sql_en_1",
+      "question": "Show all blocked tasks in project 1",
+      "expected_intent": "TEXT_TO_SQL",
+      "actual_intent": "TEXT_TO_SQL",
+      "intent_correct": true,
+      "intent_confidence": 0.44999999999999996,
+      "tables_expected": [
+        "task.tasks"
+      ],
+      "tables_found": [
+        "project.projects",
+        "task.tasks",
+        "task.sprints",
+        "project.issues",
+        "project.phases"
+      ],
+      "tables_match_score": 0.2,
+      "keyword_match_score": 1.0,
+      "validation_passed": false,
+      "error": null,
+      "duration_ms": 9.07588005065918
+    },
+    {
+      "test_id": "sql_en_2",
+      "question": "What is the completion rate for sprint 5?",
+      "expected_intent": "TEXT_TO_SQL",
+      "actual_intent": "TEXT_TO_SQL",
+      "intent_correct": true,
+      "intent_confidence": 0.5,
+      "tables_expected": [
+        "task.user_stories",
+        "task.sprints"
+      ],
+      "tables_found": [
+        "task.sprints",
+        "project.issues",
+        "project.risks",
+        "project.projects",
+        "auth.users"
+      ],
+      "tables_match_score": 0.16666666666666666,
+      "keyword_match_score": 0.6666666666666666,
+      "validation_passed": false,
+      "error": null,
+      "duration_ms": 0.8955001831054688
+    },
+    {
+      "test_id": "sql_en_3",
+      "question": "List users with more than 5 assigned tasks",
+      "expected_intent": "TEXT_TO_SQL",
+      "actual_intent": "TEXT_TO_SQL",
+      "intent_correct": true,
+      "intent_confidence": 0.3,
+      "tables_expected": [
+        "task.tasks",
+        "auth.users"
+      ],
+      "tables_found": [
+        "auth.users",
+        "task.tasks",
+        "task.user_stories"
+      ],
+      "tables_match_score": 0.6666666666666666,
+      "keyword_match_score": 1.0,
+      "validation_passed": false,
+      "error": null,
+      "duration_ms": 0.8299350738525391
+    },
+    {
+      "test_id": "cypher_1",
+      "question": "문서와 관련된 요구사항을 찾아줘",
+      "expected_intent": "TEXT_TO_CYPHER",
+      "actual_intent": "TEXT_TO_CYPHER",
+      "intent_correct": true,
+      "intent_confidence": 0.3,
+      "tables_expected": [],
+      "tables_found": [],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 1.0,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 622.3511695861816
+    },
+    {
+      "test_id": "cypher_2",
+      "question": "Show document dependencies for RFP analysis",
+      "expected_intent": "TEXT_TO_CYPHER",
+      "actual_intent": "TEXT_TO_CYPHER",
+      "intent_correct": true,
+      "intent_confidence": 0.44999999999999996,
+      "tables_expected": [],
+      "tables_found": [],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 0.6666666666666666,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 0.19478797912597656
+    },
+    {
+      "test_id": "cypher_3",
+      "question": "Find all related documents to requirement R001",
+      "expected_intent": "TEXT_TO_CYPHER",
+      "actual_intent": "TEXT_TO_CYPHER",
+      "intent_correct": true,
+      "intent_confidence": 0.6,
+      "tables_expected": [],
+      "tables_found": [],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 0.3333333333333333,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 0.14591217041015625
+    },
+    {
+      "test_id": "general_1",
+      "question": "스크럼이 뭐야?",
+      "expected_intent": "GENERAL",
+      "actual_intent": "GENERAL",
+      "intent_correct": true,
+      "intent_confidence": 0.7,
+      "tables_expected": [],
+      "tables_found": [],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 0.0,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 0.04172325134277344
+    },
+    {
+      "test_id": "general_2",
+      "question": "What is agile methodology?",
+      "expected_intent": "GENERAL",
+      "actual_intent": "GENERAL",
+      "intent_correct": true,
+      "intent_confidence": 0.44999999999999996,
+      "tables_expected": [],
+      "tables_found": [],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 0.0,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 0.07200241088867188
+    },
+    {
+      "test_id": "complex_1",
+      "question": "프로젝트별 스프린트 완료율과 남은 스토리 수를 보여줘",
+      "expected_intent": "TEXT_TO_SQL",
+      "actual_intent": "TEXT_TO_SQL",
+      "intent_correct": true,
+      "intent_confidence": 0.9,
+      "tables_expected": [
+        "project.projects",
+        "task.sprints",
+        "task.user_stories"
+      ],
+      "tables_found": [
+        "project.projects",
+        "task.sprints",
+        "task.user_stories",
+        "task.tasks"
+      ],
+      "tables_match_score": 0.75,
+      "keyword_match_score": 1.0,
+      "validation_passed": false,
+      "error": null,
+      "duration_ms": 10.623931884765625
+    },
+    {
+      "test_id": "complex_2",
+      "question": "Show overdue tasks with their assignee and project name",
+      "expected_intent": "TEXT_TO_SQL",
+      "actual_intent": "TEXT_TO_SQL",
+      "intent_correct": true,
+      "intent_confidence": 0.6,
+      "tables_expected": [
+        "task.tasks",
+        "auth.users",
+        "project.projects"
+      ],
+      "tables_found": [
+        "project.projects",
+        "task.tasks",
+        "project.phases",
+        "task.user_stories",
+        "auth.users"
+      ],
+      "tables_match_score": 0.6,
+      "keyword_match_score": 0.25,
+      "validation_passed": false,
+      "error": null,
+      "duration_ms": 9.419679641723633
+    },
+    {
+      "test_id": "sql_ko_6",
+      "question": "우선순위가 높은 이슈 목록",
+      "expected_intent": "TEXT_TO_SQL",
+      "actual_intent": "TEXT_TO_SQL",
+      "intent_correct": true,
+      "intent_confidence": 0.3,
+      "tables_expected": [
+        "project.issues"
+      ],
+      "tables_found": [
+        "project.issues"
+      ],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 1.0,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 11.640071868896484
+    },
+    {
+      "test_id": "sql_ko_7",
+      "question": "이번 달 생성된 리스크 개수",
+      "expected_intent": "TEXT_TO_SQL",
+      "actual_intent": "TEXT_TO_SQL",
+      "intent_correct": true,
+      "intent_confidence": 0.3,
+      "tables_expected": [
+        "project.risks"
+      ],
+      "tables_found": [
+        "project.risks"
+      ],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 1.0,
+      "validation_passed": false,
+      "error": null,
+      "duration_ms": 0.6775856018066406
+    },
+    {
+      "test_id": "sql_ko_8",
+      "question": "진행률이 50% 이상인 페이즈",
+      "expected_intent": "TEXT_TO_SQL",
+      "actual_intent": "TEXT_TO_SQL",
+      "intent_correct": true,
+      "intent_confidence": 0.5,
+      "tables_expected": [
+        "project.phases"
+      ],
+      "tables_found": [
+        "project.phases",
+        "task.tasks"
+      ],
+      "tables_match_score": 0.5,
+      "keyword_match_score": 0.0,
+      "validation_passed": false,
+      "error": null,
+      "duration_ms": 8.335351943969727
+    },
+    {
+      "test_id": "sql_en_4",
+      "question": "Show active sprints with their story count",
+      "expected_intent": "TEXT_TO_SQL",
+      "actual_intent": "TEXT_TO_SQL",
+      "intent_correct": true,
+      "intent_confidence": 0.44999999999999996,
+      "tables_expected": [
+        "task.sprints",
+        "task.user_stories"
+      ],
+      "tables_found": [
+        "task.sprints",
+        "auth.users",
+        "task.user_stories",
+        "task.tasks"
+      ],
+      "tables_match_score": 0.5,
+      "keyword_match_score": 1.0,
+      "validation_passed": false,
+      "error": null,
+      "duration_ms": 0.7255077362060547
+    },
+    {
+      "test_id": "sql_en_5",
+      "question": "List top 10 users by completed tasks",
+      "expected_intent": "TEXT_TO_SQL",
+      "actual_intent": "TEXT_TO_SQL",
+      "intent_correct": true,
+      "intent_confidence": 0.44999999999999996,
+      "tables_expected": [
+        "task.tasks",
+        "auth.users"
+      ],
+      "tables_found": [
+        "task.tasks",
+        "auth.users",
+        "task.user_stories"
+      ],
+      "tables_match_score": 0.6666666666666666,
+      "keyword_match_score": 1.0,
+      "validation_passed": false,
+      "error": null,
+      "duration_ms": 0.5426406860351562
+    },
+    {
+      "test_id": "sql_en_6",
+      "question": "Average story points per sprint",
+      "expected_intent": "TEXT_TO_SQL",
+      "actual_intent": "TEXT_TO_SQL",
+      "intent_correct": true,
+      "intent_confidence": 0.5,
+      "tables_expected": [
+        "task.user_stories",
+        "task.sprints"
+      ],
+      "tables_found": [
+        "task.user_stories",
+        "task.sprints"
+      ],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 1.0,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 12.188196182250977
+    },
+    {
+      "test_id": "cypher_4",
+      "question": "요구사항 R001과 연결된 모든 문서 경로",
+      "expected_intent": "TEXT_TO_CYPHER",
+      "actual_intent": "TEXT_TO_CYPHER",
+      "intent_correct": true,
+      "intent_confidence": 0.44999999999999996,
+      "tables_expected": [],
+      "tables_found": [],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 0.3333333333333333,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 0.2827644348144531
+    },
+    {
+      "test_id": "cypher_5",
+      "question": "Find the shortest path between documents A and B",
+      "expected_intent": "TEXT_TO_CYPHER",
+      "actual_intent": "TEXT_TO_CYPHER",
+      "intent_correct": true,
+      "intent_confidence": 0.44999999999999996,
+      "tables_expected": [],
+      "tables_found": [],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 1.0,
+      "validation_passed": false,
+      "error": null,
+      "duration_ms": 0.15997886657714844
+    },
+    {
+      "test_id": "general_3",
+      "question": "스프린트 벨로시티란?",
+      "expected_intent": "GENERAL",
+      "actual_intent": "GENERAL",
+      "intent_correct": true,
+      "intent_confidence": 0.7,
+      "tables_expected": [],
+      "tables_found": [],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 0.0,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 0.03838539123535156
+    },
+    {
+      "test_id": "general_4",
+      "question": "How do I estimate story points?",
+      "expected_intent": "GENERAL",
+      "actual_intent": "GENERAL",
+      "intent_correct": true,
+      "intent_confidence": 0.44999999999999996,
+      "tables_expected": [],
+      "tables_found": [],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 0.0,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 0.07271766662597656
+    },
+    {
+      "test_id": "edge_1",
+      "question": "ㅎ",
+      "expected_intent": "CLARIFICATION_NEEDED",
+      "actual_intent": "CLARIFICATION_NEEDED",
+      "intent_correct": true,
+      "intent_confidence": 0.85,
+      "tables_expected": [],
+      "tables_found": [],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 0.0,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 0.033855438232421875
+    },
+    {
+      "test_id": "edge_2",
+      "question": "태스크",
+      "expected_intent": "CLARIFICATION_NEEDED",
+      "actual_intent": "CLARIFICATION_NEEDED",
+      "intent_correct": true,
+      "intent_confidence": 0.85,
+      "tables_expected": [],
+      "tables_found": [],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 0.0,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 0.027179718017578125
+    },
+    {
+      "test_id": "edge_3",
+      "question": "delete all tasks",
+      "expected_intent": "CLARIFICATION_NEEDED",
+      "actual_intent": "CLARIFICATION_NEEDED",
+      "intent_correct": true,
+      "intent_confidence": 0.3,
+      "tables_expected": [],
+      "tables_found": [],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 0.0,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 0.052928924560546875
+    },
+    {
+      "test_id": "edge_4",
+      "question": "Show me everything",
+      "expected_intent": "CLARIFICATION_NEEDED",
+      "actual_intent": "CLARIFICATION_NEEDED",
+      "intent_correct": true,
+      "intent_confidence": 0.9,
+      "tables_expected": [],
+      "tables_found": [],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 0.0,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 0.03814697265625
+    },
+    {
+      "test_id": "sql_ko_9",
+      "question": "미완료 스토리 포인트 합계",
+      "expected_intent": "TEXT_TO_SQL",
+      "actual_intent": "TEXT_TO_SQL",
+      "intent_correct": true,
+      "intent_confidence": 0.44999999999999996,
+      "tables_expected": [
+        "task.user_stories"
+      ],
+      "tables_found": [
+        "task.user_stories",
+        "task.tasks"
+      ],
+      "tables_match_score": 0.5,
+      "keyword_match_score": 0.6666666666666666,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 12.611627578735352
+    },
+    {
+      "test_id": "sql_ko_10",
+      "question": "스프린트 3에서 완료된 스토리 개수",
+      "expected_intent": "TEXT_TO_SQL",
+      "actual_intent": "TEXT_TO_SQL",
+      "intent_correct": true,
+      "intent_confidence": 0.6,
+      "tables_expected": [
+        "task.user_stories",
+        "task.sprints"
+      ],
+      "tables_found": [
+        "task.sprints",
+        "task.user_stories",
+        "task.tasks"
+      ],
+      "tables_match_score": 0.6666666666666666,
+      "keyword_match_score": 1.0,
+      "validation_passed": false,
+      "error": null,
+      "duration_ms": 10.574102401733398
+    },
+    {
+      "test_id": "sql_ko_11",
+      "question": "우선순위 높음으로 설정된 리스크",
+      "expected_intent": "TEXT_TO_SQL",
+      "actual_intent": "TEXT_TO_SQL",
+      "intent_correct": true,
+      "intent_confidence": 0.5,
+      "tables_expected": [
+        "project.risks"
+      ],
+      "tables_found": [
+        "project.risks"
+      ],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 1.0,
+      "validation_passed": false,
+      "error": null,
+      "duration_ms": 0.5762577056884766
+    },
+    {
+      "test_id": "sql_ko_12",
+      "question": "현재 활성화된 스프린트 목록",
+      "expected_intent": "TEXT_TO_SQL",
+      "actual_intent": "TEXT_TO_SQL",
+      "intent_correct": true,
+      "intent_confidence": 0.3,
+      "tables_expected": [
+        "task.sprints"
+      ],
+      "tables_found": [
+        "task.sprints"
+      ],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 1.0,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 11.000394821166992
+    },
+    {
+      "test_id": "sql_en_7",
+      "question": "Count of unresolved issues by severity",
+      "expected_intent": "TEXT_TO_SQL",
+      "actual_intent": "TEXT_TO_SQL",
+      "intent_correct": true,
+      "intent_confidence": 0.3,
+      "tables_expected": [
+        "project.issues"
+      ],
+      "tables_found": [
+        "project.issues"
+      ],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 0.6666666666666666,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 11.091470718383789
+    },
+    {
+      "test_id": "sql_en_8",
+      "question": "Tasks due this week that are not started",
+      "expected_intent": "TEXT_TO_SQL",
+      "actual_intent": "TEXT_TO_SQL",
+      "intent_correct": true,
+      "intent_confidence": 0.6,
+      "tables_expected": [
+        "task.tasks"
+      ],
+      "tables_found": [
+        "task.tasks"
+      ],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 0.3333333333333333,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 12.250423431396484
+    },
+    {
+      "test_id": "sql_en_9",
+      "question": "Project phases with progress less than 25%",
+      "expected_intent": "TEXT_TO_SQL",
+      "actual_intent": "TEXT_TO_SQL",
+      "intent_correct": true,
+      "intent_confidence": 0.5,
+      "tables_expected": [
+        "project.phases"
+      ],
+      "tables_found": [
+        "project.phases",
+        "project.projects"
+      ],
+      "tables_match_score": 0.5,
+      "keyword_match_score": 0.0,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 10.931968688964844
+    },
+    {
+      "test_id": "sql_en_10",
+      "question": "Sprint burndown data for sprint 2",
+      "expected_intent": "TEXT_TO_SQL",
+      "actual_intent": "TEXT_TO_SQL",
+      "intent_correct": true,
+      "intent_confidence": 0.5,
+      "tables_expected": [
+        "task.sprints",
+        "task.user_stories"
+      ],
+      "tables_found": [
+        "task.sprints",
+        "task.user_stories",
+        "task.backlog_items"
+      ],
+      "tables_match_score": 0.6666666666666666,
+      "keyword_match_score": 0.5,
+      "validation_passed": false,
+      "error": null,
+      "duration_ms": 9.820222854614258
+    },
+    {
+      "test_id": "cypher_6",
+      "question": "RFP 문서에서 키워드 검색",
+      "expected_intent": "TEXT_TO_CYPHER",
+      "actual_intent": "TEXT_TO_CYPHER",
+      "intent_correct": true,
+      "intent_confidence": 0.44999999999999996,
+      "tables_expected": [],
+      "tables_found": [],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 1.0,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 0.24008750915527344
+    },
+    {
+      "test_id": "cypher_7",
+      "question": "Search document chunks for contract terms",
+      "expected_intent": "TEXT_TO_CYPHER",
+      "actual_intent": "TEXT_TO_CYPHER",
+      "intent_correct": true,
+      "intent_confidence": 0.3,
+      "tables_expected": [],
+      "tables_found": [],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 0.6666666666666666,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 0.1220703125
+    },
+    {
+      "test_id": "general_5",
+      "question": "번다운 차트가 뭔가요?",
+      "expected_intent": "GENERAL",
+      "actual_intent": "GENERAL",
+      "intent_correct": true,
+      "intent_confidence": 0.44999999999999996,
+      "tables_expected": [],
+      "tables_found": [],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 0.0,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 0.06031990051269531
+    },
+    {
+      "test_id": "general_6",
+      "question": "What is the difference between epic and user story?",
+      "expected_intent": "GENERAL",
+      "actual_intent": "GENERAL",
+      "intent_correct": true,
+      "intent_confidence": 0.85,
+      "tables_expected": [],
+      "tables_found": [],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 0.0,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 0.03838539123535156
+    },
+    {
+      "test_id": "general_7",
+      "question": "칸반과 스크럼의 차이점",
+      "expected_intent": "GENERAL",
+      "actual_intent": "GENERAL",
+      "intent_correct": true,
+      "intent_confidence": 0.85,
+      "tables_expected": [],
+      "tables_found": [],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 0.0,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 0.029087066650390625
+    },
+    {
+      "test_id": "complex_3",
+      "question": "이번 스프린트의 담당자별 완료 태스크 수",
+      "expected_intent": "TEXT_TO_SQL",
+      "actual_intent": "TEXT_TO_SQL",
+      "intent_correct": true,
+      "intent_confidence": 0.9,
+      "tables_expected": [
+        "task.tasks",
+        "auth.users",
+        "task.sprints"
+      ],
+      "tables_found": [
+        "task.tasks",
+        "task.sprints",
+        "task.user_stories",
+        "auth.users"
+      ],
+      "tables_match_score": 0.75,
+      "keyword_match_score": 1.0,
+      "validation_passed": false,
+      "error": null,
+      "duration_ms": 0.7121562957763672
+    },
+    {
+      "test_id": "complex_4",
+      "question": "Show projects with more than 3 high-priority risks",
+      "expected_intent": "TEXT_TO_SQL",
+      "actual_intent": "TEXT_TO_SQL",
+      "intent_correct": true,
+      "intent_confidence": 0.3,
+      "tables_expected": [
+        "project.projects",
+        "project.risks"
+      ],
+      "tables_found": [
+        "project.projects",
+        "project.risks"
+      ],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 1.0,
+      "validation_passed": false,
+      "error": null,
+      "duration_ms": 0.4787445068359375
+    },
+    {
+      "test_id": "complex_5",
+      "question": "스프린트별 스토리 포인트 평균과 완료율",
+      "expected_intent": "TEXT_TO_SQL",
+      "actual_intent": "TEXT_TO_SQL",
+      "intent_correct": true,
+      "intent_confidence": 0.9,
+      "tables_expected": [
+        "task.sprints",
+        "task.user_stories"
+      ],
+      "tables_found": [
+        "task.user_stories",
+        "task.sprints",
+        "task.tasks"
+      ],
+      "tables_match_score": 0.6666666666666666,
+      "keyword_match_score": 0.75,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 12.782573699951172
+    },
+    {
+      "test_id": "edge_5",
+      "question": "DROP TABLE",
+      "expected_intent": "CLARIFICATION_NEEDED",
+      "actual_intent": "MISLEADING_QUERY",
+      "intent_correct": true,
+      "intent_confidence": 0.95,
+      "tables_expected": [],
+      "tables_found": [],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 0.0,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 0.08177757263183594
+    },
+    {
+      "test_id": "edge_6",
+      "question": "오늘 날씨 어때?",
+      "expected_intent": "CLARIFICATION_NEEDED",
+      "actual_intent": "MISLEADING_QUERY",
+      "intent_correct": true,
+      "intent_confidence": 0.9,
+      "tables_expected": [],
+      "tables_found": [],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 0.0,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 0.04100799560546875
+    },
+    {
+      "test_id": "edge_7",
+      "question": "123",
+      "expected_intent": "CLARIFICATION_NEEDED",
+      "actual_intent": "CLARIFICATION_NEEDED",
+      "intent_correct": true,
+      "intent_confidence": 0.85,
+      "tables_expected": [],
+      "tables_found": [],
+      "tables_match_score": 1.0,
+      "keyword_match_score": 0.0,
+      "validation_passed": true,
+      "error": null,
+      "duration_ms": 0.03981590270996094
+    }
+  ]
+}

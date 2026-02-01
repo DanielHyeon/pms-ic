@@ -1,0 +1,564 @@
+{
+  "catalog": "pms",
+  "schema": "multiple",
+  "models": [
+    {
+      "name": "projects",
+      "displayName": "Project",
+      "description": "Insurance claims project with lifecycle management",
+      "tableReference": {
+        "schema": "project",
+        "table": "projects"
+      },
+      "columns": [
+        {
+          "name": "id",
+          "displayName": "Project ID",
+          "type": "BIGINT",
+          "notNull": true
+        },
+        {
+          "name": "name",
+          "displayName": "Project Name",
+          "type": "VARCHAR",
+          "description": "Human-readable project identifier"
+        },
+        {
+          "name": "status",
+          "displayName": "Status",
+          "type": "VARCHAR",
+          "description": "PLANNING, IN_PROGRESS, ON_HOLD, COMPLETED, CANCELLED"
+        },
+        {
+          "name": "start_date",
+          "displayName": "Start Date",
+          "type": "DATE"
+        },
+        {
+          "name": "end_date",
+          "displayName": "End Date",
+          "type": "DATE"
+        },
+        {
+          "name": "is_delayed",
+          "displayName": "Is Delayed",
+          "type": "BOOLEAN",
+          "expression": "end_date < NOW() AND status != 'COMPLETED'"
+        }
+      ],
+      "primaryKey": "id",
+      "projectScoped": false
+    },
+    {
+      "name": "phases",
+      "displayName": "Phase",
+      "description": "Project phase representing major milestones",
+      "tableReference": {
+        "schema": "project",
+        "table": "phases"
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "BIGINT",
+          "notNull": true
+        },
+        {
+          "name": "name",
+          "displayName": "Phase Name",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "status",
+          "displayName": "Status",
+          "type": "VARCHAR",
+          "description": "NOT_STARTED, IN_PROGRESS, COMPLETED"
+        },
+        {
+          "name": "progress_percentage",
+          "displayName": "Progress",
+          "type": "INTEGER",
+          "description": "Completion percentage 0-100"
+        },
+        {
+          "name": "sequence_order",
+          "displayName": "Order",
+          "type": "INTEGER"
+        },
+        {
+          "name": "project_id",
+          "type": "BIGINT"
+        }
+      ],
+      "primaryKey": "id",
+      "projectScoped": true
+    },
+    {
+      "name": "user_stories",
+      "displayName": "User Story",
+      "description": "Agile user story for sprint planning",
+      "tableReference": {
+        "schema": "task",
+        "table": "user_stories"
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "BIGINT",
+          "notNull": true
+        },
+        {
+          "name": "title",
+          "displayName": "Title",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "status",
+          "displayName": "Status",
+          "type": "VARCHAR",
+          "description": "TODO, IN_PROGRESS, IN_REVIEW, DONE"
+        },
+        {
+          "name": "story_points",
+          "displayName": "Story Points",
+          "type": "INTEGER",
+          "description": "Effort estimation in Fibonacci scale"
+        },
+        {
+          "name": "priority",
+          "displayName": "Priority",
+          "type": "VARCHAR",
+          "description": "LOW, MEDIUM, HIGH, CRITICAL"
+        },
+        {
+          "name": "sprint_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "project_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "assignee_id",
+          "displayName": "Assignee",
+          "type": "BIGINT"
+        }
+      ],
+      "primaryKey": "id",
+      "projectScoped": true
+    },
+    {
+      "name": "tasks",
+      "displayName": "Task",
+      "description": "Individual work item under a user story",
+      "tableReference": {
+        "schema": "task",
+        "table": "tasks"
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "BIGINT",
+          "notNull": true
+        },
+        {
+          "name": "title",
+          "displayName": "Title",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "status",
+          "displayName": "Status",
+          "type": "VARCHAR",
+          "description": "TODO, IN_PROGRESS, DONE, BLOCKED"
+        },
+        {
+          "name": "assignee_id",
+          "displayName": "Assignee",
+          "type": "BIGINT"
+        },
+        {
+          "name": "estimated_hours",
+          "displayName": "Estimated Hours",
+          "type": "DECIMAL"
+        },
+        {
+          "name": "actual_hours",
+          "displayName": "Actual Hours",
+          "type": "DECIMAL"
+        },
+        {
+          "name": "user_story_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "completed_at",
+          "displayName": "Completed At",
+          "type": "TIMESTAMP"
+        }
+      ],
+      "primaryKey": "id",
+      "projectScoped": true
+    },
+    {
+      "name": "sprints",
+      "displayName": "Sprint",
+      "description": "Time-boxed iteration for agile development",
+      "tableReference": {
+        "schema": "task",
+        "table": "sprints"
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "BIGINT",
+          "notNull": true
+        },
+        {
+          "name": "name",
+          "displayName": "Sprint Name",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "start_date",
+          "displayName": "Start Date",
+          "type": "DATE"
+        },
+        {
+          "name": "end_date",
+          "displayName": "End Date",
+          "type": "DATE"
+        },
+        {
+          "name": "status",
+          "displayName": "Status",
+          "type": "VARCHAR",
+          "description": "PLANNING, ACTIVE, COMPLETED"
+        },
+        {
+          "name": "project_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "velocity",
+          "displayName": "Velocity",
+          "type": "INTEGER",
+          "expression": "SELECT SUM(story_points) FROM task.user_stories WHERE sprint_id = sprints.id AND status = 'DONE'"
+        }
+      ],
+      "primaryKey": "id",
+      "projectScoped": true
+    },
+    {
+      "name": "issues",
+      "displayName": "Issue",
+      "description": "Project issue or problem tracking",
+      "tableReference": {
+        "schema": "project",
+        "table": "issues"
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "BIGINT",
+          "notNull": true
+        },
+        {
+          "name": "title",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "severity",
+          "displayName": "Severity",
+          "type": "VARCHAR",
+          "description": "LOW, MEDIUM, HIGH, CRITICAL"
+        },
+        {
+          "name": "priority",
+          "displayName": "Priority",
+          "type": "VARCHAR",
+          "description": "LOW, MEDIUM, HIGH, CRITICAL"
+        },
+        {
+          "name": "status",
+          "displayName": "Status",
+          "type": "VARCHAR",
+          "description": "OPEN, IN_PROGRESS, RESOLVED, CLOSED"
+        },
+        {
+          "name": "project_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "created_at",
+          "displayName": "Created At",
+          "type": "TIMESTAMP"
+        }
+      ],
+      "primaryKey": "id",
+      "projectScoped": true
+    },
+    {
+      "name": "risks",
+      "displayName": "Risk",
+      "description": "Project risk identification and tracking",
+      "tableReference": {
+        "schema": "project",
+        "table": "risks"
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "BIGINT",
+          "notNull": true
+        },
+        {
+          "name": "title",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "probability",
+          "displayName": "Probability",
+          "type": "VARCHAR",
+          "description": "LOW, MEDIUM, HIGH"
+        },
+        {
+          "name": "impact",
+          "displayName": "Impact",
+          "type": "VARCHAR",
+          "description": "LOW, MEDIUM, HIGH, CRITICAL"
+        },
+        {
+          "name": "status",
+          "displayName": "Status",
+          "type": "VARCHAR",
+          "description": "IDENTIFIED, MITIGATING, MITIGATED, OCCURRED"
+        },
+        {
+          "name": "project_id",
+          "type": "BIGINT"
+        }
+      ],
+      "primaryKey": "id",
+      "projectScoped": true
+    },
+    {
+      "name": "users",
+      "displayName": "User",
+      "description": "System user accounts",
+      "tableReference": {
+        "schema": "auth",
+        "table": "users"
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "BIGINT",
+          "notNull": true
+        },
+        {
+          "name": "username",
+          "displayName": "Username",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "email",
+          "displayName": "Email",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "full_name",
+          "displayName": "Full Name",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "is_active",
+          "displayName": "Is Active",
+          "type": "BOOLEAN"
+        }
+      ],
+      "primaryKey": "id",
+      "projectScoped": false
+    },
+    {
+      "name": "backlogs",
+      "displayName": "Backlog",
+      "description": "Product backlog container",
+      "tableReference": {
+        "schema": "task",
+        "table": "backlogs"
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "BIGINT",
+          "notNull": true
+        },
+        {
+          "name": "name",
+          "displayName": "Backlog Name",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "project_id",
+          "type": "BIGINT"
+        }
+      ],
+      "primaryKey": "id",
+      "projectScoped": true
+    },
+    {
+      "name": "backlog_items",
+      "displayName": "Backlog Item",
+      "description": "Individual backlog item before sprint assignment",
+      "tableReference": {
+        "schema": "task",
+        "table": "backlog_items"
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "BIGINT",
+          "notNull": true
+        },
+        {
+          "name": "title",
+          "displayName": "Title",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "priority",
+          "displayName": "Priority",
+          "type": "INTEGER"
+        },
+        {
+          "name": "backlog_id",
+          "type": "BIGINT"
+        }
+      ],
+      "primaryKey": "id",
+      "projectScoped": true
+    }
+  ],
+  "relationships": [
+    {
+      "name": "project_phases",
+      "models": ["projects", "phases"],
+      "joinType": "ONE_TO_MANY",
+      "condition": "projects.id = phases.project_id"
+    },
+    {
+      "name": "project_user_stories",
+      "models": ["projects", "user_stories"],
+      "joinType": "ONE_TO_MANY",
+      "condition": "projects.id = user_stories.project_id"
+    },
+    {
+      "name": "sprint_user_stories",
+      "models": ["sprints", "user_stories"],
+      "joinType": "ONE_TO_MANY",
+      "condition": "sprints.id = user_stories.sprint_id"
+    },
+    {
+      "name": "user_story_tasks",
+      "models": ["user_stories", "tasks"],
+      "joinType": "ONE_TO_MANY",
+      "condition": "user_stories.id = tasks.user_story_id"
+    },
+    {
+      "name": "project_sprints",
+      "models": ["projects", "sprints"],
+      "joinType": "ONE_TO_MANY",
+      "condition": "projects.id = sprints.project_id"
+    },
+    {
+      "name": "project_issues",
+      "models": ["projects", "issues"],
+      "joinType": "ONE_TO_MANY",
+      "condition": "projects.id = issues.project_id"
+    },
+    {
+      "name": "project_risks",
+      "models": ["projects", "risks"],
+      "joinType": "ONE_TO_MANY",
+      "condition": "projects.id = risks.project_id"
+    },
+    {
+      "name": "user_story_assignee",
+      "models": ["users", "user_stories"],
+      "joinType": "ONE_TO_MANY",
+      "condition": "users.id = user_stories.assignee_id"
+    },
+    {
+      "name": "task_assignee",
+      "models": ["users", "tasks"],
+      "joinType": "ONE_TO_MANY",
+      "condition": "users.id = tasks.assignee_id"
+    },
+    {
+      "name": "project_backlogs",
+      "models": ["projects", "backlogs"],
+      "joinType": "ONE_TO_MANY",
+      "condition": "projects.id = backlogs.project_id"
+    },
+    {
+      "name": "backlog_items_rel",
+      "models": ["backlogs", "backlog_items"],
+      "joinType": "ONE_TO_MANY",
+      "condition": "backlogs.id = backlog_items.backlog_id"
+    }
+  ],
+  "metrics": [
+    {
+      "name": "sprint_velocity",
+      "displayName": "Sprint Velocity",
+      "description": "Total story points completed per sprint",
+      "baseModel": "user_stories",
+      "dimension": ["sprint_id"],
+      "measure": ["SUM(story_points)"],
+      "timeGrain": "WEEK"
+    },
+    {
+      "name": "task_completion_rate",
+      "displayName": "Task Completion Rate",
+      "description": "Percentage of tasks completed (via user_stories.project_id)",
+      "baseModel": "tasks",
+      "dimension": ["user_story_id"],
+      "measure": ["COUNT(*) FILTER (WHERE status = 'DONE') * 100.0 / NULLIF(COUNT(*), 0)"],
+      "note": "Join to user_stories for project_id scope"
+    },
+    {
+      "name": "open_issues_count",
+      "displayName": "Open Issues",
+      "description": "Number of unresolved issues",
+      "baseModel": "issues",
+      "dimension": ["project_id", "severity"],
+      "measure": ["COUNT(*) FILTER (WHERE status IN ('OPEN', 'IN_PROGRESS'))"]
+    },
+    {
+      "name": "high_risk_count",
+      "displayName": "High Risks",
+      "description": "Number of high probability/impact risks",
+      "baseModel": "risks",
+      "dimension": ["project_id"],
+      "measure": ["COUNT(*) FILTER (WHERE probability = 'HIGH' OR impact IN ('HIGH', 'CRITICAL'))"]
+    },
+    {
+      "name": "story_points_by_status",
+      "displayName": "Story Points by Status",
+      "description": "Story points grouped by status",
+      "baseModel": "user_stories",
+      "dimension": ["project_id", "status"],
+      "measure": ["SUM(story_points)"]
+    },
+    {
+      "name": "blocked_tasks_count",
+      "displayName": "Blocked Tasks",
+      "description": "Number of blocked tasks (via user_stories.project_id)",
+      "baseModel": "tasks",
+      "dimension": ["user_story_id"],
+      "measure": ["COUNT(*) FILTER (WHERE status = 'BLOCKED')"],
+      "note": "Join to user_stories for project_id scope"
+    }
+  ]
+}
