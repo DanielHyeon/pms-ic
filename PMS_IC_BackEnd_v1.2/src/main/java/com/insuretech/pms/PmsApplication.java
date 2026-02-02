@@ -30,8 +30,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
                 "com\\.insuretech\\.pms\\.rfp\\.controller\\.(?!Reactive).*",
                 "com\\.insuretech\\.pms\\.education\\.controller\\.(?!Reactive).*",
                 "com\\.insuretech\\.pms\\.lineage\\.controller\\.(?!Reactive).*",
-                // Exclude blocking services (non-Reactive)
-                "com\\.insuretech\\.pms\\.project\\.service\\.(?!Reactive).*",
+                // Exclude blocking services (non-Reactive) except Outbox services
+                "com\\.insuretech\\.pms\\.project\\.service\\.(?!Reactive|Deliverable).*",
                 "com\\.insuretech\\.pms\\.task\\.service\\.(?!Reactive).*",
                 "com\\.insuretech\\.pms\\.report\\.service\\.(?!Reactive).*",
                 "com\\.insuretech\\.pms\\.rfp\\.service\\.(?!Reactive).*",

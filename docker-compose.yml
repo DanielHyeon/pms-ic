@@ -14,7 +14,7 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - ./data/postgres:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/init:/docker-entrypoint-initdb.d
     networks:
       - pms-network
@@ -34,7 +34,7 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - ./data/redis:/data
+      - redis_data:/data
     networks:
       - pms-network
     command: redis-server --appendonly yes
@@ -220,8 +220,8 @@ services:
       - "7474:7474"  # Browser UI
       - "7687:7687"  # Bolt protocol
     volumes:
-      - ./data/neo4j/data:/data
-      - ./data/neo4j/logs:/logs
+      - neo4j_data:/data
+      - neo4j_logs:/logs
       - ./data/neo4j/import:/var/lib/neo4j/import
       - ./data/neo4j/plugins:/plugins
     networks:
@@ -260,7 +260,7 @@ services:
     ports:
       - "5050:80"
     volumes:
-      - ./data/pgadmin:/var/lib/pgadmin
+      - pgadmin_data:/var/lib/pgadmin
     networks:
       - pms-network
     depends_on:
@@ -326,4 +326,14 @@ networks:
 
 volumes:
   backend_cache:
+    driver: local
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  neo4j_data:
+    driver: local
+  neo4j_logs:
+    driver: local
+  pgadmin_data:
     driver: local
