@@ -43,6 +43,7 @@ interface ApiPhaseData {
   startDate?: string;
   endDate?: string;
   code?: string;
+  projectId?: string;
   [key: string]: unknown;
 }
 
@@ -68,8 +69,10 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
   const permissions = getRolePermissions(userRole);
   const canEdit = permissions.canEdit;
 
-  // Phases data
-  const phases = phasesData || [];
+  // Phases data - filter by projectId
+  const phases = useMemo(() => {
+    return (phasesData || []).filter(p => p.projectId === projectId);
+  }, [phasesData, projectId]);
   const selectedPhase = phases.find(p => p.id === selectedPhaseId);
 
   // Prepare phases info for project-wide WBS query

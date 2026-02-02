@@ -54,8 +54,9 @@ export default function ApplyTemplateModal({
   const applyMutation = useApplyTemplate();
   const createSnapshotMutation = useCreateWbsSnapshot();
   const { data: existingPhases = [] } = usePhases(projectId);
-  // WBS categories (phases from WbsManagement)
-  const { data: wbsCategories = [] } = useAllPhases();
+  // WBS categories (phases from WbsManagement) - filter by projectId
+  const { data: allCategories = [] } = useAllPhases();
+  const wbsCategories = (allCategories as any[]).filter(p => p.projectId === projectId);
   const stats = calculateTemplateStats(template);
 
   // Check if there are existing phases with WBS data to backup

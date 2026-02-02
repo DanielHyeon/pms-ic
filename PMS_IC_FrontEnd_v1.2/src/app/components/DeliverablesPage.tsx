@@ -59,7 +59,8 @@ export default function DeliverablesPage({ userRole, projectId = 'proj-001' }: D
 
   // API hooks
   const { data: phasesData = [], isLoading: isPhasesLoading } = useAllPhases();
-  const phases = phasesData as PhaseWithDeliverables[];
+  // Filter phases by projectId
+  const phases = (phasesData as PhaseWithDeliverables[]).filter(p => (p as any).projectId === projectId);
 
   // Role permissions
   const permissions = getRolePermissions(userRole);

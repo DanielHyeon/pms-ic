@@ -47,7 +47,12 @@ import {
   type SettingsTabType,
 } from './phases';
 
-export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
+interface PhaseManagementProps {
+  userRole: UserRole;
+  projectId?: string;
+}
+
+export default function PhaseManagement({ userRole, projectId = 'proj-001' }: PhaseManagementProps) {
   // Core state
   const [phases, setPhases] = useState<Phase[]>(INITIAL_PHASES);
   const [selectedPhase, setSelectedPhase] = useState<Phase>(INITIAL_PHASES[2]);
@@ -96,7 +101,9 @@ export default function PhaseManagement({ userRole }: { userRole: UserRole }) {
   const [selectedWbsItemName, setSelectedWbsItemName] = useState<string>('');
 
   // TanStack Query hooks
-  const { data: phasesData } = useAllPhases();
+  const { data: allPhasesData } = useAllPhases();
+  // Filter phases by projectId
+  const phasesData = (allPhasesData as any[] | undefined)?.filter((p: any) => p.projectId === projectId);
   const isValidApiPhaseId = selectedPhase.id && !/^[1-6]$/.test(selectedPhase.id);
   const { data: deliverables } = usePhaseDeliverables(isValidApiPhaseId ? selectedPhase.id : '');
   const { data: kpis } = usePhaseKpis(isValidApiPhaseId ? selectedPhase.id : '');
