@@ -1,89 +1,89 @@
-# ADR-002: PostgreSQL to Neo4j Sync via Outbox Pattern
+# ADR-002: Outbox 패턴을 통한 PostgreSQL-Neo4j 동기화
 
-## Status
+## 상태
 
-**Accepted** | 2026-01-31
-
----
-
-## Context
-
-We use PostgreSQL as the primary transactional database and Neo4j for graph-based RAG. Data needs to be synchronized between them, but we need to maintain transactional consistency.
+**승인됨** | 2026-01-31
 
 ---
 
-## Considered Options
+## 배경
 
-### Option A: Dual Write
-
-Write to both PostgreSQL and Neo4j in the same transaction.
-
-**Pros:**
-- Immediate consistency
-- Simple conceptually
-
-**Cons:**
-- No distributed transaction support
-- Partial failure scenarios
-- Neo4j write failure blocks main operations
-- Performance impact
-
-### Option B: Change Data Capture (CDC)
-
-Use Debezium or similar for PostgreSQL CDC.
-
-**Pros:**
-- No application code changes
-- Real-time streaming
-
-**Cons:**
-- Infrastructure complexity
-- Additional moving parts
-- Kafka/Connect dependency
-- Harder to debug
-
-### Option C: Transactional Outbox (Chosen)
-
-Write to outbox table in same transaction, poll and sync to Neo4j.
-
-**Pros:**
-- Transactional guarantee (local commit)
-- Simple polling mechanism
-- Easy to debug and retry
-- No external dependencies
-
-**Cons:**
-- Eventual consistency (delay)
-- Polling overhead
-- Need to manage outbox table
+PostgreSQL을 주요 트랜잭션 데이터베이스로, Neo4j를 그래프 기반 RAG에 사용합니다. 둘 사이의 데이터 동기화가 필요하지만 트랜잭션 일관성을 유지해야 합니다.
 
 ---
 
-## Decision
+## 검토한 옵션
 
-**Option C: Transactional Outbox Pattern**
+### 옵션 A: 이중 쓰기
 
-We chose to implement the outbox pattern with polling-based Neo4j synchronization.
+동일 트랜잭션에서 PostgreSQL과 Neo4j 모두에 쓰기.
+
+**장점:**
+- 즉각적인 일관성
+- 개념적으로 간단
+
+**단점:**
+- 분산 트랜잭션 미지원
+- 부분 실패 시나리오
+- Neo4j 쓰기 실패가 메인 작업 차단
+- 성능 영향
+
+### 옵션 B: 변경 데이터 캡처 (CDC)
+
+Debezium 또는 유사 도구로 PostgreSQL CDC 사용.
+
+**장점:**
+- 애플리케이션 코드 변경 없음
+- 실시간 스트리밍
+
+**단점:**
+- 인프라 복잡성
+- 추가 이동 부품
+- Kafka/Connect 의존성
+- 디버깅 어려움
+
+### 옵션 C: 트랜잭션 Outbox (선택됨)
+
+같은 트랜잭션에서 outbox 테이블에 쓰고, 폴링하여 Neo4j에 동기화.
+
+**장점:**
+- 트랜잭션 보장 (로컬 커밋)
+- 간단한 폴링 메커니즘
+- 디버깅과 재시도 용이
+- 외부 의존성 없음
+
+**단점:**
+- 최종 일관성 (지연)
+- 폴링 오버헤드
+- Outbox 테이블 관리 필요
 
 ---
 
-## Rationale
+## 결정
 
-1. **Consistency guarantee**: Outbox write is in same transaction as business data. If transaction fails, both fail atomically.
+**옵션 C: 트랜잭션 Outbox 패턴**
 
-2. **Simplicity**: No need for Kafka, Debezium, or distributed transaction coordinator.
-
-3. **Debuggability**: Outbox events are visible in database, easy to inspect and replay.
-
-4. **Failure handling**: Failed syncs can be retried without affecting main operations.
-
-5. **Independence**: Neo4j unavailability doesn't block PostgreSQL writes.
+폴링 기반 Neo4j 동기화와 함께 outbox 패턴을 구현하기로 결정했습니다.
 
 ---
 
-## Implementation
+## 근거
 
-### Outbox Table
+1. **일관성 보장**: Outbox 쓰기는 비즈니스 데이터와 같은 트랜잭션. 트랜잭션 실패 시 둘 다 원자적으로 실패.
+
+2. **단순성**: Kafka, Debezium, 분산 트랜잭션 코디네이터 불필요.
+
+3. **디버깅 용이성**: Outbox 이벤트가 데이터베이스에서 보임, 검사와 재실행 용이.
+
+4. **장애 처리**: 실패한 동기화를 메인 작업에 영향 없이 재시도 가능.
+
+5. **독립성**: Neo4j 불가용성이 PostgreSQL 쓰기를 차단하지 않음.
+
+---
+
+## 구현
+
+### Outbox 테이블
 
 ```sql
 CREATE TABLE project.outbox_events (
@@ -99,58 +99,58 @@ CREATE TABLE project.outbox_events (
 );
 ```
 
-### Sync Flow
+### 동기화 흐름
 
 ```
-1. Business operation + outbox insert (single transaction)
-2. Poller reads unprocessed events (every 5 min)
-3. Apply to Neo4j
-4. Mark as processed
-5. Full sync every 24 hours for consistency check
+1. 비즈니스 작업 + outbox 삽입 (단일 트랜잭션)
+2. 폴러가 처리되지 않은 이벤트 읽기 (매 5분)
+3. Neo4j에 적용
+4. 처리됨으로 표시
+5. 일관성 확인을 위해 매 24시간 전체 동기화
 ```
 
 ---
 
-## Consequences
+## 결과
 
-### Positive
+### 긍정적
 
-- PostgreSQL operations are never blocked by Neo4j
-- Clear audit trail of all synced changes
-- Easy replay of failed events
-- Transactional safety
+- PostgreSQL 작업이 Neo4j에 의해 차단되지 않음
+- 모든 동기화 변경 사항의 명확한 감사 추적
+- 실패한 이벤트 쉽게 재실행
+- 트랜잭션 안전성
 
-### Negative
+### 부정적
 
-- 5-minute delay for graph updates
-- Need to manage outbox table growth
-- Polling resource usage
+- 그래프 업데이트에 5분 지연
+- Outbox 테이블 증가 관리 필요
+- 폴링 리소스 사용
 
-### Mitigations
+### 완화
 
-- RAG queries include "last synced" metadata
-- Outbox cleanup job (7-day retention)
-- Configurable polling interval
-
----
-
-## Review Conditions
-
-Revisit this decision if:
-
-- Real-time graph updates become required
-- Outbox table grows too large
-- CDC tooling becomes simpler to operate
+- RAG 쿼리에 "마지막 동기화" 메타데이터 포함
+- Outbox 정리 작업 (7일 보존)
+- 설정 가능한 폴링 간격
 
 ---
 
-## Evidence
+## 재검토 조건
 
-- Schema: `V20260121__add_outbox_events.sql`
-- Poller: `DeliverableOutboxPollerService.java`
-- Neo4j Sync: `llm-service/run_sync.py`
+다음 경우 이 결정을 재검토:
+
+- 실시간 그래프 업데이트가 필요해질 때
+- Outbox 테이블이 너무 커질 때
+- CDC 도구가 운영하기 더 간단해질 때
 
 ---
 
-*Decision made by: Architecture Team*
-*Date: 2026-01-31*
+## 증거
+
+- 스키마: `V20260121__add_outbox_events.sql`
+- 폴러: `DeliverableOutboxPollerService.java`
+- Neo4j 동기화: `llm-service/run_sync.py`
+
+---
+
+*결정자: 아키텍처 팀*
+*날짜: 2026-01-31*

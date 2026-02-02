@@ -1,130 +1,130 @@
-# ADR-001: Backend and LLM Service Separation
+# ADR-001: 백엔드와 LLM 서비스 분리
 
-## Status
+## 상태
 
-**Accepted** | 2026-01-31
-
----
-
-## Context
-
-The system needs both traditional CRUD operations (project management) and AI-powered features (chat, RAG). We needed to decide whether to:
-1. Build everything in a single service
-2. Separate AI/LLM functionality into a dedicated service
+**승인됨** | 2026-01-31
 
 ---
 
-## Considered Options
+## 배경
 
-### Option A: Monolithic Service
-
-All functionality in Spring Boot backend.
-
-**Pros:**
-- Simpler deployment
-- No network overhead
-- Single codebase
-
-**Cons:**
-- Java ecosystem limited for ML
-- Resource contention (CPU/GPU vs I/O)
-- Harder to scale independently
-- LLM failures affect entire system
-
-### Option B: Separate LLM Service (Chosen)
-
-Backend in Spring Boot, LLM in Python/Flask.
-
-**Pros:**
-- Python ML ecosystem (LangGraph, llama-cpp)
-- Independent scaling (GPU for LLM, I/O for backend)
-- Failure isolation
-- Team specialization possible
-
-**Cons:**
-- Network latency
-- Operational complexity
-- Need for service discovery
-
-### Option C: External LLM API Only
-
-Use only external APIs (OpenAI, Claude).
-
-**Pros:**
-- No infrastructure management
-- Always latest models
-
-**Cons:**
-- Cost at scale
-- Data privacy concerns
-- Vendor lock-in
-- Latency for on-premise requirements
+시스템은 전통적인 CRUD 작업(프로젝트 관리)과 AI 기반 기능(채팅, RAG) 모두 필요합니다. 다음 중 하나를 결정해야 했습니다:
+1. 단일 서비스로 모든 것을 구축
+2. AI/LLM 기능을 전용 서비스로 분리
 
 ---
 
-## Decision
+## 검토한 옵션
 
-**Option B: Separate LLM Service**
+### 옵션 A: 모놀리식 서비스
 
-We chose to separate the LLM functionality into a dedicated Python service (Flask + LangGraph) while keeping the main backend in Spring Boot.
+모든 기능을 Spring Boot 백엔드에 포함.
 
----
+**장점:**
+- 간단한 배포
+- 네트워크 오버헤드 없음
+- 단일 코드베이스
 
-## Rationale
+**단점:**
+- Java 생태계의 ML 지원 제한
+- 리소스 경합 (CPU/GPU vs I/O)
+- 독립적 확장 어려움
+- LLM 장애가 전체 시스템에 영향
 
-1. **Technology fit**: Python has better ML/LLM ecosystem (LangGraph, sentence-transformers, llama-cpp)
+### 옵션 B: 별도 LLM 서비스 (선택됨)
 
-2. **Resource isolation**: LLM inference is CPU/GPU intensive; backend is I/O bound. Separating allows optimal resource allocation.
+백엔드는 Spring Boot, LLM은 Python/Flask.
 
-3. **Failure isolation**: LLM failures (OOM, model issues) don't crash the main backend. Users can still access non-AI features.
+**장점:**
+- Python ML 생태계 (LangGraph, llama-cpp)
+- 독립적 확장 (LLM에 GPU, 백엔드에 I/O)
+- 장애 격리
+- 팀 전문화 가능
 
-4. **Scalability**: Can scale LLM service independently based on demand.
+**단점:**
+- 네트워크 지연
+- 운영 복잡성
+- 서비스 디스커버리 필요
 
-5. **Team structure**: Different skill sets can work independently.
+### 옵션 C: 외부 LLM API만 사용
 
----
+외부 API만 사용 (OpenAI, Claude).
 
-## Consequences
+**장점:**
+- 인프라 관리 불필요
+- 항상 최신 모델
 
-### Positive
-
-- Clean separation of concerns
-- Easier to swap LLM implementations
-- Better resource utilization
-- Graceful degradation possible
-
-### Negative
-
-- Additional network hop (mitigated with SSE streaming)
-- Deployment complexity (mitigated with Docker Compose)
-- Need for health checks and circuit breakers
-
-### Risks
-
-- Service discovery in production
-- Latency for real-time features
-- Operational monitoring overhead
-
----
-
-## Review Conditions
-
-Revisit this decision if:
-
-- LLM inference becomes cheap enough for managed APIs
-- Java gets mature LLM libraries
-- Latency requirements become stricter
-- Team structure changes significantly
+**단점:**
+- 대규모 비용
+- 데이터 프라이버시 우려
+- 벤더 종속
+- 온프레미스 요구사항에 대한 지연
 
 ---
 
-## Evidence
+## 결정
 
-- Implementation: `docker-compose.yml` (separate services)
-- LLM Service: `llm-service/` directory
-- Circuit Breaker: `LlmGatewayService.java`
+**옵션 B: 별도 LLM 서비스**
+
+LLM 기능을 전용 Python 서비스(Flask + LangGraph)로 분리하고 메인 백엔드는 Spring Boot로 유지하기로 결정했습니다.
 
 ---
 
-*Decision made by: Architecture Team*
-*Date: 2026-01-31*
+## 근거
+
+1. **기술 적합성**: Python이 더 나은 ML/LLM 생태계 보유 (LangGraph, sentence-transformers, llama-cpp)
+
+2. **리소스 격리**: LLM 추론은 CPU/GPU 집약적; 백엔드는 I/O 바운드. 분리하면 최적의 리소스 할당 가능.
+
+3. **장애 격리**: LLM 장애(OOM, 모델 이슈)가 메인 백엔드를 중단시키지 않음. 사용자는 여전히 비AI 기능에 접근 가능.
+
+4. **확장성**: 수요에 따라 LLM 서비스를 독립적으로 확장 가능.
+
+5. **팀 구조**: 다른 기술 셋이 독립적으로 작업 가능.
+
+---
+
+## 결과
+
+### 긍정적
+
+- 깔끔한 관심사 분리
+- LLM 구현 교체 용이
+- 더 나은 리소스 활용
+- 우아한 성능 저하 가능
+
+### 부정적
+
+- 추가 네트워크 홉 (SSE 스트리밍으로 완화)
+- 배포 복잡성 (Docker Compose로 완화)
+- 헬스 체크와 서킷 브레이커 필요
+
+### 위험
+
+- 운영 환경에서 서비스 디스커버리
+- 실시간 기능에 대한 지연
+- 운영 모니터링 오버헤드
+
+---
+
+## 재검토 조건
+
+다음 경우 이 결정을 재검토:
+
+- LLM 추론이 관리형 API로 충분히 저렴해질 때
+- Java에 성숙한 LLM 라이브러리가 생길 때
+- 지연 요구사항이 더 엄격해질 때
+- 팀 구조가 크게 변경될 때
+
+---
+
+## 증거
+
+- 구현: `docker-compose.yml` (별도 서비스)
+- LLM 서비스: `llm-service/` 디렉토리
+- 서킷 브레이커: `LlmGatewayService.java`
+
+---
+
+*결정자: 아키텍처 팀*
+*날짜: 2026-01-31*

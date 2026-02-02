@@ -1,43 +1,43 @@
-# User Roles and Permissions
+# 사용자 역할 및 권한
 
-> **Version**: 1.0 | **Last Updated**: 2026-01-31
-
----
-
-## Questions This Document Answers
-
-- What roles exist in the system?
-- What can each role do?
-- How does project-scoped authorization work?
+> **버전**: 2.0 | **최종 수정일**: 2026-02-02
 
 ---
 
-## 1. Role Classification
+## 이 문서가 답하는 질문
 
-### System Roles (Global)
+- 시스템에 어떤 역할이 존재하는가?
+- 각 역할은 무엇을 할 수 있는가?
+- 프로젝트 범위 인가는 어떻게 동작하는가?
 
-| Role | Scope | Purpose |
+---
+
+## 1. 역할 분류
+
+### 시스템 역할 (전역)
+
+| 역할 | 범위 | 목적 |
 |------|-------|---------|
-| **ADMIN** | System-wide | Full system administration |
-| **AUDITOR** | System-wide | Read-only access to all projects |
+| **ADMIN** | 시스템 전체 | 전체 시스템 관리 |
+| **AUDITOR** | 시스템 전체 | 모든 프로젝트 읽기 전용 접근 |
 
-### Project Roles (Project-Scoped)
+### 프로젝트 역할 (프로젝트별)
 
-| Role | Scope | Purpose |
+| 역할 | 범위 | 목적 |
 |------|-------|---------|
-| **SPONSOR** | Per-project | Project funding and approval |
-| **PMO_HEAD** | Per-project | PMO leadership and oversight |
-| **PM** | Per-project | Project execution management |
-| **DEVELOPER** | Per-project | Development tasks |
-| **QA** | Per-project | Quality assurance |
-| **BUSINESS_ANALYST** | Per-project | Requirements and user stories |
-| **MEMBER** | Per-project | General membership |
+| **SPONSOR** | 프로젝트별 | 프로젝트 자금 지원 및 승인 |
+| **PMO_HEAD** | 프로젝트별 | PMO 리더십 및 감독 |
+| **PM** | 프로젝트별 | 프로젝트 실행 관리 |
+| **DEVELOPER** | 프로젝트별 | 개발 태스크 |
+| **QA** | 프로젝트별 | 품질 보증 |
+| **BUSINESS_ANALYST** | 프로젝트별 | 요구사항 및 사용자 스토리 |
+| **MEMBER** | 프로젝트별 | 일반 멤버십 |
 
 ---
 
-## 2. Permission Matrix
+## 2. 권한 매트릭스
 
-| Permission | SPONSOR | PMO_HEAD | PM | DEVELOPER | QA | BA | MEMBER |
+| 권한 | SPONSOR | PMO_HEAD | PM | DEVELOPER | QA | BA | MEMBER |
 |------------|:-------:|:--------:|:--:|:---------:|:--:|:--:|:------:|
 | project.view | O | O | O | O | O | O | O |
 | project.edit | O | O | O | - | - | - | - |
@@ -58,62 +58,86 @@
 
 ---
 
-## 3. Authorization Implementation
+## 3. 인가 구현
 
-### Project-Scoped Authorization Pattern
+### 프로젝트 범위 인가 패턴
 
 ```java
-// Controller annotation
-@PreAuthorize("@projectSecurity.hasAnyRole(#projectId, 'PM', 'PMO_HEAD')")
-public ResponseEntity<?> updateProject(@PathVariable String projectId, ...) {
+// 리액티브 컨트롤러 어노테이션
+@PreAuthorize("@reactiveProjectSecurity.hasAnyRole(#projectId, 'PM', 'PMO_HEAD')")
+public Mono<ProjectDto> updateProject(@PathVariable String projectId, ...) {
+    // ...
+}
+
+// 멤버십만 확인
+@PreAuthorize("@reactiveProjectSecurity.isProjectMember(#projectId)")
+public Flux<TaskDto> getProjectTasks(@PathVariable String projectId) {
     // ...
 }
 ```
 
-### Authorization Flow
+### 인가 흐름
 
 ```
-Request → JWT Extraction → ProjectSecurityService
+요청 → JWT 추출 → ReactiveProjectSecurityService
                               ↓
-                   Check project_members table
+                   project_members 테이블 조회
                               ↓
-              User's role on THIS project
+              해당 프로젝트에서의 사용자 역할 확인
                               ↓
-                   Grant or Deny (403)
+                   허용(Grant) 또는 거부(403 Forbidden)
 ```
 
 ---
 
-## 4. Key Rules
+## 4. 핵심 규칙
 
-### Decisions
+### 결정 사항 (Decisions)
 
-- A user can have DIFFERENT roles on different projects
-- System roles (ADMIN, AUDITOR) bypass project-scoped checks
-- ADMIN has full access to all projects
-- AUDITOR has read-only access to all projects
+- 사용자는 서로 다른 프로젝트에서 다른 역할을 가질 수 있음
+- 시스템 역할(ADMIN, AUDITOR)은 프로젝트 범위 검사를 우회
+- ADMIN은 모든 프로젝트에 전체 접근 권한
+- AUDITOR는 모든 프로젝트에 읽기 전용 접근 권한
 
-### Facts
+### 사실 (Facts)
 
-- Role information is stored in `project.project_members` table
-- JWT contains project roles for frontend use
-- Role changes take effect on next API call (no JWT refresh required)
+- 역할 정보는 `project.project_members` 테이블에 저장됨
+- JWT는 프론트엔드 사용을 위한 프로젝트 역할 포함
+- 역할 변경은 다음 API 호출 시 즉시 적용 (JWT 갱신 불필요)
+- ReactiveProjectSecurityService가 모든 인가 검사 담당
 
-### Prohibited
+### 금지 사항 (Prohibited)
 
-- Direct repository access from controllers
-- Checking global `User.role` for project authorization
-- Hardcoding role checks in business logic
+- 컨트롤러에서 리포지토리 직접 접근
+- 프로젝트 인가에 전역 `User.role` 검사 사용
+- 비즈니스 로직에 역할 검사 하드코딩
+- 인가 검사 없이 프로젝트 범위 데이터 접근
 
 ---
 
-## 5. Related Documents
+## 5. 엔드포인트별 권한
 
-| Document | Description |
+| 엔드포인트 | 메서드 | 필요 역할 |
+|----------|--------|----------------|
+| `/api/v2/projects` | GET | 인증됨 (멤버십 기준 필터링) |
+| `/api/v2/projects/{id}` | GET | 프로젝트 멤버 |
+| `/api/v2/projects/{id}` | PUT | PM, PMO_HEAD |
+| `/api/v2/projects/{id}` | DELETE | PMO_HEAD |
+| `/api/v2/projects/{id}/tasks` | POST | PM, DEVELOPER |
+| `/api/v2/projects/{id}/tasks/{tid}` | DELETE | PM |
+| `/api/v2/projects/{id}/issues` | POST | PM, DEVELOPER, QA, BA |
+| `/api/v2/projects/{id}/deliverables` | POST | PM |
+| `/api/v2/projects/{id}/members` | POST | PM, PMO_HEAD |
+
+---
+
+## 6. 관련 문서
+
+| 문서 | 설명 |
 |----------|-------------|
-| [../07_security/auth_model.md](../07_security/auth_model.md) | Authentication model |
-| [../07_security/access_control.md](../07_security/access_control.md) | Access control details |
+| [../07_security/access_control.md](../07_security/access_control.md) | 접근 제어 상세 |
+| [../07_security/query_validation.md](../07_security/query_validation.md) | AI 쿼리 검증 보안 |
 
 ---
 
-*Last Updated: 2026-01-31*
+*최종 수정일: 2026-02-02*

@@ -1,173 +1,173 @@
-# LLM Usage Scope
+# LLM 사용 범위
 
-> **Version**: 2.0 | **Status**: Final | **Last Updated**: 2026-01-31
+> **버전**: 2.0 | **상태**: Final | **최종 수정일**: 2026-02-02
 
 <!-- affects: llm, backend, frontend -->
 
 ---
 
-## Questions This Document Answers
+## 이 문서가 답하는 질문
 
-- What tasks can AI perform?
-- What tasks must AI NOT perform?
-- How reliable are AI responses?
-
----
-
-## 1. AI Capabilities
-
-### What AI Does
-
-| Function | Authority | Description |
-|----------|-----------|-------------|
-| Query Understanding | SUGGEST | Parse natural language to structured query |
-| Document Search | EXECUTE | Find relevant chunks via RAG |
-| Status Summarization | SUGGEST | Summarize project/sprint status |
-| Report Draft Generation | SUGGEST | Generate report content for review |
-| Knowledge Q&A | SUGGEST | Answer questions from indexed docs |
-| Intent Classification | EXECUTE | Route to appropriate workflow |
-
-### Examples of Valid AI Responses
-
-```
-User: "Show me overdue tasks"
-AI: Queries DB via tool call, returns factual list
-
-User: "Summarize this sprint"
-AI: Generates summary from DB data + context
-
-User: "What is planning poker?"
-AI: Retrieves definition from indexed documents
-```
+- AI가 수행할 수 있는 작업은 무엇인가?
+- AI가 수행하면 안 되는 작업은 무엇인가?
+- AI 응답은 얼마나 신뢰할 수 있는가?
 
 ---
 
-## 2. AI Prohibitions
+## 1. AI 기능
 
-### What AI Must NOT Do
+### AI가 하는 것
 
-| Prohibited Action | Reason | Enforcement |
-|-------------------|--------|-------------|
-| Make authorization decisions | Security-critical | Code-level block |
-| Modify database directly | Data integrity | No write access |
-| Calculate financial values | Accuracy required | Block in prompt |
-| Determine task completion | Business decision | Require human |
-| Delete any data | Irreversible | No delete capability |
+| 기능 | 권한 | 설명 |
+|------|------|------|
+| 쿼리 이해 | SUGGEST | 자연어를 구조화된 쿼리로 변환 |
+| 문서 검색 | EXECUTE | RAG를 통해 관련 청크 찾기 |
+| 상태 요약 | SUGGEST | 프로젝트/스프린트 상태 요약 |
+| 보고서 초안 생성 | SUGGEST | 검토용 보고서 내용 생성 |
+| 지식 Q&A | SUGGEST | 인덱싱된 문서에서 질문 답변 |
+| 의도 분류 | EXECUTE | 적절한 워크플로우로 라우팅 |
 
-### Examples of Invalid AI Actions
+### 유효한 AI 응답 예시
 
 ```
-PROHIBITED: "Task seems done, marking complete"
-CORRECT: "Task appears complete. Would you like to mark it done?"
+사용자: "지연된 태스크 보여줘"
+AI: 도구 호출을 통해 DB 쿼리, 사실 기반 목록 반환
 
-PROHIBITED: "Budget is $50,000 based on my calculation"
-CORRECT: "Budget is $50,000 according to project data"
+사용자: "이번 스프린트 요약해줘"
+AI: DB 데이터 + 컨텍스트에서 요약 생성
 
-PROHIBITED: Changing user permissions
-CORRECT: Suggesting permission changes for admin review
+사용자: "플래닝 포커가 뭐야?"
+AI: 인덱싱된 문서에서 정의 검색
 ```
 
 ---
 
-## 3. Trust Principles
+## 2. AI 금지 사항
 
-### Data Source Trust Hierarchy
+### AI가 하면 안 되는 것
+
+| 금지된 행동 | 이유 | 강제 방법 |
+|-------------|------|----------|
+| 인가 결정 | 보안 필수 | 코드 레벨 차단 |
+| 데이터베이스 직접 수정 | 데이터 무결성 | 쓰기 권한 없음 |
+| 재무 값 계산 | 정확성 필요 | 프롬프트에서 차단 |
+| 태스크 완료 결정 | 비즈니스 결정 | 인간 필요 |
+| 데이터 삭제 | 되돌릴 수 없음 | 삭제 기능 없음 |
+
+### 잘못된 AI 행동 예시
 
 ```
-Level 1 (Highest): Database values
-  ↓ Always use for: counts, percentages, dates, amounts
+금지됨: "태스크가 완료된 것 같아서 완료로 표시합니다"
+올바름: "태스크가 완료된 것 같습니다. 완료로 표시할까요?"
 
-Level 2: RAG-retrieved documents
-  ↓ Always cite source, indicate retrieval date
+금지됨: "제 계산에 따르면 예산은 5천만원입니다"
+올바름: "프로젝트 데이터에 따르면 예산은 5천만원입니다"
 
-Level 3: LLM-generated content
-  ↓ Always mark as "AI-generated", require review
+금지됨: 사용자 권한 변경
+올바름: 관리자 검토를 위한 권한 변경 제안
 ```
-
-### Response Validation Rules
-
-| Data Type | Validation | Action |
-|-----------|------------|--------|
-| Counts | Must match DB | Query verification |
-| Dates | Must match DB | No approximation |
-| Names | Must match DB | Exact match only |
-| Summaries | Review required | Human approval |
-| Suggestions | Non-binding | User decision |
 
 ---
 
-## 4. Failure Handling
+## 3. 신뢰 원칙
 
-### When AI Cannot Answer
+### 데이터 출처 신뢰 계층
 
-| Scenario | Response |
-|----------|----------|
-| No relevant documents found | "No information found in project documents" |
-| Query out of scope | "This question is outside the system's scope" |
-| Ambiguous query | Ask clarifying question |
-| Service unavailable | Graceful degradation message |
+```
+레벨 1 (최고): 데이터베이스 값
+  ↓ 항상 사용: 개수, 백분율, 날짜, 금액
 
-### Failure Codes (Taxonomy)
+레벨 2: RAG 검색 문서
+  ↓ 항상 출처 인용, 검색 날짜 표시
 
-| Code | Category | User Message |
+레벨 3: LLM 생성 콘텐츠
+  ↓ 항상 "AI 생성"으로 표시, 검토 필요
+```
+
+### 응답 검증 규칙
+
+| 데이터 유형 | 검증 | 조치 |
+|-------------|------|------|
+| 개수 | DB와 일치해야 함 | 쿼리 검증 |
+| 날짜 | DB와 일치해야 함 | 근사치 불가 |
+| 이름 | DB와 일치해야 함 | 정확히 일치만 |
+| 요약 | 검토 필요 | 인간 승인 |
+| 제안 | 구속력 없음 | 사용자 결정 |
+
+---
+
+## 4. 장애 처리
+
+### AI가 답변할 수 없을 때
+
+| 시나리오 | 응답 |
+|----------|------|
+| 관련 문서 없음 | "프로젝트 문서에서 정보를 찾을 수 없습니다" |
+| 범위 외 쿼리 | "이 질문은 시스템 범위 밖입니다" |
+| 모호한 쿼리 | 명확화 질문 |
+| 서비스 불가 | 우아한 성능 저하 메시지 |
+
+### 장애 코드 (분류)
+
+| 코드 | 카테고리 | 사용자 메시지 |
 |------|----------|--------------|
-| F001 | No context | "No relevant documents found" |
-| F002 | Out of scope | "Outside system scope" |
-| F003 | Ambiguous | "Please clarify your question" |
-| F004 | Service error | "AI service temporarily unavailable" |
+| F001 | 컨텍스트 없음 | "관련 문서를 찾을 수 없습니다" |
+| F002 | 범위 외 | "시스템 범위 밖입니다" |
+| F003 | 모호함 | "질문을 명확히 해주세요" |
+| F004 | 서비스 오류 | "AI 서비스가 일시적으로 불가합니다" |
 
 ---
 
-## 5. Implementation Constraints
+## 5. 구현 제약
 
-### Prompt-Level Constraints
+### 프롬프트 수준 제약
 
 ```python
 SYSTEM_PROMPT = """
-You are a project management assistant.
+당신은 프로젝트 관리 어시스턴트입니다.
 
-STRICT RULES:
-1. Never claim to modify data directly
-2. All numerical values must come from provided context
-3. Always cite sources for factual claims
-4. Mark suggestions as "Recommendation:"
-5. Ask for clarification when uncertain
+엄격한 규칙:
+1. 데이터를 직접 수정한다고 절대 주장하지 마세요
+2. 모든 수치는 제공된 컨텍스트에서 가져와야 합니다
+3. 사실 주장에는 항상 출처를 인용하세요
+4. 제안은 "권장사항:"으로 표시하세요
+5. 불확실할 때는 명확화를 요청하세요
 """
 ```
 
-### Code-Level Constraints
+### 코드 수준 제약
 
-| Constraint | Implementation |
-|------------|----------------|
-| No DB writes | LLM service has no PostgreSQL access |
-| Read-only Neo4j | Only SELECT/MATCH operations |
-| Response format | Structured JSON with metadata |
-| Authority tagging | Every response includes authority level |
+| 제약 | 구현 |
+|------|------|
+| DB 쓰기 없음 | LLM 서비스에 PostgreSQL 접근 없음 |
+| 읽기 전용 Neo4j | SELECT/MATCH 작업만 |
+| 응답 형식 | 메타데이터가 있는 구조화된 JSON |
+| 권한 태깅 | 모든 응답에 권한 수준 포함 |
 
 ---
 
-## 6. Monitoring & Audit
+## 6. 모니터링 및 감사
 
-### Logged Information
+### 로깅 정보
 
-| Field | Purpose |
-|-------|---------|
-| query | User input |
-| intent | Classified intent |
-| track | L1 or L2 |
+| 필드 | 목적 |
+|------|------|
+| query | 사용자 입력 |
+| intent | 분류된 의도 |
+| track | L1 또는 L2 |
 | authority_level | SUGGEST/DECIDE/EXECUTE/COMMIT |
-| evidence_count | Number of RAG sources |
-| response_time_ms | Performance tracking |
-| failure_code | If applicable |
+| evidence_count | RAG 출처 수 |
+| response_time_ms | 성능 추적 |
+| failure_code | 해당되는 경우 |
 
-### Alert Conditions
+### 알림 조건
 
-| Condition | Alert |
-|-----------|-------|
-| Authority level > SUGGEST for data change | Warning |
-| No evidence for factual claim | Warning |
-| Response time > 30s | Performance alert |
+| 조건 | 알림 |
+|------|------|
+| 데이터 변경에 대해 권한 수준 > SUGGEST | 경고 |
+| 사실 주장에 증거 없음 | 경고 |
+| 응답 시간 > 30초 | 성능 알림 |
 
 ---
 
-*Last Updated: 2026-01-31*
+*최종 수정일: 2026-02-02*

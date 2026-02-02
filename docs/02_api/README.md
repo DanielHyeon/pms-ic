@@ -1,56 +1,55 @@
-# API Documentation
+# API 문서
 
-> **Version**: 1.0 | **Status**: Final | **Last Updated**: 2026-01-31
+> **버전**: 2.0 | **상태**: Final | **최종 수정일**: 2026-02-02
 
----
-
-## Questions This Document Answers
-
-- What APIs exist and how do I call them?
-- What are the request/response formats?
-- What errors can occur?
-- What authentication is required?
+<!-- affects: api, frontend, backend -->
 
 ---
 
-## Documents in This Section
+## 이 문서가 답하는 질문
 
-| Document | Purpose |
-|----------|---------|
-| [api_conventions.md](./api_conventions.md) | API design rules |
-| [auth.md](./auth.md) | Authentication endpoints |
-| [error_codes.md](./error_codes.md) | Error code reference |
-| [rest/](./rest/) | REST endpoint documentation |
-| [sse_websocket.md](./sse_websocket.md) | Real-time streaming |
+- 어떤 API가 존재하고 어떻게 호출하는가?
+- 요청/응답 형식은 무엇인가?
+- 어떤 오류가 발생할 수 있는가?
+- 어떤 인증이 필요한가?
 
 ---
 
-## 1. API Overview
+## 이 섹션의 문서
 
-### Base URLs
+| 문서 | 목적 |
+|------|------|
+| [api_conventions.md](./api_conventions.md) | API 설계 규칙 |
+| [error_codes.md](./error_codes.md) | 오류 코드 참조 |
 
-| Environment | Backend | LLM Service |
-|-------------|---------|-------------|
-| Development | `http://localhost:8083` | `http://localhost:8000` |
+---
+
+## 1. API 개요
+
+### 기본 URL
+
+| 환경 | Backend | LLM Service |
+|------|---------|-------------|
+| 개발 | `http://localhost:8083` | `http://localhost:8000` |
 | Docker | `http://backend:8083` | `http://llm-service:8000` |
 
-### API Prefix
+### API 접두사
 
-All REST endpoints: `/api/**`
+모든 REST 엔드포인트: `/api/**`
 
 ---
 
-## 2. Authentication
+## 2. 인증
 
-### JWT Token
+### JWT 토큰
 
-All authenticated endpoints require:
+모든 인증된 엔드포인트는 다음이 필요합니다:
 
 ```http
 Authorization: Bearer <jwt-token>
 ```
 
-### Token Acquisition
+### 토큰 획득
 
 ```http
 POST /api/auth/login
@@ -62,7 +61,7 @@ Content-Type: application/json
 }
 ```
 
-Response:
+응답:
 ```json
 {
   "accessToken": "eyJ...",
@@ -84,9 +83,9 @@ Response:
 
 ---
 
-## 3. Common Response Format
+## 3. 공통 응답 형식
 
-### Success Response
+### 성공 응답
 
 ```json
 {
@@ -96,7 +95,7 @@ Response:
 }
 ```
 
-### Error Response
+### 오류 응답
 
 ```json
 {
@@ -111,82 +110,82 @@ Response:
 
 ---
 
-## 4. API Categories
+## 4. API 카테고리
 
-### Core APIs (Backend)
+### 핵심 API (Backend)
 
-| Category | Base Path | Description |
-|----------|-----------|-------------|
-| Auth | `/api/auth/*` | Authentication, user management |
-| Projects | `/api/projects/*` | Project CRUD, members |
-| Phases | `/api/projects/{id}/phases/*` | Phase management |
-| WBS | `/api/projects/{id}/wbs/*` | Work breakdown structure |
-| Tasks | `/api/projects/{id}/tasks/*` | Task/Kanban management |
-| Sprints | `/api/projects/{id}/sprints/*` | Sprint management |
-| Issues | `/api/projects/{id}/issues/*` | Issue tracking |
-| Deliverables | `/api/projects/{id}/deliverables/*` | Deliverable management |
-| Chat | `/api/chat/*` | AI chat sessions |
-| Reports | `/api/reports/*` | Report generation |
+| 카테고리 | 기본 경로 | 설명 |
+|----------|-----------|------|
+| Auth | `/api/auth/*` | 인증, 사용자 관리 |
+| Projects | `/api/v2/projects/*` | 프로젝트 CRUD, 멤버 |
+| Phases | `/api/v2/projects/{id}/phases/*` | 단계 관리 |
+| WBS | `/api/v2/projects/{id}/wbs/*` | 작업 분류 체계 |
+| Tasks | `/api/v2/projects/{id}/tasks/*` | 태스크/칸반 관리 |
+| Sprints | `/api/v2/projects/{id}/sprints/*` | 스프린트 관리 |
+| Issues | `/api/v2/projects/{id}/issues/*` | 이슈 추적 |
+| Deliverables | `/api/v2/projects/{id}/deliverables/*` | 산출물 관리 |
+| Chat | `/api/chat/*` | AI 채팅 세션 |
+| Reports | `/api/reports/*` | 보고서 생성 |
 
-### AI APIs (LLM Service)
+### AI API (LLM Service)
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/chat/v2` | POST | Chat with AI (Two-Track) |
-| `/api/chat/stream` | POST | SSE streaming chat |
-| `/api/rag/index` | POST | Index document for RAG |
-| `/api/rag/documents/{id}` | DELETE | Remove from RAG |
-| `/health` | GET | Service health check |
+| 엔드포인트 | 메서드 | 설명 |
+|------------|--------|------|
+| `/api/chat/v2` | POST | AI와 채팅 (Two-Track) |
+| `/api/chat/stream` | POST | SSE 스트리밍 채팅 |
+| `/api/rag/index` | POST | RAG용 문서 인덱싱 |
+| `/api/rag/documents/{id}` | DELETE | RAG에서 제거 |
+| `/health` | GET | 서비스 헬스 체크 |
 
 ---
 
-## 5. Authorization Rules
+## 5. 인가 규칙
 
-### Endpoint Authorization
+### 엔드포인트 인가
 
-| Pattern | Required Authorization |
-|---------|----------------------|
-| `/api/auth/*` | Public (login, register) |
-| `/api/projects` (GET) | Authenticated (filtered by membership) |
-| `/api/projects/{id}/*` | Project membership required |
-| `/api/admin/*` | System ADMIN role |
+| 패턴 | 필요한 인가 |
+|------|-------------|
+| `/api/auth/*` | 공개 (로그인, 회원가입) |
+| `/api/v2/projects` (GET) | 인증됨 (멤버십 기준 필터링) |
+| `/api/v2/projects/{id}/*` | 프로젝트 멤버십 필요 |
+| `/api/admin/*` | 시스템 ADMIN 역할 |
 
-### Project-Scoped Endpoints
+### 프로젝트 범위 엔드포인트
 
 ```
-All /api/projects/{projectId}/* endpoints require:
-1. Valid JWT token
-2. User must be member of the project
-3. User's project role must match endpoint requirements
+모든 /api/v2/projects/{projectId}/* 엔드포인트는 다음이 필요합니다:
+1. 유효한 JWT 토큰
+2. 사용자가 해당 프로젝트의 멤버여야 함
+3. 사용자의 프로젝트 역할이 엔드포인트 요구사항과 일치해야 함
 ```
 
 ---
 
-## 6. Rate Limiting
+## 6. 레이트 리미팅
 
-| Endpoint Type | Limit |
-|---------------|-------|
-| Auth endpoints | 10 req/min |
-| Chat endpoints | 20 req/min |
-| Standard APIs | 100 req/min |
-
----
-
-## 7. Versioning
-
-Current API version: **v1** (implicit)
-
-Future versioning pattern: `/api/v2/*`
+| 엔드포인트 유형 | 제한 |
+|-----------------|------|
+| Auth 엔드포인트 | 10 req/min |
+| Chat 엔드포인트 | 20 req/min |
+| 표준 API | 100 req/min |
 
 ---
 
-## 8. Related Documents
+## 7. 버전 관리
 
-| Document | Description |
-|----------|-------------|
-| [../07_security/](../07_security/) | Security architecture |
-| [../01_architecture/](../01_architecture/) | System architecture |
+현재 API 버전: **v2** (리액티브 API)
+
+레거시 버전: **v1** (더 이상 사용되지 않음)
 
 ---
 
-*Last Updated: 2026-01-31*
+## 8. 관련 문서
+
+| 문서 | 설명 |
+|------|------|
+| [../07_security/](../07_security/) | 보안 아키텍처 |
+| [../01_architecture/](../01_architecture/) | 시스템 아키텍처 |
+
+---
+
+*최종 수정일: 2026-02-02*

@@ -1,95 +1,95 @@
-# Architecture Decision Records (ADR)
+# 아키텍처 결정 기록 (ADR)
 
-> **Version**: 1.1 | **Last Updated**: 2026-02-02
-
----
-
-## Purpose
-
-This directory contains Architecture Decision Records (ADRs) documenting significant technical decisions made in this project.
-
-ADRs answer the question: **"Why did we build it this way?"**
+> **버전**: 2.0 | **최종 수정일**: 2026-02-02
 
 ---
 
-## Why ADRs Matter
+## 목적
 
-| Without ADRs | With ADRs |
-|--------------|-----------|
-| "Why is this like this?" | Clear documented rationale |
-| Repeated debates | Reference past decisions |
-| Context lost with people | Context preserved in docs |
-| Inconsistent decisions | Pattern-based decisions |
+이 디렉토리는 프로젝트에서 내린 중요한 기술적 결정을 문서화한 아키텍처 결정 기록(ADR)을 포함합니다.
+
+ADR은 다음 질문에 답합니다: **"왜 이렇게 만들었는가?"**
 
 ---
 
-## ADR Format
+## ADR이 중요한 이유
 
-Each ADR follows this structure:
+| ADR 없이 | ADR 있으면 |
+|----------|------------|
+| "왜 이렇게 되어 있지?" | 명확하게 문서화된 근거 |
+| 반복되는 논쟁 | 과거 결정 참조 |
+| 사람과 함께 사라지는 컨텍스트 | 문서에 보존된 컨텍스트 |
+| 일관성 없는 결정 | 패턴 기반 결정 |
+
+---
+
+## ADR 형식
+
+각 ADR은 다음 구조를 따릅니다:
 
 ```markdown
-# ADR-XXX: [Decision Title]
+# ADR-XXX: [결정 제목]
 
-## Status
-Accepted | Deprecated | Superseded by ADR-YYY
+## 상태
+승인됨 | 폐기됨 | ADR-YYY로 대체됨
 
-## Context
-What is the issue that we're seeing that is motivating this decision?
+## 배경
+이 결정을 하게 된 이슈는 무엇인가?
 
-## Considered Options
-1. Option A
-2. Option B
-3. Option C
+## 검토한 옵션
+1. 옵션 A
+2. 옵션 B
+3. 옵션 C
 
-## Decision
-What is the change that we're proposing and/or doing?
+## 결정
+제안하거나 실행하는 변경 사항은 무엇인가?
 
-## Rationale
-Why is this decision the best option?
+## 근거
+왜 이 결정이 최선의 선택인가?
 
-## Consequences
-- Positive impacts
-- Negative impacts
-- Risks
+## 결과
+- 긍정적 영향
+- 부정적 영향
+- 위험
 
-## Review Conditions
-When should this decision be revisited?
+## 재검토 조건
+이 결정을 언제 재검토해야 하는가?
 ```
 
 ---
 
-## Index of Decisions
+## 결정 목록
 
-| ADR | Title | Status | Date |
-|-----|-------|--------|------|
-| [ADR-001](./ADR-001-service-separation.md) | Backend and LLM Service Separation | Accepted | 2026-01-31 |
-| [ADR-002](./ADR-002-outbox-pattern.md) | PostgreSQL to Neo4j Sync via Outbox | Accepted | 2026-01-31 |
-| [ADR-003](./ADR-003-two-track-llm.md) | Two-Track LLM Workflow | Accepted | 2026-01-31 |
-| [ADR-004](./ADR-004-project-scoped-rbac.md) | Project-Scoped RBAC | Accepted | 2026-01-26 |
-| [ADR-005](./ADR-005-query-validation-security.md) | Query Validation Security Layer | Accepted | 2026-02-02 |
-
----
-
-## When to Create an ADR
-
-Create an ADR when:
-
-- Choosing between multiple viable options
-- Making a decision that's hard to reverse
-- Establishing a pattern for future work
-- Deviating from common practice
-- Adding significant new technology
+| ADR | 제목 | 상태 | 날짜 |
+|-----|------|------|------|
+| [ADR-001](./ADR-001-service-separation.md) | 백엔드와 LLM 서비스 분리 | 승인됨 | 2026-01-31 |
+| [ADR-002](./ADR-002-outbox-pattern.md) | Outbox 패턴을 통한 PostgreSQL-Neo4j 동기화 | 승인됨 | 2026-01-31 |
+| [ADR-003](./ADR-003-two-track-llm.md) | Two-Track LLM 워크플로우 | 승인됨 | 2026-01-31 |
+| [ADR-004](./ADR-004-project-scoped-rbac.md) | 프로젝트 범위 RBAC | 승인됨 | 2026-01-26 |
+| [ADR-005](./ADR-005-query-validation-security.md) | 쿼리 검증 보안 계층 | 승인됨 | 2026-02-02 |
 
 ---
 
-## ADR Lifecycle
+## ADR 작성 시점
+
+다음 경우에 ADR을 작성합니다:
+
+- 여러 실행 가능한 옵션 중 선택할 때
+- 되돌리기 어려운 결정을 내릴 때
+- 향후 작업을 위한 패턴을 수립할 때
+- 일반적인 관행에서 벗어날 때
+- 중요한 새 기술을 추가할 때
+
+---
+
+## ADR 생명주기
 
 ```
-PROPOSED → ACCEPTED → [DEPRECATED | SUPERSEDED]
-    │
-    └── REJECTED (documented why)
+제안됨 -> 승인됨 -> [폐기됨 | 대체됨]
+    |
+    +-- 거부됨 (이유 문서화)
 ```
 
 ---
 
-*ADRs are "immutable" once accepted. To change a decision, create a new ADR that supersedes the old one.*
+*ADR은 승인되면 "불변"입니다. 결정을 변경하려면 기존 ADR을 대체하는 새 ADR을 작성합니다.*

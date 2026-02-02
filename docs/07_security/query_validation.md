@@ -1,235 +1,235 @@
-# Query Validation Security
+# 쿼리 검증 보안
 
-> **Version**: 1.0 | **Status**: Final | **Last Updated**: 2026-02-02
+> **버전**: 2.0 | **상태**: Final | **최종 수정일**: 2026-02-02
 
 <!-- affects: llm, backend, security -->
 
 ---
 
-## Questions This Document Answers
+## 이 문서가 답하는 질문
 
-- How are AI-generated SQL queries validated for security?
-- What bypass patterns are detected and blocked?
-- How is project scope enforced in queries?
-- What sensitive data is protected?
-
----
-
-## 1. Overview
-
-The QueryValidator implements a 4-layer defense-in-depth strategy for validating AI-generated SQL and Cypher queries before execution.
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Query Validation Pipeline                     │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  Layer 1: Syntax Validation                                     │
-│  └─ Query length, emptiness, basic structure                    │
-│                                                                 │
-│  Layer 2: Schema Validation                                     │
-│  └─ Tables exist, columns valid, type checking                  │
-│                                                                 │
-│  Layer 3: Security Validation   ◄── 2-Stage Security            │
-│  ├─ Stage 1: Bypass Pattern Detection (fail-fast)               │
-│  └─ Stage 2: Project Scope Integrity                            │
-│                                                                 │
-│  Layer 4: Performance Validation                                │
-│  └─ LIMIT enforcement, subquery depth, UNION count              │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
+- AI가 생성한 SQL 쿼리는 어떻게 보안 검증되는가?
+- 어떤 우회 패턴이 탐지되고 차단되는가?
+- 쿼리에서 프로젝트 범위는 어떻게 강제되는가?
+- 어떤 민감 데이터가 보호되는가?
 
 ---
 
-## 2. Security Layer (Layer 3) Details
+## 1. 개요
 
-### 2.1 Stage 1: Bypass Pattern Detection
+QueryValidator는 AI가 생성한 SQL 및 Cypher 쿼리를 실행 전에 검증하는 4계층 심층 방어 전략을 구현합니다.
 
-**Purpose**: Fail-fast detection of known SQL injection and scope bypass patterns.
+```
++---------------------------------------------------------------+
+|                    쿼리 검증 파이프라인                          |
++---------------------------------------------------------------+
+|                                                                |
+|  계층 1: 구문 검증                                              |
+|  +-- 쿼리 길이, 비어있음, 기본 구조                              |
+|                                                                |
+|  계층 2: 스키마 검증                                            |
+|  +-- 테이블 존재, 컬럼 유효, 타입 확인                           |
+|                                                                |
+|  계층 3: 보안 검증   <-- 2단계 보안                              |
+|  +-- 단계 1: 우회 패턴 탐지 (빠른 실패)                         |
+|  +-- 단계 2: 프로젝트 범위 무결성                               |
+|                                                                |
+|  계층 4: 성능 검증                                              |
+|  +-- LIMIT 강제, 서브쿼리 깊이, UNION 수                        |
+|                                                                |
++---------------------------------------------------------------+
+```
 
-#### OR-Based Tautologies (Blocked)
+---
 
-| Pattern | Example | Risk |
-|---------|---------|------|
-| Numeric tautology | `OR 1=1`, `OR 0=0` | Bypasses WHERE conditions |
-| Boolean tautology | `OR TRUE`, `OR NOT FALSE` | Returns all rows |
-| String tautology | `OR 'a'='a'` | Bypasses filters |
-| Comparison tautology | `OR 2>1`, `OR 1<2` | Always evaluates true |
-| NULL tautology | `OR NULL IS NULL` | Always true |
-| EXISTS bypass | `OR EXISTS(SELECT 1)` | Subquery always returns |
-| Function bypass | `OR COALESCE(...)` | Potential tautology |
+## 2. 보안 계층 (계층 3) 상세
 
-#### Comment-Based Bypass Prevention
+### 2.1 단계 1: 우회 패턴 탐지
+
+**목적**: 알려진 SQL 인젝션 및 범위 우회 패턴의 빠른 실패 탐지.
+
+#### OR 기반 항진식 (차단됨)
+
+| 패턴 | 예시 | 위험 |
+|------|------|------|
+| 숫자 항진식 | `OR 1=1`, `OR 0=0` | WHERE 조건 우회 |
+| 불리언 항진식 | `OR TRUE`, `OR NOT FALSE` | 모든 행 반환 |
+| 문자열 항진식 | `OR 'a'='a'` | 필터 우회 |
+| 비교 항진식 | `OR 2>1`, `OR 1<2` | 항상 참으로 평가 |
+| NULL 항진식 | `OR NULL IS NULL` | 항상 참 |
+| EXISTS 우회 | `OR EXISTS(SELECT 1)` | 서브쿼리 항상 반환 |
+| 함수 우회 | `OR COALESCE(...)` | 잠재적 항진식 |
+
+#### 주석 기반 우회 방지
 
 ```sql
--- BLOCKED: Comment-obfuscated patterns
-OR/**/1=1          -- Block comment bypass
-OR/* comment */1=1 -- Extended comment bypass
+-- 차단됨: 주석으로 난독화된 패턴
+OR/**/1=1          -- 블록 주석 우회
+OR/* comment */1=1 -- 확장 주석 우회
 OR--
-1=1                -- Line comment bypass
+1=1                -- 라인 주석 우회
 ```
 
-**Implementation**: `normalize_sql()` replaces comments with spaces to preserve token boundaries.
+**구현**: `normalize_sql()`이 주석을 공백으로 대체하여 토큰 경계 보존.
 
-### 2.2 Stage 2: Project Scope Integrity
+### 2.2 단계 2: 프로젝트 범위 무결성
 
-**Purpose**: Ensure all queries accessing project-scoped tables include proper `project_id` filtering.
+**목적**: 프로젝트 범위 테이블에 접근하는 모든 쿼리에 적절한 `project_id` 필터링 포함 보장.
 
-#### Project-Scoped Tables
+#### 프로젝트 범위 테이블
 
-| Table | Scope Method |
-|-------|--------------|
-| `task.tasks` | Via `task.user_stories.project_id` |
-| `task.user_stories` | Direct `project_id` column |
-| `task.sprints` | Direct `project_id` column |
-| `project.phases` | Direct `project_id` column |
-| `project.issues` | Direct `project_id` column |
-| `project.risks` | Direct `project_id` column |
+| 테이블 | 범위 방법 |
+|--------|----------|
+| `task.tasks` | `task.user_stories.project_id` 경유 |
+| `task.user_stories` | 직접 `project_id` 컬럼 |
+| `task.sprints` | 직접 `project_id` 컬럼 |
+| `project.phases` | 직접 `project_id` 컬럼 |
+| `project.issues` | 직접 `project_id` 컬럼 |
+| `project.risks` | 직접 `project_id` 컬럼 |
 
-#### Alias-Aware Validation
+#### 별칭 인식 검증
 
 ```sql
--- VALID: Alias matches table in FROM clause
+-- 유효: FROM 절의 테이블과 별칭 일치
 SELECT t.id FROM task.tasks t
 WHERE t.project_id = :project_id
 
--- INVALID: Alias doesn't exist
+-- 무효: 별칭이 존재하지 않음
 SELECT t.id FROM task.tasks t
-WHERE x.project_id = :project_id  -- 'x' is not defined
+WHERE x.project_id = :project_id  -- 'x'가 정의되지 않음
 ```
 
 ---
 
-## 3. Forbidden Tables
+## 3. 금지된 테이블
 
-The following tables are completely blocked from query access:
+다음 테이블은 쿼리 접근이 완전히 차단됩니다:
 
-| Table | Reason |
-|-------|--------|
-| `auth.password_history` | Contains password hashes |
-| `auth.tokens` | Contains authentication tokens |
-| `auth.refresh_tokens` | Contains refresh tokens |
+| 테이블 | 이유 |
+|--------|------|
+| `auth.password_history` | 비밀번호 해시 포함 |
+| `auth.tokens` | 인증 토큰 포함 |
+| `auth.refresh_tokens` | 리프레시 토큰 포함 |
 
 ---
 
-## 4. Column Denylist
+## 4. 컬럼 거부 목록
 
-Specific columns that must never appear in SELECT clauses:
+SELECT 절에 절대 나타나면 안 되는 특정 컬럼:
 
-| Table | Column | Reason |
-|-------|--------|--------|
-| `auth.users` | `password_hash` | Credential data |
-| `auth.users` | `password` | Credential data |
-| `auth.users` | `salt` | Cryptographic material |
-| `auth.users` | `api_key` | Secret key |
-| `auth.users` | `refresh_token` | Authentication token |
-| `auth.users` | `access_token` | Authentication token |
+| 테이블 | 컬럼 | 이유 |
+|--------|------|------|
+| `auth.users` | `password_hash` | 인증 정보 |
+| `auth.users` | `password` | 인증 정보 |
+| `auth.users` | `salt` | 암호화 자료 |
+| `auth.users` | `api_key` | 비밀 키 |
+| `auth.users` | `refresh_token` | 인증 토큰 |
+| `auth.users` | `access_token` | 인증 토큰 |
 
-### UNION Bypass Prevention
+### UNION 우회 방지
 
-Column validation checks **all** SELECT clauses, including those in UNION queries:
+컬럼 검증은 UNION 쿼리의 것을 포함하여 **모든** SELECT 절을 확인합니다:
 
 ```sql
--- BLOCKED: Column in second SELECT
+-- 차단됨: 두 번째 SELECT의 컬럼
 SELECT id FROM auth.users
 UNION SELECT password_hash FROM auth.users
 ```
 
 ---
 
-## 5. Forbidden SQL Patterns
+## 5. 금지된 SQL 패턴
 
-| Pattern | Reason |
-|---------|--------|
-| `DROP`, `DELETE`, `TRUNCATE` | Data destruction |
-| `INSERT`, `UPDATE`, `ALTER` | Data modification |
-| `CREATE`, `GRANT`, `REVOKE` | Schema/permission changes |
-| `EXECUTE`, `EXEC` | Stored procedure execution |
-| `--`, `/*` | SQL comments (injection vector) |
-| `pg_sleep` | Resource exhaustion |
-| `COPY`, `LOAD` | File system access |
-| `;` followed by text | Multiple statements |
-
----
-
-## 6. Performance Safeguards (Layer 4)
-
-| Constraint | Default | Purpose |
-|------------|---------|---------|
-| Max query length | 5,000 chars | Prevent DoS |
-| LIMIT required | Yes | Prevent unbounded results |
-| Max LIMIT value | 100 rows | Resource protection |
-| Max subquery depth | 3 levels | Query complexity |
-| Max UNION count | 5 | Query complexity |
-| RECURSIVE CTE | Blocked | Prevent infinite loops |
-| SELECT * | Blocked | Column exposure prevention |
+| 패턴 | 이유 |
+|------|------|
+| `DROP`, `DELETE`, `TRUNCATE` | 데이터 파괴 |
+| `INSERT`, `UPDATE`, `ALTER` | 데이터 수정 |
+| `CREATE`, `GRANT`, `REVOKE` | 스키마/권한 변경 |
+| `EXECUTE`, `EXEC` | 저장 프로시저 실행 |
+| `--`, `/*` | SQL 주석 (인젝션 벡터) |
+| `pg_sleep` | 리소스 고갈 |
+| `COPY`, `LOAD` | 파일 시스템 접근 |
+| `;` 뒤에 텍스트 | 다중 문장 |
 
 ---
 
-## 7. Error Responses
+## 6. 성능 보호 장치 (계층 4)
 
-| Error Type | Message | Suggestion |
-|------------|---------|------------|
-| `SECURITY_VIOLATION` | "Security bypass attempt: OR 1=1 bypass detected" | "Remove tautology condition" |
-| `SECURITY_VIOLATION` | "Access to table 'auth.tokens' is forbidden" | "This table cannot be queried" |
-| `SCOPE_MISSING` | "Query must filter by project_id" | "Add WHERE project_id = :project_id" |
-| `POLICY_VIOLATION` | "SELECT * is forbidden" | "List specific columns" |
-
----
-
-## 8. Test Coverage
-
-Security bypass prevention is verified by 13 dedicated tests:
-
-| Test | Purpose |
-|------|---------|
-| `test_or_bypass_detected` | Standard OR tautologies |
-| `test_comment_bypass_detected` | Comment-obfuscated patterns |
-| `test_additional_or_patterns_detected` | Comparison/EXISTS/COALESCE |
-| `test_legitimate_or_not_blocked` | Valid OR conditions pass |
-| `test_forbidden_tables_blocked` | auth.tokens etc blocked |
-| `test_allowed_tables_not_blocked` | auth.users allowed |
-| `test_password_hash_column_blocked` | Sensitive columns blocked |
-| `test_union_column_bypass_blocked` | UNION bypass prevention |
-| `test_safe_columns_allowed` | Normal columns pass |
-| `test_subquery_without_scope_detected` | Subquery scope check |
-| `test_valid_scope_with_alias` | Alias validation |
-| `test_legitimate_cte_not_blocked` | Valid CTEs pass |
-| `test_legitimate_cte_without_inner_where_not_blocked` | CTE aggregation pass |
+| 제약 | 기본값 | 목적 |
+|------|--------|------|
+| 최대 쿼리 길이 | 5,000자 | DoS 방지 |
+| LIMIT 필수 | 예 | 무제한 결과 방지 |
+| 최대 LIMIT 값 | 100행 | 리소스 보호 |
+| 최대 서브쿼리 깊이 | 3레벨 | 쿼리 복잡성 |
+| 최대 UNION 수 | 5개 | 쿼리 복잡성 |
+| RECURSIVE CTE | 차단됨 | 무한 루프 방지 |
+| SELECT * | 차단됨 | 컬럼 노출 방지 |
 
 ---
 
-## 9. Implementation Reference
+## 7. 오류 응답
 
-| Component | File | Description |
-|-----------|------|-------------|
-| Main validator | `llm-service/text2query/query_validator.py` | 4-layer validation |
-| Bypass patterns | `OR_BYPASS_PATTERNS` constant | Pattern definitions |
-| Column denylist | `COLUMN_DENYLIST` constant | Blocked columns |
-| Forbidden tables | `FORBIDDEN_TABLES` in `schema_manager.py` | Blocked tables |
-| Tests | `tests/test_schema_graph_regression.py` | Security tests |
-
----
-
-## 10. Known Limitations
-
-| Limitation | Impact | Mitigation |
-|------------|--------|------------|
-| CTE with inner WHERE | May find wrong WHERE clause | Document limitation |
-| Quoted identifiers | Not fully supported | Low priority |
-| Complex aliases | May miss some patterns | Additional test coverage |
+| 오류 유형 | 메시지 | 제안 |
+|----------|--------|------|
+| `SECURITY_VIOLATION` | "보안 우회 시도: OR 1=1 우회 탐지됨" | "항진식 조건 제거" |
+| `SECURITY_VIOLATION` | "'auth.tokens' 테이블 접근 금지됨" | "이 테이블은 쿼리할 수 없음" |
+| `SCOPE_MISSING` | "쿼리는 project_id로 필터링해야 함" | "WHERE project_id = :project_id 추가" |
+| `POLICY_VIOLATION` | "SELECT * 금지됨" | "특정 컬럼 나열" |
 
 ---
 
-## 11. Related Documents
+## 8. 테스트 커버리지
 
-| Document | Description |
-|----------|-------------|
-| [access_control.md](./access_control.md) | RBAC and authorization |
-| [../05_llm/README.md](../05_llm/README.md) | LLM service overview |
-| [ADR-005](../99_decisions/ADR-005-query-validation-security.md) | Security bypass prevention decision |
+보안 우회 방지는 13개의 전용 테스트로 검증됩니다:
+
+| 테스트 | 목적 |
+|--------|------|
+| `test_or_bypass_detected` | 표준 OR 항진식 |
+| `test_comment_bypass_detected` | 주석 난독화 패턴 |
+| `test_additional_or_patterns_detected` | 비교/EXISTS/COALESCE |
+| `test_legitimate_or_not_blocked` | 유효한 OR 조건 통과 |
+| `test_forbidden_tables_blocked` | auth.tokens 등 차단 |
+| `test_allowed_tables_not_blocked` | auth.users 허용 |
+| `test_password_hash_column_blocked` | 민감 컬럼 차단 |
+| `test_union_column_bypass_blocked` | UNION 우회 방지 |
+| `test_safe_columns_allowed` | 일반 컬럼 통과 |
+| `test_subquery_without_scope_detected` | 서브쿼리 범위 확인 |
+| `test_valid_scope_with_alias` | 별칭 검증 |
+| `test_legitimate_cte_not_blocked` | 유효한 CTE 통과 |
+| `test_legitimate_cte_without_inner_where_not_blocked` | CTE 집계 통과 |
 
 ---
 
-*Last Updated: 2026-02-02*
+## 9. 구현 참조
+
+| 컴포넌트 | 파일 | 설명 |
+|----------|------|------|
+| 메인 검증기 | `llm-service/text2query/query_validator.py` | 4계층 검증 |
+| 우회 패턴 | `OR_BYPASS_PATTERNS` 상수 | 패턴 정의 |
+| 컬럼 거부 목록 | `COLUMN_DENYLIST` 상수 | 차단된 컬럼 |
+| 금지된 테이블 | `schema_manager.py`의 `FORBIDDEN_TABLES` | 차단된 테이블 |
+| 테스트 | `tests/test_schema_graph_regression.py` | 보안 테스트 |
+
+---
+
+## 10. 알려진 제한사항
+
+| 제한사항 | 영향 | 완화 |
+|----------|------|------|
+| 내부 WHERE가 있는 CTE | 잘못된 WHERE 절 찾을 수 있음 | 제한사항 문서화 |
+| 따옴표로 묶인 식별자 | 완전히 지원되지 않음 | 낮은 우선순위 |
+| 복잡한 별칭 | 일부 패턴 놓칠 수 있음 | 추가 테스트 커버리지 |
+
+---
+
+## 11. 관련 문서
+
+| 문서 | 설명 |
+|------|------|
+| [access_control.md](./access_control.md) | RBAC 및 인가 |
+| [../05_llm/README.md](../05_llm/README.md) | LLM 서비스 개요 |
+| [ADR-005](../99_decisions/ADR-005-query-validation-security.md) | 보안 우회 방지 결정 |
+
+---
+
+*최종 수정일: 2026-02-02*

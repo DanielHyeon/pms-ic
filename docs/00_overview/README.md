@@ -1,111 +1,151 @@
-# PMS Insurance Claims - Project Overview
+# PMS Insurance Claims - 프로젝트 개요
 
-> **Version**: 2.0 | **Status**: Production Ready | **Last Updated**: 2026-01-31
-
----
-
-## Questions This Document Answers
-
-- What is this system and why does it exist?
-- What problems does it solve?
-- Who are the users?
-- What is the scope of AI/LLM usage?
+> **버전**: 2.1 | **상태**: Production Ready | **최종 수정일**: 2026-02-02
 
 ---
 
-## 1. Purpose (Why)
+## 이 문서가 답하는 질문
 
-PMS Insurance Claims is an **AI-integrated Project Management Platform** for insurance claims project lifecycle management. It provides:
+- 이 시스템은 무엇이며 왜 존재하는가?
+- 어떤 문제를 해결하는가?
+- 사용자는 누구인가?
+- AI/LLM의 사용 범위는 무엇인가?
 
-- Full project lifecycle management (6-phase methodology)
-- GraphRAG-based intelligent assistant for decision support
-- Traceability from RFP requirements to final deliverables
-- Real-time project health monitoring and reporting
+---
 
-### Problem Being Solved
+## 1. 목적 (Why)
 
-| Problem | Solution |
+PMS Insurance Claims는 **보험심사 프로젝트 전주기 관리를 위한 AI 통합 프로젝트 관리 플랫폼**입니다.
+
+### 핵심 가치 제안
+
+- **6단계 방법론 기반** 보험심사 프로젝트 생명주기 관리
+- **GraphRAG 기반** 의사결정 지원 AI 어시스턴트
+- **RFP → 요구사항 → 태스크** 완전한 추적성 보장
+- **실시간 프로젝트 건강도** 모니터링 및 리포팅
+
+### 해결하는 문제
+
+| 문제 | 해결책 |
 |---------|----------|
-| Manual project tracking is error-prone | Automated status tracking with Neo4j graph |
-| Lack of traceability from requirements to tasks | RFP → Requirement → UserStory → Task chain |
-| Difficult to generate consistent reports | AI-generated weekly reports and analysis |
-| Knowledge silos in project documentation | RAG-based knowledge retrieval |
+| 수동 프로젝트 추적의 오류 | Neo4j 그래프 기반 자동 상태 추적 |
+| 요구사항-태스크 간 추적성 부재 | RFP → Requirement → UserStory → Task 체인 |
+| 일관된 보고서 생성의 어려움 | AI 기반 주간보고서 및 분석 자동 생성 |
+| 프로젝트 문서의 지식 사일로 | RAG 기반 지식 검색 및 QA |
 
 ---
 
-## 2. Scope (What)
+## 2. 범위 (What)
 
-### Included
+### 포함 기능
 
-- Project creation and lifecycle management
-- WBS (Work Breakdown Structure) hierarchy management
-- Sprint/Kanban task management
-- AI-powered chatbot for project queries
-- Report generation (weekly, phase, project)
-- RFP parsing and requirement extraction
-- Deliverable tracking with gate reviews
+- 프로젝트 생성 및 생명주기 관리
+- WBS (Work Breakdown Structure) 계층 관리
+- Sprint/Kanban 태스크 관리
+- AI 챗봇 기반 프로젝트 질의응답
+- 보고서 생성 (주간, 단계별, 프로젝트)
+- RFP 파싱 및 요구사항 추출
+- 산출물 추적 및 게이트 리뷰
+- 교육 이력 관리
 
-### NOT Included
+### 제외 범위
 
-- Financial/billing management
-- HR management
-- External system integrations (SAP, Oracle, etc.)
-- Multi-tenant SaaS deployment (single-tenant only)
+- 재무/결제 관리
+- HR 관리
+- 외부 시스템 연동 (SAP, Oracle 등)
+- 멀티테넌트 SaaS 배포 (단일 테넌트만 지원)
 
 ---
 
-## 3. User Types
+## 3. 기술 스택 요약
 
-| Role | Description | System Access |
+| 계층 | 기술 | 버전 |
+|------|------|------|
+| **Frontend** | React + TypeScript + Vite | React 18, Vite 5 |
+| **Backend** | Spring Boot + WebFlux + R2DBC | Spring Boot 3.2, Java 21 |
+| **LLM Service** | Flask + LangGraph | Python 3.11 |
+| **Primary DB** | PostgreSQL | 17 |
+| **Graph DB** | Neo4j | 2025.01.0-community |
+| **Cache** | Redis | 8 |
+
+### 서비스 포트
+
+| 서비스 | 포트 | 용도 |
+|--------|------|---------|
+| Frontend | 5173 | React SPA |
+| Backend | 8083 | Spring Boot API |
+| LLM Service | 8000 | AI/LLM 처리 |
+| PostgreSQL | 5433 | 주 데이터베이스 |
+| Redis | 6379 | 캐시 및 세션 |
+| Neo4j | 7687 (Bolt), 7474 (HTTP) | 그래프 데이터베이스 |
+
+---
+
+## 4. 사용자 유형
+
+| 역할 | 설명 | 시스템 접근 |
 |------|-------------|---------------|
-| **ADMIN** | System administrator | Full system access |
-| **AUDITOR** | Read-only system access | All projects (read-only) |
-| **SPONSOR** | Project sponsor/stakeholder | Project approval, deliverable sign-off |
-| **PMO_HEAD** | PMO leadership | All project management |
-| **PM** | Project Manager | Full project control |
-| **DEVELOPER** | Development team member | Task execution, issue reporting |
-| **QA** | Quality Assurance | Testing, issue reporting |
-| **BUSINESS_ANALYST** | Business analysis | Requirements, user stories |
-| **MEMBER** | General project member | View access |
+| **ADMIN** | 시스템 관리자 | 전체 시스템 접근 |
+| **AUDITOR** | 감사자 | 전체 프로젝트 읽기 전용 |
+| **SPONSOR** | 프로젝트 스폰서 | 프로젝트 승인, 산출물 결재 |
+| **PMO_HEAD** | PMO 리더 | 모든 프로젝트 관리 |
+| **PM** | 프로젝트 매니저 | 프로젝트 전체 제어 |
+| **DEVELOPER** | 개발팀 멤버 | 태스크 실행, 이슈 보고 |
+| **QA** | 품질보증 | 테스트, 이슈 보고 |
+| **BUSINESS_ANALYST** | 비즈니스 분석가 | 요구사항, 사용자 스토리 |
+| **MEMBER** | 일반 프로젝트 멤버 | 읽기 접근 |
 
 ---
 
-## 4. AI/LLM Usage Scope
+## 5. AI/LLM 사용 범위
 
-### What AI Does
+### AI가 수행하는 작업
 
-| Function | Trust Level | Description |
+| 기능 | 신뢰 수준 | 설명 |
 |----------|-------------|-------------|
-| Information Summary | SUGGEST | Summarize project status, activities |
-| Query Interpretation | SUGGEST | Parse natural language queries |
-| Report Generation | SUGGEST | Generate draft reports for review |
-| Knowledge QA | SUGGEST | Answer questions from indexed documents |
+| 정보 요약 | SUGGEST | 프로젝트 상태, 활동 요약 |
+| 자연어 쿼리 해석 | EXECUTE | 자연어를 구조화된 쿼리로 변환 (Text2SQL) |
+| 보고서 초안 생성 | SUGGEST | 리뷰를 위한 보고서 초안 생성 |
+| 지식 QA | SUGGEST | 색인된 문서에서 질문 응답 |
+| 의도 분류 | EXECUTE | Two-Track 워크플로우 라우팅 |
 
-### What AI Does NOT Do
+### AI가 수행하지 않는 작업
 
-| Prohibited Action | Reason |
+| 금지된 작업 | 이유 |
 |-------------------|--------|
-| DB state decisions | LLM output is non-deterministic |
-| Authorization decisions | Security requires deterministic checks |
-| Final numerical calculations | Accuracy cannot be guaranteed |
-| Automatic data modification | All changes require human approval |
+| DB 상태 결정 | LLM 출력은 비결정적 |
+| 권한 결정 | 보안은 결정적 검증 필요 |
+| 최종 수치 계산 | 정확도 보장 불가 |
+| 자동 데이터 수정 | 모든 변경은 사람 승인 필요 |
 
-### Trust Principle
+### 신뢰 원칙
 
-> All numerical data comes from the database.
-> LLM results are always "advisory" and require human validation.
+> **모든 수치 데이터는 데이터베이스에서 가져온다.**
+> **LLM 결과는 항상 "권고" 수준이며 사람의 검증이 필요하다.**
 
 ---
 
-## 5. Related Documents
+## 6. 구현 현황
 
-| Document | Description |
+| 컴포넌트 | 상태 | 커버리지 |
+|-----------|--------|----------|
+| Frontend | 완료 | 165개 TSX 파일, 60+ 컴포넌트 |
+| Backend API | 완료 | 32개 Controller, 45개 R2DBC 엔티티 |
+| Database | 완료 | PostgreSQL 54+ 테이블, Neo4j 12 노드 타입 |
+| LLM Service | 완료 | Text2Query, 5개 워크플로우, RAG 파이프라인 |
+| Security (RBAC) | 완료 | Project-Scoped 인가, 쿼리 검증 |
+
+---
+
+## 7. 관련 문서
+
+| 문서 | 설명 |
 |----------|-------------|
-| [product_scope.md](./product_scope.md) | Detailed product scope |
-| [user_roles.md](./user_roles.md) | Role definitions and permissions |
-| [glossary.md](./glossary.md) | Technical term definitions |
-| [../01_architecture/](../01_architecture/) | System architecture |
+| [user_roles.md](./user_roles.md) | 역할 정의 및 권한 |
+| [glossary.md](./glossary.md) | 기술 용어 정의 |
+| [../01_architecture/](../01_architecture/) | 시스템 아키텍처 |
+| [../05_llm/](../05_llm/) | LLM 서비스 상세 |
 
 ---
 
-*Last Updated: 2026-01-31*
+*최종 수정일: 2026-02-02*

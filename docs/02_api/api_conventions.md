@@ -1,79 +1,79 @@
-# API Conventions
+# API 컨벤션
 
-> **Version**: 1.0 | **Status**: Final | **Last Updated**: 2026-01-31
+> **버전**: 2.0 | **상태**: Final | **최종 수정일**: 2026-02-02
 
 <!-- affects: api, frontend, backend -->
 
 ---
 
-## Questions This Document Answers
+## 이 문서가 답하는 질문
 
-- What rules govern API design?
-- How should requests/responses be formatted?
-- What HTTP methods are used for what?
-
----
-
-## 1. URL Conventions
-
-### Resource Naming
-
-| Rule | Example |
-|------|---------|
-| Plural nouns | `/projects`, `/tasks`, `/users` |
-| Lowercase with hyphens | `/user-stories`, `/wbs-groups` |
-| Nested resources | `/projects/{id}/phases/{phaseId}` |
-| No verbs in URL | Use HTTP methods instead |
-
-### Path Parameters
-
-```
-/api/projects/{projectId}/tasks/{taskId}
-
-projectId: UUID or string identifier
-taskId: UUID or string identifier
-```
-
-### Query Parameters
-
-```
-GET /api/projects?status=ACTIVE&page=0&size=20&sort=createdAt,desc
-```
-
-| Parameter | Purpose | Default |
-|-----------|---------|---------|
-| `page` | Page number (0-indexed) | 0 |
-| `size` | Page size | 20 |
-| `sort` | Sort field and direction | varies |
-| Filter params | Resource-specific filters | - |
+- API 설계를 지배하는 규칙은 무엇인가?
+- 요청/응답은 어떻게 포맷되어야 하는가?
+- 어떤 HTTP 메서드가 무엇에 사용되는가?
 
 ---
 
-## 2. HTTP Methods
+## 1. URL 컨벤션
 
-| Method | Purpose | Idempotent | Request Body |
-|--------|---------|------------|--------------|
-| `GET` | Read resource(s) | Yes | No |
-| `POST` | Create resource | No | Yes |
-| `PUT` | Full update | Yes | Yes |
-| `PATCH` | Partial update | Yes | Yes |
-| `DELETE` | Remove resource | Yes | No |
+### 리소스 네이밍
 
-### Method Selection Rules
+| 규칙 | 예시 |
+|------|------|
+| 복수형 명사 | `/projects`, `/tasks`, `/users` |
+| 소문자 + 하이픈 | `/user-stories`, `/wbs-groups` |
+| 중첩 리소스 | `/projects/{id}/phases/{phaseId}` |
+| URL에 동사 금지 | 대신 HTTP 메서드 사용 |
 
-| Action | Method | Example |
-|--------|--------|---------|
-| List resources | GET | `GET /projects` |
-| Get single resource | GET | `GET /projects/123` |
-| Create new | POST | `POST /projects` |
-| Replace entire | PUT | `PUT /projects/123` |
-| Update fields | PATCH | `PATCH /projects/123` |
-| Delete | DELETE | `DELETE /projects/123` |
-| Custom action | POST | `POST /projects/123/archive` |
+### 경로 파라미터
+
+```
+/api/v2/projects/{projectId}/tasks/{taskId}
+
+projectId: UUID 또는 문자열 식별자
+taskId: UUID 또는 문자열 식별자
+```
+
+### 쿼리 파라미터
+
+```
+GET /api/v2/projects?status=ACTIVE&page=0&size=20&sort=createdAt,desc
+```
+
+| 파라미터 | 목적 | 기본값 |
+|----------|------|--------|
+| `page` | 페이지 번호 (0부터 시작) | 0 |
+| `size` | 페이지 크기 | 20 |
+| `sort` | 정렬 필드와 방향 | 다양함 |
+| 필터 파라미터 | 리소스별 필터 | - |
 
 ---
 
-## 3. Request Format
+## 2. HTTP 메서드
+
+| 메서드 | 목적 | 멱등성 | 요청 본문 |
+|--------|------|--------|----------|
+| `GET` | 리소스 조회 | 예 | 아니오 |
+| `POST` | 리소스 생성 | 아니오 | 예 |
+| `PUT` | 전체 업데이트 | 예 | 예 |
+| `PATCH` | 부분 업데이트 | 예 | 예 |
+| `DELETE` | 리소스 삭제 | 예 | 아니오 |
+
+### 메서드 선택 규칙
+
+| 동작 | 메서드 | 예시 |
+|------|--------|------|
+| 리소스 목록 | GET | `GET /projects` |
+| 단일 리소스 조회 | GET | `GET /projects/123` |
+| 새로 생성 | POST | `POST /projects` |
+| 전체 교체 | PUT | `PUT /projects/123` |
+| 필드 업데이트 | PATCH | `PATCH /projects/123` |
+| 삭제 | DELETE | `DELETE /projects/123` |
+| 커스텀 액션 | POST | `POST /projects/123/archive` |
+
+---
+
+## 3. 요청 형식
 
 ### Content-Type
 
@@ -81,7 +81,7 @@ GET /api/projects?status=ACTIVE&page=0&size=20&sort=createdAt,desc
 Content-Type: application/json
 ```
 
-### Request Body Example
+### 요청 본문 예시
 
 ```json
 {
@@ -92,15 +92,15 @@ Content-Type: application/json
 }
 ```
 
-### Date Format
+### 날짜 형식
 
-ISO 8601: `YYYY-MM-DD` or `YYYY-MM-DDTHH:mm:ss.sssZ`
+ISO 8601: `YYYY-MM-DD` 또는 `YYYY-MM-DDTHH:mm:ss.sssZ`
 
 ---
 
-## 4. Response Format
+## 4. 응답 형식
 
-### Standard Response Wrapper
+### 표준 응답 래퍼
 
 ```json
 {
@@ -114,7 +114,7 @@ ISO 8601: `YYYY-MM-DD` or `YYYY-MM-DDTHH:mm:ss.sssZ`
 }
 ```
 
-### Pagination Response
+### 페이지네이션 응답
 
 ```json
 {
@@ -133,31 +133,31 @@ ISO 8601: `YYYY-MM-DD` or `YYYY-MM-DDTHH:mm:ss.sssZ`
 
 ---
 
-## 5. HTTP Status Codes
+## 5. HTTP 상태 코드
 
-### Success Codes
+### 성공 코드
 
-| Code | Meaning | When Used |
-|------|---------|-----------|
-| 200 | OK | GET, PUT, PATCH success |
-| 201 | Created | POST success |
-| 204 | No Content | DELETE success |
+| 코드 | 의미 | 사용 시기 |
+|------|------|----------|
+| 200 | OK | GET, PUT, PATCH 성공 |
+| 201 | Created | POST 성공 |
+| 204 | No Content | DELETE 성공 |
 
-### Error Codes
+### 오류 코드
 
-| Code | Meaning | When Used |
-|------|---------|-----------|
-| 400 | Bad Request | Invalid request body |
-| 401 | Unauthorized | Missing/invalid token |
-| 403 | Forbidden | Insufficient permissions |
-| 404 | Not Found | Resource doesn't exist |
-| 409 | Conflict | Duplicate resource |
-| 422 | Unprocessable Entity | Validation failed |
-| 500 | Internal Server Error | Server error |
+| 코드 | 의미 | 사용 시기 |
+|------|------|----------|
+| 400 | Bad Request | 잘못된 요청 본문 |
+| 401 | Unauthorized | 토큰 없음/유효하지 않음 |
+| 403 | Forbidden | 권한 부족 |
+| 404 | Not Found | 리소스 없음 |
+| 409 | Conflict | 리소스 중복 |
+| 422 | Unprocessable Entity | 유효성 검사 실패 |
+| 500 | Internal Server Error | 서버 오류 |
 
 ---
 
-## 6. Error Response Format
+## 6. 오류 응답 형식
 
 ```json
 {
@@ -178,18 +178,18 @@ ISO 8601: `YYYY-MM-DD` or `YYYY-MM-DDTHH:mm:ss.sssZ`
 
 ---
 
-## 7. Field Naming
+## 7. 필드 네이밍
 
-### JSON Fields
+### JSON 필드
 
-| Convention | Example |
-|------------|---------|
+| 컨벤션 | 예시 |
+|--------|------|
 | camelCase | `projectId`, `createdAt` |
-| Boolean prefix | `isActive`, `hasChildren` |
-| Date suffix | `createdAt`, `updatedAt` |
-| ID suffix | `projectId`, `userId` |
+| Boolean 접두사 | `isActive`, `hasChildren` |
+| Date 접미사 | `createdAt`, `updatedAt` |
+| ID 접미사 | `projectId`, `userId` |
 
-### Nullable Fields
+### Nullable 필드
 
 ```json
 {
@@ -198,40 +198,40 @@ ISO 8601: `YYYY-MM-DD` or `YYYY-MM-DDTHH:mm:ss.sssZ`
 }
 ```
 
-Nullable fields MUST be documented in API specs.
+Nullable 필드는 반드시 API 스펙에 문서화되어야 합니다.
 
 ---
 
-## 8. Versioning Strategy
+## 8. 버전 관리 전략
 
-### Current State
+### 현재 상태
 
-No explicit versioning (implicit v1).
+명시적 버전: **v2** (리액티브 API)
 
-### Future Strategy
+### 버전 관리 패턴
 
 ```
 /api/v2/projects
 ```
 
-Breaking changes require new version.
+브레이킹 체인지는 새 버전이 필요합니다.
 
 ---
 
-## 9. Decisions
+## 9. 결정 사항 (Decisions)
 
-- REST + JSON for all APIs
-- camelCase for JSON fields
-- Project-scoped authorization on all project endpoints
-- Pagination for all list endpoints
+- 모든 API에 REST + JSON 사용
+- JSON 필드에 camelCase 사용
+- 모든 프로젝트 엔드포인트에 프로젝트 범위 인가
+- 모든 목록 엔드포인트에 페이지네이션
 
-## 10. Prohibited
+## 10. 금지 사항 (Prohibited)
 
-- Verbs in URL paths (use methods)
-- snake_case in JSON fields
-- Returning raw database errors
-- Exposing internal IDs in URLs
+- URL 경로에 동사 (메서드 사용)
+- JSON 필드에 snake_case
+- 원시 데이터베이스 오류 반환
+- URL에 내부 ID 노출
 
 ---
 
-*Last Updated: 2026-01-31*
+*최종 수정일: 2026-02-02*

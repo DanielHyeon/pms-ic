@@ -1,64 +1,64 @@
-# Backend Documentation
+# 백엔드 문서
 
-> **Version**: 1.0 | **Status**: Final | **Last Updated**: 2026-01-31
+> **버전**: 2.0 | **상태**: Final | **최종 수정일**: 2026-02-02
 
 <!-- affects: backend, api -->
 
 ---
 
-## Questions This Document Answers
+## 이 문서가 답하는 질문
 
-- How is the backend structured?
-- What are the core domain entities?
-- How does the reactive architecture work?
-- What modules exist and what do they do?
+- 백엔드는 어떻게 구성되어 있는가?
+- 핵심 도메인 엔티티는 무엇인가?
+- 리액티브 아키텍처는 어떻게 동작하는가?
+- 어떤 모듈이 존재하며 무엇을 하는가?
 
 ---
 
-## Documents in This Section
+## 이 섹션의 문서
 
-| Document | Purpose |
+| 문서 | 목적 |
 |----------|---------|
-| [domain_model.md](./domain_model.md) | Core entities and relationships |
-| [module_structure.md](./module_structure.md) | Package organization |
-| [reactive_patterns.md](./reactive_patterns.md) | WebFlux and R2DBC patterns |
+| [domain_model.md](./domain_model.md) | 핵심 엔티티와 관계 |
+| [module_structure.md](./module_structure.md) | 패키지 구성 |
+| [reactive_patterns.md](./reactive_patterns.md) | WebFlux와 R2DBC 패턴 |
 
 ---
 
-## 1. Technology Stack
+## 1. 기술 스택
 
-| Component | Technology | Purpose |
+| 컴포넌트 | 기술 | 목적 |
 |-----------|------------|---------|
-| Framework | Spring Boot 3.2 | Application framework |
-| Reactive | Spring WebFlux | Non-blocking web layer |
-| Database Access | R2DBC | Reactive database access |
-| Database | PostgreSQL 15 | Primary data storage |
-| Cache | Redis 7 (Reactive) | Session & caching |
-| Graph DB | Neo4j 5.20 | Lineage & RAG |
+| Framework | Spring Boot 3.2 | 애플리케이션 프레임워크 |
+| Reactive | Spring WebFlux | 논블로킹 웹 계층 |
+| Database Access | R2DBC | 리액티브 데이터베이스 접근 |
+| Database | PostgreSQL 17 | 주 데이터 저장소 |
+| Cache | Redis 8 (Reactive) | 세션 및 캐싱 |
+| Graph DB | Neo4j 2025.01 | 계보 및 RAG |
 
 ---
 
-## 2. Module Overview
+## 2. 모듈 개요
 
-```
+```text
 com.insuretech.pms/
-├── auth/           # Authentication & user management
-├── project/        # Project, Phase, WBS, Deliverables
-├── task/           # Sprint, UserStory, Task, Kanban
-├── chat/           # AI chat sessions & messages
-├── rfp/            # RFP and requirements
-├── report/         # Report generation
-├── education/      # Training management
-├── lineage/        # Neo4j graph operations
-├── rag/            # RAG search integration
-└── common/         # Shared utilities, security, config
+├── auth/           # 인증 및 사용자 관리
+├── project/        # 프로젝트, 단계, WBS, 산출물
+├── task/           # 스프린트, 사용자스토리, 태스크, 칸반
+├── chat/           # AI 채팅 세션 및 메시지
+├── rfp/            # RFP 및 요구사항
+├── report/         # 보고서 생성
+├── education/      # 교육 관리
+├── lineage/        # Neo4j 그래프 작업
+├── rag/            # RAG 검색 통합
+└── common/         # 공유 유틸리티, 보안, 설정
 ```
 
 ---
 
-## 3. Layered Architecture
+## 3. 계층형 아키텍처
 
-```
+```text
 ┌─────────────────────────────────────────┐
 │           Controller Layer              │
 │    ReactiveXxxController (WebFlux)      │
@@ -74,9 +74,9 @@ com.insuretech.pms/
 └─────────────────────────────────────────┘
 ```
 
-### Naming Convention
+### 네이밍 컨벤션
 
-| Layer | Prefix | Example |
+| 계층 | 접두사 | 예시 |
 |-------|--------|---------|
 | Entity | `R2dbc` | `R2dbcProject`, `R2dbcPhase` |
 | Repository | `Reactive` | `ReactiveProjectRepository` |
@@ -85,19 +85,20 @@ com.insuretech.pms/
 
 ---
 
-## 4. Key Design Decisions
+## 4. 핵심 설계 결정
 
-### Why Reactive (WebFlux + R2DBC)?
+### 왜 리액티브 (WebFlux + R2DBC)인가?
 
-| Aspect | Decision |
+| 측면 | 결정 |
 |--------|----------|
-| High concurrency | Non-blocking I/O handles more concurrent requests |
-| External service calls | LLM Service calls benefit from reactive backpressure |
-| Resource efficiency | Thread pool not blocked during I/O |
+| 높은 동시성 | 논블로킹 I/O가 더 많은 동시 요청 처리 |
+| 외부 서비스 호출 | LLM 서비스 호출이 리액티브 백프레셔 활용 |
+| 리소스 효율성 | I/O 중 스레드 풀 블로킹 없음 |
 
-### Why Separate Schemas?
+### 왜 스키마를 분리하는가?
 
-PostgreSQL schemas by domain:
+PostgreSQL 스키마별 도메인:
+
 - `auth` - User, Permission, RolePermission
 - `project` - Project, Phase, WBS, Deliverable
 - `task` - Sprint, UserStory, Task, KanbanColumn
@@ -108,9 +109,9 @@ PostgreSQL schemas by domain:
 
 ---
 
-## 5. Security Architecture
+## 5. 보안 아키텍처
 
-### Project-Scoped RBAC
+### 프로젝트 범위 RBAC
 
 ```java
 @PreAuthorize("@reactiveProjectSecurity.isProjectMember(#projectId)")
@@ -120,50 +121,50 @@ public Mono<List<TaskDto>> getProjectTasks(String projectId) { ... }
 public Mono<Void> updateProject(String projectId, ProjectDto dto) { ... }
 ```
 
-### Role Hierarchy
+### 역할 계층
 
-| Role | Access Level |
+| 역할 | 접근 수준 |
 |------|--------------|
-| ADMIN | System-wide access |
-| AUDITOR | Read-only system-wide |
-| PM | Full project access |
-| PMO_HEAD | Multiple project oversight |
-| SPONSOR | Strategic decisions |
-| DEVELOPER | Task execution |
-| QA | Testing tasks |
-| BUSINESS_ANALYST | Requirements |
-| MEMBER | Basic read access |
+| ADMIN | 시스템 전체 접근 |
+| AUDITOR | 읽기 전용 시스템 전체 |
+| PM | 전체 프로젝트 접근 |
+| PMO_HEAD | 다중 프로젝트 감독 |
+| SPONSOR | 전략적 결정 |
+| DEVELOPER | 태스크 실행 |
+| QA | 테스트 태스크 |
+| BUSINESS_ANALYST | 요구사항 |
+| MEMBER | 기본 읽기 접근 |
 
 ---
 
-## 6. External Integrations
+## 6. 외부 통합
 
-### LLM Service Integration
+### LLM 서비스 통합
 
-```
+```text
 Backend ──HTTP/SSE──> LLM Service (localhost:8000)
          WebClient      Flask + LangGraph
 ```
 
-### Neo4j Integration
+### Neo4j 통합
 
-```
+```text
 Backend ──Bolt──> Neo4j (localhost:7687)
-         Driver    Graph DB for lineage
+         Driver    계보용 그래프 DB
 ```
 
-### Redis Integration
+### Redis 통합
 
-```
+```text
 Backend ──Reactive──> Redis (localhost:6379)
-         Lettuce       Caching, Streams
+         Lettuce       캐싱, 스트림
 ```
 
 ---
 
-## 7. Configuration
+## 7. 설정
 
-### Key Properties (application.yml)
+### 주요 속성 (application.yml)
 
 ```yaml
 spring:
@@ -186,24 +187,36 @@ app:
 
 ---
 
-## 8. Prohibited Patterns
+## 8. 금지 패턴
 
-- Blocking calls in reactive chains (use `publishOn` if unavoidable)
-- Direct database access from controllers
-- Hardcoded credentials in code
-- Exposing internal entity IDs in API responses
-- Skipping project membership checks on project-scoped endpoints
+- 리액티브 체인에서 블로킹 호출 (불가피하면 `publishOn` 사용)
+- 컨트롤러에서 직접 데이터베이스 접근
+- 코드에 자격 증명 하드코딩
+- API 응답에 내부 엔티티 ID 노출
+- 프로젝트 범위 엔드포인트에서 멤버십 검사 생략
 
 ---
 
-## 9. Related Documents
+## 9. 구현 현황
 
-| Document | Description |
+| 항목 | 개수 |
+|------|------|
+| Controllers | 32개 |
+| R2DBC Entities | 45개 |
+| Reactive Repositories | 40+ |
+| Services | 50+ |
+| Java 파일 총계 | 361개 |
+
+---
+
+## 10. 관련 문서
+
+| 문서 | 설명 |
 |----------|-------------|
-| [../02_api/](../02_api/) | API endpoint documentation |
-| [../06_data/](../06_data/) | Database schema documentation |
-| [../07_security/](../07_security/) | Security architecture |
+| [../02_api/](../02_api/) | API 엔드포인트 문서 |
+| [../06_data/](../06_data/) | 데이터베이스 스키마 문서 |
+| [../07_security/](../07_security/) | 보안 아키텍처 |
 
 ---
 
-*Last Updated: 2026-01-31*
+*최종 수정일: 2026-02-02*

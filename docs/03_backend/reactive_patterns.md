@@ -1,41 +1,41 @@
-# Reactive Patterns
+# 리액티브 패턴
 
-> **Version**: 1.0 | **Status**: Final | **Last Updated**: 2026-01-31
+> **버전**: 2.0 | **상태**: Final | **최종 수정일**: 2026-02-02
 
 <!-- affects: backend -->
 
 ---
 
-## Questions This Document Answers
+## 이 문서가 답하는 질문
 
-- How does the reactive architecture work?
-- What patterns are used for WebFlux and R2DBC?
-- How are transactions handled reactively?
+- 리액티브 아키텍처는 어떻게 동작하는가?
+- WebFlux와 R2DBC에 어떤 패턴이 사용되는가?
+- 트랜잭션은 리액티브하게 어떻게 처리되는가?
 
 ---
 
-## 1. Reactive Stack Overview
+## 1. 리액티브 스택 개요
 
 ```
 ┌─────────────────┐
-│  Spring WebFlux │  Non-blocking web layer
+│  Spring WebFlux │  논블로킹 웹 계층
 ├─────────────────┤
 │  Project Reactor│  Mono<T> / Flux<T>
 ├─────────────────┤
-│     R2DBC       │  Reactive database access
+│     R2DBC       │  리액티브 데이터베이스 접근
 ├─────────────────┤
-│   PostgreSQL    │  Primary database
+│   PostgreSQL    │  주 데이터베이스
 └─────────────────┘
 ```
 
 ---
 
-## 2. Core Reactive Types
+## 2. 핵심 리액티브 타입
 
-### Mono<T> - 0 or 1 element
+### Mono<T> - 0개 또는 1개 요소
 
 ```java
-// Single result
+// 단일 결과
 public Mono<ProjectDto> getProjectById(String id) {
     return projectRepository.findById(id)
             .switchIfEmpty(Mono.error(CustomException.notFound("Project not found")))
@@ -43,10 +43,10 @@ public Mono<ProjectDto> getProjectById(String id) {
 }
 ```
 
-### Flux<T> - 0 to N elements
+### Flux<T> - 0개에서 N개 요소
 
 ```java
-// Multiple results
+// 다중 결과
 public Flux<ProjectDto> getAllProjects() {
     return projectRepository.findAllByOrderByCreatedAtDesc()
             .map(this::toDto);
@@ -55,9 +55,9 @@ public Flux<ProjectDto> getAllProjects() {
 
 ---
 
-## 3. Repository Pattern
+## 3. 리포지토리 패턴
 
-### Repository Interface
+### 리포지토리 인터페이스
 
 ```java
 public interface ReactiveProjectRepository
@@ -80,9 +80,9 @@ public interface ReactiveProjectRepository
 
 ---
 
-## 4. Service Layer Patterns
+## 4. 서비스 계층 패턴
 
-### Basic CRUD Operations
+### 기본 CRUD 작업
 
 ```java
 @Service
@@ -106,7 +106,7 @@ public class ReactiveProjectService {
 }
 ```
 
-### Chained Operations
+### 체이닝 작업
 
 ```java
 public Mono<ProjectDto> updateProject(String id, ProjectDto dto) {
@@ -124,7 +124,7 @@ public Mono<ProjectDto> updateProject(String id, ProjectDto dto) {
 
 ---
 
-## 5. Transaction Management
+## 5. 트랜잭션 관리
 
 ### TransactionalOperator
 
@@ -146,10 +146,10 @@ public class R2dbcConfig {
 }
 ```
 
-### Usage in Service
+### 서비스에서 사용
 
 ```java
-// Wrap operation in transaction
+// 트랜잭션으로 작업 래핑
 return projectRepository.save(project)
         .map(this::toDto)
         .as(transactionalOperator::transactional);
@@ -157,9 +157,9 @@ return projectRepository.save(project)
 
 ---
 
-## 6. Error Handling
+## 6. 에러 처리
 
-### Custom Exception
+### 커스텀 예외
 
 ```java
 public class CustomException extends RuntimeException {
@@ -176,7 +176,7 @@ public class CustomException extends RuntimeException {
 }
 ```
 
-### Error Handling in Chains
+### 체인에서의 에러 처리
 
 ```java
 public Mono<ProjectDto> getProjectById(String id) {
@@ -189,9 +189,9 @@ public Mono<ProjectDto> getProjectById(String id) {
 
 ---
 
-## 7. Security Integration
+## 7. 보안 통합
 
-### Reactive Security Context
+### 리액티브 보안 컨텍스트
 
 ```java
 @Service("reactiveProjectSecurity")
@@ -219,7 +219,7 @@ public class ReactiveProjectSecurityService {
 }
 ```
 
-### PreAuthorize with Reactive
+### 리액티브와 PreAuthorize
 
 ```java
 @GetMapping("/{projectId}/tasks")
@@ -231,9 +231,9 @@ public Flux<TaskDto> getProjectTasks(@PathVariable String projectId) {
 
 ---
 
-## 8. Controller Patterns
+## 8. 컨트롤러 패턴
 
-### WebFlux Controller
+### WebFlux 컨트롤러
 
 ```java
 @RestController
@@ -276,12 +276,12 @@ public class ReactiveProjectController {
 
 ---
 
-## 9. Common Patterns
+## 9. 공통 패턴
 
-### Conditional Operations
+### 조건부 작업
 
 ```java
-// Only proceed if condition is met
+// 조건이 충족될 때만 진행
 public Mono<Void> deleteIfOwner(String id, String userId) {
     return projectRepository.findById(id)
             .filter(project -> project.getOwnerId().equals(userId))
@@ -290,7 +290,7 @@ public Mono<Void> deleteIfOwner(String id, String userId) {
 }
 ```
 
-### Combining Multiple Sources
+### 다중 소스 결합
 
 ```java
 public Mono<ProjectDetailsDto> getProjectWithDetails(String id) {
@@ -308,16 +308,35 @@ public Mono<ProjectDetailsDto> getProjectWithDetails(String id) {
 
 ---
 
-## 10. Prohibited Patterns
+## 10. 금지 패턴
 
-| Pattern | Why Prohibited | Alternative |
-|---------|----------------|-------------|
-| `.block()` | Blocks reactive thread | Use reactive operators |
-| `Thread.sleep()` | Blocks thread | Use `Mono.delay()` |
-| Synchronized blocks | Blocking | Use reactive state |
-| Direct JDBC | Not reactive | Use R2DBC |
-| `@Transactional` | Blocking | Use `TransactionalOperator` |
+| 패턴 | 금지 이유 | 대안 |
+|------|-----------|------|
+| `.block()` | 리액티브 스레드 블로킹 | 리액티브 연산자 사용 |
+| `Thread.sleep()` | 스레드 블로킹 | `Mono.delay()` 사용 |
+| synchronized 블록 | 블로킹 | 리액티브 상태 사용 |
+| 직접 JDBC | 리액티브 아님 | R2DBC 사용 |
+| `@Transactional` | 블로킹 | `TransactionalOperator` 사용 |
 
 ---
 
-*Last Updated: 2026-01-31*
+## 11. 왜 리액티브인가?
+
+### 결정 사항 (Decisions)
+
+| 측면 | 결정 |
+|------|------|
+| 높은 동시성 | 논블로킹 I/O가 더 많은 동시 요청 처리 |
+| 외부 서비스 호출 | LLM 서비스 호출이 리액티브 백프레셔 활용 |
+| 리소스 효율성 | I/O 중 스레드 풀 블로킹 없음 |
+
+### 사실 (Facts)
+
+- Spring Boot 3.2 + WebFlux 사용
+- R2DBC로 PostgreSQL에 리액티브 접근
+- Project Reactor (Mono/Flux) 기반
+- TransactionalOperator로 트랜잭션 관리
+
+---
+
+*최종 수정일: 2026-02-02*

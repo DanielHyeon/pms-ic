@@ -1,20 +1,20 @@
-# API Binding
+# API 바인딩
 
-> **Version**: 1.0 | **Status**: Final | **Last Updated**: 2026-01-31
+> **버전**: 2.0 | **상태**: Final | **최종 수정일**: 2026-02-02
 
 <!-- affects: frontend, api -->
 
 ---
 
-## Questions This Document Answers
+## 이 문서가 답하는 질문
 
-- How does the frontend communicate with the backend?
-- How are API errors handled?
-- How is authentication managed in API calls?
+- 프론트엔드는 백엔드와 어떻게 통신하는가?
+- API 오류는 어떻게 처리되는가?
+- API 호출에서 인증은 어떻게 관리되는가?
 
 ---
 
-## 1. API Service Architecture
+## 1. API 서비스 아키텍처
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -22,11 +22,11 @@
 │                      │                           │
 │                      ▼                           │
 │          hooks/api/useXxx.ts                     │
-│          (TanStack Query hooks)                  │
+│          (TanStack Query 훅)                     │
 │                      │                           │
 │                      ▼                           │
 │           services/api.ts                        │
-│           (ApiService class)                     │
+│           (ApiService 클래스)                    │
 │                      │                           │
 │                      ▼                           │
 │              fetch() API                         │
@@ -38,16 +38,16 @@
 
 ---
 
-## 2. API Service Class
+## 2. API 서비스 클래스
 
-### Configuration
+### 설정
 
 ```typescript
 // services/api.ts
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8083/api';
 
-// API version prefixes
-const V2 = '/v2';  // For v2 endpoints
+// API 버전 접두사
+const V2 = '/v2';  // v2 엔드포인트용
 
 export class ApiService {
   private token: string | null = null;
@@ -70,7 +70,7 @@ export class ApiService {
 }
 ```
 
-### Request Method
+### 요청 메서드
 
 ```typescript
 private async fetchWithFallback<T>(
@@ -106,9 +106,9 @@ private async fetchWithFallback<T>(
 
 ---
 
-## 3. API Endpoint Methods
+## 3. API 엔드포인트 메서드
 
-### GET Requests
+### GET 요청
 
 ```typescript
 async getProjects(): Promise<Project[]> {
@@ -128,7 +128,7 @@ async getProject(id: string): Promise<Project> {
 }
 ```
 
-### POST Requests
+### POST 요청
 
 ```typescript
 async createProject(data: Partial<Project>): Promise<Project> {
@@ -143,7 +143,7 @@ async createProject(data: Partial<Project>): Promise<Project> {
 }
 ```
 
-### PUT/PATCH Requests
+### PUT/PATCH 요청
 
 ```typescript
 async updateProject(id: string, data: Partial<Project>): Promise<Project> {
@@ -158,7 +158,7 @@ async updateProject(id: string, data: Partial<Project>): Promise<Project> {
 }
 ```
 
-### DELETE Requests
+### DELETE 요청
 
 ```typescript
 async deleteProject(id: string): Promise<void> {
@@ -172,23 +172,23 @@ async deleteProject(id: string): Promise<void> {
 
 ---
 
-## 4. TanStack Query Hooks
+## 4. TanStack Query 훅
 
-### Hook Structure Pattern
+### 훅 구조 패턴
 
 ```typescript
 // hooks/api/useProjects.ts
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../../services/api';
 
-// Query keys factory
+// Query keys 팩토리
 export const projectKeys = {
   all: ['projects'] as const,
   lists: () => [...projectKeys.all, 'list'] as const,
   detail: (id: string) => [...projectKeys.all, 'detail', id] as const,
 };
 
-// Query hook
+// Query 훅
 export function useProjects() {
   return useQuery({
     queryKey: projectKeys.lists(),
@@ -196,7 +196,7 @@ export function useProjects() {
   });
 }
 
-// Mutation hook
+// Mutation 훅
 export function useCreateProject() {
   const queryClient = useQueryClient();
 
@@ -211,26 +211,26 @@ export function useCreateProject() {
 
 ---
 
-## 5. Available API Hooks
+## 5. 사용 가능한 API 훅
 
-| Hook | Operations |
-|------|------------|
-| `useProjects` | List, get, create, update, delete projects |
-| `usePhases` | Phase CRUD, gate approval |
-| `useTasks` | Task CRUD, status updates |
-| `useSprints` | Sprint CRUD, story management |
-| `useChat` | Chat sessions, messages, AI responses |
-| `useAuth` | Login, logout, token management |
-| `useRfps` | RFP document management |
-| `useRequirements` | Requirement tracking |
-| `useDeliverables` | Deliverable management |
-| `useLineage` | Data lineage queries |
+| 훅 | 작업 |
+|----|------|
+| `useProjects` | 프로젝트 목록, 조회, 생성, 수정, 삭제 |
+| `usePhases` | 단계 CRUD, 게이트 승인 |
+| `useTasks` | 태스크 CRUD, 상태 업데이트 |
+| `useSprints` | 스프린트 CRUD, 스토리 관리 |
+| `useChat` | 채팅 세션, 메시지, AI 응답 |
+| `useAuth` | 로그인, 로그아웃, 토큰 관리 |
+| `useRfps` | RFP 문서 관리 |
+| `useRequirements` | 요구사항 추적 |
+| `useDeliverables` | 산출물 관리 |
+| `useLineage` | 데이터 계보 쿼리 |
 
 ---
 
-## 6. Error Handling
+## 6. 오류 처리
 
-### API Error Response
+### API 오류 응답
 
 ```typescript
 interface ApiError {
@@ -244,7 +244,7 @@ interface ApiError {
 }
 ```
 
-### Error Handling in Components
+### 컴포넌트에서 오류 처리
 
 ```typescript
 function ProjectList() {
@@ -257,50 +257,50 @@ function ProjectList() {
 }
 ```
 
-### Global Error Handling
+### 전역 오류 처리
 
 ```typescript
-// In mutation hooks
+// Mutation 훅에서
 useMutation({
   mutationFn: (data) => apiService.createProject(data),
   onError: (error) => {
-    toast.error(`Failed to create project: ${error.message}`);
+    toast.error(`프로젝트 생성 실패: ${error.message}`);
   },
   onSuccess: () => {
-    toast.success('Project created successfully');
+    toast.success('프로젝트가 성공적으로 생성되었습니다');
   },
 });
 ```
 
 ---
 
-## 7. Authentication Flow
+## 7. 인증 흐름
 
-### Login
+### 로그인
 
 ```typescript
 async function handleLogin(email: string, password: string) {
   const response = await apiService.login(email, password);
 
-  // Store token
+  // 토큰 저장
   apiService.setToken(response.accessToken);
 
-  // Update auth store
+  // auth 스토어 업데이트
   useAuthStore.getState().login(response.user, response.accessToken);
 }
 ```
 
-### Authenticated Requests
+### 인증된 요청
 
 ```typescript
-// Token automatically added by ApiService
+// ApiService가 자동으로 토큰 추가
 const headers = {
   'Content-Type': 'application/json',
   ...(this.token && { Authorization: `Bearer ${this.token}` }),
 };
 ```
 
-### Logout
+### 로그아웃
 
 ```typescript
 function handleLogout() {
@@ -311,9 +311,9 @@ function handleLogout() {
 
 ---
 
-## 8. Mock Data Fallback
+## 8. Mock 데이터 폴백
 
-The API service includes fallback to mock data when backend is unavailable:
+백엔드가 사용 불가능할 때 mock 데이터로 폴백하는 API 서비스:
 
 ```typescript
 private async fetchWithFallback<T>(
@@ -322,11 +322,11 @@ private async fetchWithFallback<T>(
   mockData: T
 ): Promise<T> {
   try {
-    // Try real API
+    // 실제 API 시도
     const response = await fetch(...);
     return await response.json();
   } catch (error) {
-    // Fall back to mock data
+    // mock 데이터로 폴백
     console.warn('Using mock data');
     return mockData;
   }
@@ -335,33 +335,33 @@ private async fetchWithFallback<T>(
 
 ---
 
-## 9. API Versioning
+## 9. API 버전 관리
 
-| Version | Endpoints | Description |
-|---------|-----------|-------------|
-| `/api/v2` | projects, chat, users, permissions, lineage, reports | Current v2 endpoints |
-| `/api` | phases, members, sprints, auth | Legacy endpoints |
-
----
-
-## 10. Best Practices
-
-### DO
-
-- Use TanStack Query hooks for all API calls
-- Handle loading and error states
-- Invalidate related queries after mutations
-- Use TypeScript types for API responses
-- Set appropriate timeout values
-
-### DON'T
-
-- Call `fetch()` directly in components
-- Store API data in local state
-- Ignore error responses
-- Hardcode API URLs
-- Skip authentication headers
+| 버전 | 엔드포인트 | 설명 |
+|------|------------|------|
+| `/api/v2` | projects, chat, users, permissions, lineage, reports | 현재 v2 엔드포인트 |
+| `/api` | phases, members, sprints, auth | 레거시 엔드포인트 |
 
 ---
 
-*Last Updated: 2026-01-31*
+## 10. 모범 사례
+
+### 해야 할 것 (DO)
+
+- 모든 API 호출에 TanStack Query 훅 사용
+- 로딩과 오류 상태 처리
+- Mutation 후 관련 쿼리 무효화
+- API 응답에 TypeScript 타입 사용
+- 적절한 타임아웃 값 설정
+
+### 하지 말아야 할 것 (DON'T)
+
+- 컴포넌트에서 `fetch()` 직접 호출
+- 로컬 상태에 API 데이터 저장
+- 오류 응답 무시
+- API URL 하드코딩
+- 인증 헤더 생략
+
+---
+
+*최종 수정일: 2026-02-02*

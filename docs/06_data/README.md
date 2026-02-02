@@ -1,177 +1,229 @@
-# Data Architecture
+# 데이터 아키텍처
 
-> **Version**: 1.0 | **Status**: Final | **Last Updated**: 2026-01-31
+> **버전**: 2.0 | **상태**: Final | **최종 수정일**: 2026-02-02
 
----
-
-## Questions This Document Answers
-
-- What data exists and where is it stored?
-- How does data flow through the system?
-- How is data synchronized between stores?
+<!-- affects: data, backend, llm -->
 
 ---
 
-## Documents in This Section
+## 이 문서가 답하는 질문
 
-| Document | Purpose |
-|----------|---------|
-| [database_schema.md](./database_schema.md) | PostgreSQL table structures |
-| [entity_relationship.md](./entity_relationship.md) | ER diagrams and relationships |
-| [neo4j_model.md](./neo4j_model.md) | Graph nodes and relationships |
-| [data_lifecycle.md](./data_lifecycle.md) | Data creation, usage, deletion |
+- 어떤 데이터가 존재하고 어디에 저장되는가?
+- 데이터는 시스템을 통해 어떻게 흐르는가?
+- 데이터 저장소 간 동기화는 어떻게 이루어지는가?
 
 ---
 
-## 1. Data Store Overview
+## 이 섹션의 문서
 
-| Store | Purpose | Data Types |
-|-------|---------|------------|
-| **PostgreSQL** | Primary transactional data | Users, Projects, Tasks, etc. |
-| **Neo4j** | Graph relationships, RAG | Nodes, Relations, Embeddings |
-| **Redis** | Caching, sessions | Session tokens, query cache |
+| 문서 | 목적 |
+|------|------|
+| [neo4j_model.md](./neo4j_model.md) | 그래프 노드와 관계 |
 
 ---
 
-## 2. Schema Summary
+## 1. 데이터 저장소 개요
 
-### PostgreSQL (6 Schemas, 54+ Tables)
-
-| Schema | Tables | Purpose |
-|--------|--------|---------|
-| **auth** | 3 | User accounts, permissions |
-| **project** | 31 | Projects, phases, WBS, deliverables |
-| **task** | 7 | Tasks, sprints, user stories |
-| **chat** | 4 | AI chat sessions and messages |
-| **report** | 13 | Report templates and generated reports |
-
-### Neo4j (12 Node Types, 17 Relationship Types)
-
-| Category | Count | Examples |
-|----------|-------|----------|
-| **Entity Nodes** | 12 | Project, Phase, Task, Sprint |
-| **Relationships** | 17 | HAS_PHASE, DEPENDS_ON, ASSIGNED_TO |
-| **Document Nodes** | 2 | Document, Chunk |
-| **Indexes** | 3 | Vector, Fulltext, Unique |
+| 저장소 | 목적 | 데이터 유형 |
+|--------|------|-------------|
+| **PostgreSQL** | 주요 트랜잭션 데이터 | 사용자, 프로젝트, 태스크 등 |
+| **Neo4j** | 그래프 관계, RAG | 노드, 관계, 임베딩 |
+| **Redis** | 캐싱, 세션 | 세션 토큰, 쿼리 캐시 |
 
 ---
 
-## 3. Data Flow Patterns
+## 2. 스키마 요약
 
-### Write Path (User → PostgreSQL → Neo4j)
+### PostgreSQL (6 스키마, 54+ 테이블)
+
+| 스키마 | 테이블 수 | 목적 |
+|--------|----------|------|
+| **auth** | 3 | 사용자 계정, 권한 |
+| **project** | 31 | 프로젝트, 단계, WBS, 산출물 |
+| **task** | 7 | 태스크, 스프린트, 사용자 스토리 |
+| **chat** | 4 | AI 채팅 세션 및 메시지 |
+| **report** | 13 | 보고서 템플릿 및 생성된 보고서 |
+
+### Neo4j (12 노드 유형, 17 관계 유형)
+
+| 카테고리 | 수량 | 예시 |
+|----------|------|------|
+| **엔티티 노드** | 12 | Project, Phase, Task, Sprint |
+| **관계** | 17 | HAS_PHASE, DEPENDS_ON, ASSIGNED_TO |
+| **문서 노드** | 2 | Document, Chunk |
+| **인덱스** | 3 | Vector, Fulltext, Unique |
+
+---
+
+## 3. 데이터 흐름 패턴
+
+### 쓰기 경로 (사용자 -> PostgreSQL -> Neo4j)
 
 ```
-User Action
-    │
-    ▼
-Frontend (Optimistic UI)
-    │
-    ▼
-Backend API
-    │
-    ├─── PostgreSQL (Transactional Write)
-    │         │
-    │         ▼
-    │    Outbox Event
-    │
-    └─── Response to Frontend
+사용자 액션
+    |
+    v
+프론트엔드 (Optimistic UI)
+    |
+    v
+백엔드 API
+    |
+    +--- PostgreSQL (트랜잭션 쓰기)
+    |         |
+    |         v
+    |    Outbox 이벤트
+    |
+    +--- 프론트엔드에 응답
 
-[Async] Outbox Poller
-    │
-    ▼
-Neo4j Sync (Node/Relationship Update)
+[비동기] Outbox 폴러
+    |
+    v
+Neo4j 동기화 (노드/관계 업데이트)
 ```
 
-### Read Path (RAG Query)
+### 읽기 경로 (RAG 쿼리)
 
 ```
-User Query
-    │
-    ▼
-LLM Service
-    │
-    ├─── Neo4j (Hybrid Search)
-    │         │
-    │         ▼
-    │    Chunks + Graph Context
-    │
-    └─── LLM Generation with Context
+사용자 쿼리
+    |
+    v
+LLM 서비스
+    |
+    +--- Neo4j (하이브리드 검색)
+    |         |
+    |         v
+    |    청크 + 그래프 컨텍스트
+    |
+    +--- 컨텍스트로 LLM 생성
 ```
 
 ---
 
-## 4. Key Design Decisions
+## 4. 핵심 설계 결정
 
-### Why PostgreSQL for Primary Data?
+### 왜 PostgreSQL을 주요 데이터로 사용하는가?
 
-| Reason | Benefit |
-|--------|---------|
-| ACID transactions | Data consistency |
-| R2DBC support | Reactive performance |
-| Schema enforcement | Data integrity |
-| Mature ecosystem | Tooling, backup, monitoring |
+| 이유 | 이점 |
+|------|------|
+| ACID 트랜잭션 | 데이터 일관성 |
+| R2DBC 지원 | 리액티브 성능 |
+| 스키마 강제 | 데이터 무결성 |
+| 성숙한 생태계 | 도구, 백업, 모니터링 |
 
-### Why Neo4j for RAG?
+### 왜 Neo4j를 RAG에 사용하는가?
 
-| Reason | Benefit |
-|--------|---------|
-| Graph traversal | Relationship-aware retrieval |
-| Vector index | Similarity search |
-| Cypher queries | Flexible knowledge extraction |
-| Read-optimized | High RAG throughput |
+| 이유 | 이점 |
+|------|------|
+| 그래프 탐색 | 관계 인식 검색 |
+| 벡터 인덱스 | 유사도 검색 |
+| Cypher 쿼리 | 유연한 지식 추출 |
+| 읽기 최적화 | 높은 RAG 처리량 |
 
-### Why Not Direct Neo4j Writes?
+### 왜 Neo4j에 직접 쓰기를 하지 않는가?
 
-| Constraint | Rationale |
-|------------|-----------|
-| No ACID | Can't guarantee consistency |
-| Sync complexity | Two-phase commit issues |
-| Single source of truth | PostgreSQL is authoritative |
+| 제약사항 | 근거 |
+|----------|------|
+| ACID 없음 | 일관성 보장 불가 |
+| 동기화 복잡성 | 2단계 커밋 문제 |
+| 단일 진실 공급원 | PostgreSQL이 권위 있는 소스 |
 
 ---
 
-## 5. Data Synchronization
+## 5. 데이터 동기화
 
-### Outbox Pattern
+### Outbox 패턴
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Transactional Boundary                        │
-│                                                                  │
-│  INSERT INTO project.tasks (...)                                │
-│  INSERT INTO project.outbox_events (entity, action, payload)    │
-│                                                                  │
-│  COMMIT                                                         │
-└─────────────────────────────────────────────────────────────────┘
++-----------------------------------------------------------+
+|                    트랜잭션 경계                            |
+|                                                            |
+|  INSERT INTO project.tasks (...)                          |
+|  INSERT INTO project.outbox_events (entity, action, payload) |
+|                                                            |
+|  COMMIT                                                   |
++-----------------------------------------------------------+
 
-[Every 5 minutes]
+[매 5분]
 
-┌─────────────────────────────────────────────────────────────────┐
-│                    Outbox Poller Service                         │
-│                                                                  │
-│  SELECT * FROM outbox_events WHERE processed = false            │
-│  → Apply to Neo4j                                               │
-│  UPDATE outbox_events SET processed = true                      │
-└─────────────────────────────────────────────────────────────────┘
++-----------------------------------------------------------+
+|                    Outbox 폴러 서비스                        |
+|                                                            |
+|  SELECT * FROM outbox_events WHERE processed = false      |
+|  -> Neo4j에 적용                                           |
+|  UPDATE outbox_events SET processed = true                |
++-----------------------------------------------------------+
 ```
 
-### Sync Configuration
+### 동기화 설정
 
-| Setting | Value |
-|---------|-------|
-| Incremental sync | Every 5 minutes |
-| Full sync | Every 24 hours |
-| Event retention | 7 days |
-
----
-
-## 6. Related Documents
-
-| Document | Description |
-|----------|-------------|
-| [../01_architecture/](../01_architecture/) | System architecture |
-| [../03_backend/](../03_backend/) | Backend implementation |
+| 설정 | 값 |
+|------|-----|
+| 증분 동기화 | 매 5분 |
+| 전체 동기화 | 매 24시간 |
+| 이벤트 보존 | 7일 |
 
 ---
 
-*Last Updated: 2026-01-31*
+## 6. 데이터 생명주기
+
+### 생성 -> 사용 -> 폐기
+
+```
+생성 (Create)
+    |
+    v
++------------------+
+| PostgreSQL 저장   |
+| + Outbox 이벤트  |
++------------------+
+    |
+    v
+동기화 (Sync)
+    |
+    v
++------------------+
+| Neo4j 노드 생성   |
+| + 임베딩 생성    |
++------------------+
+    |
+    v
+사용 (Use)
+    |
+    v
++------------------+
+| RAG 검색에 활용   |
+| + 그래프 쿼리    |
++------------------+
+    |
+    v
+폐기 (Dispose)
+    |
+    v
++------------------+
+| 소프트 삭제       |
+| + 아카이브       |
++------------------+
+```
+
+### 데이터 보존 정책
+
+| 데이터 유형 | 보존 기간 | 폐기 방법 |
+|-------------|----------|-----------|
+| 프로젝트 데이터 | 영구 (활성) | 아카이브 |
+| 채팅 히스토리 | 1년 | 익명화 후 삭제 |
+| 감사 로그 | 5년 | 암호화 보관 |
+| 임시 캐시 | 24시간 | 자동 만료 |
+
+---
+
+## 7. 관련 문서
+
+| 문서 | 설명 |
+|------|------|
+| [../01_architecture/](../01_architecture/) | 시스템 아키텍처 |
+| [../03_backend/](../03_backend/) | 백엔드 구현 |
+| [../05_llm/rag_pipeline.md](../05_llm/rag_pipeline.md) | RAG 파이프라인 |
+
+---
+
+*최종 수정일: 2026-02-02*

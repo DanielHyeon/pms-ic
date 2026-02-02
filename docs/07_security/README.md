@@ -1,130 +1,129 @@
-# Security Architecture
+# 보안 아키텍처
 
-> **Version**: 1.1 | **Status**: Final | **Last Updated**: 2026-02-02
+> **버전**: 2.0 | **상태**: Final | **최종 수정일**: 2026-02-02
 
----
-
-## Questions This Document Answers
-
-- How does authentication work?
-- How does authorization work?
-- How is data isolated between projects?
+<!-- affects: security, backend, api -->
 
 ---
 
-## Documents in This Section
+## 이 문서가 답하는 질문
 
-| Document | Purpose |
-|----------|---------|
-| [auth_model.md](./auth_model.md) | JWT authentication |
-| [access_control.md](./access_control.md) | RBAC implementation |
-| [data_isolation.md](./data_isolation.md) | Project-scoped data access |
-| [audit_logging.md](./audit_logging.md) | Security audit trails |
-| [query_validation.md](./query_validation.md) | SQL/Cypher query validation (LLM) |
+- 인증은 어떻게 동작하는가?
+- 인가는 어떻게 동작하는가?
+- 프로젝트 간 데이터 격리는 어떻게 이루어지는가?
 
 ---
 
-## 1. Security Overview
+## 이 섹션의 문서
+
+| 문서 | 목적 |
+|------|------|
+| [access_control.md](./access_control.md) | RBAC 구현 |
+| [query_validation.md](./query_validation.md) | SQL/Cypher 쿼리 검증 (LLM) |
+
+---
+
+## 1. 보안 개요
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                     Authentication Layer                             │
-│                                                                     │
-│  Login → JWT Token (24h) → Authorization Header                     │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                     Authorization Layer                              │
-│                                                                     │
-│  JWT → ProjectSecurityService → Project Membership Check            │
-│                                                                     │
-│  @PreAuthorize("@projectSecurity.hasRole(#projectId, 'PM')")       │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                     Data Access Layer                                │
-│                                                                     │
-│  Service → Repository → Data (filtered by project)                  │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                     LLM Query Validation Layer                       │
-│                                                                     │
-│  AI Query → QueryValidator (4-layer) → Safe Execution               │
-│  - Bypass detection (OR 1=1, comments, tautologies)                 │
-│  - Project scope enforcement                                        │
-│  - Forbidden tables/columns blocking                                │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
++-------------------------------------------------------------------+
+|                     인증 계층 (Authentication)                       |
+|                                                                    |
+|  로그인 -> JWT 토큰 (24시간) -> Authorization 헤더                   |
+|                                                                    |
++-------------------------------------------------------------------+
+                               |
+                               v
++-------------------------------------------------------------------+
+|                     인가 계층 (Authorization)                        |
+|                                                                    |
+|  JWT -> ProjectSecurityService -> 프로젝트 멤버십 확인               |
+|                                                                    |
+|  @PreAuthorize("@projectSecurity.hasRole(#projectId, 'PM')")      |
+|                                                                    |
++-------------------------------------------------------------------+
+                               |
+                               v
++-------------------------------------------------------------------+
+|                     데이터 접근 계층 (Data Access)                    |
+|                                                                    |
+|  Service -> Repository -> Data (프로젝트별 필터링)                   |
+|                                                                    |
++-------------------------------------------------------------------+
+                               |
+                               v
++-------------------------------------------------------------------+
+|                     LLM 쿼리 검증 계층 (Query Validation)            |
+|                                                                    |
+|  AI 쿼리 -> QueryValidator (4계층) -> 안전한 실행                    |
+|  - 우회 탐지 (OR 1=1, 주석, 항진식)                                  |
+|  - 프로젝트 범위 강제                                               |
+|  - 금지된 테이블/컬럼 차단                                           |
+|                                                                    |
++-------------------------------------------------------------------+
 ```
 
 ---
 
-## 2. Key Security Principles
+## 2. 핵심 보안 원칙
 
-### Authentication
+### 인증 (Authentication)
 
-| Aspect | Implementation |
-|--------|----------------|
-| Method | JWT (JSON Web Token) |
-| Validity | 24 hours |
-| Storage | Client-side (localStorage) |
-| Refresh | Re-login required |
+| 측면 | 구현 |
+|------|------|
+| 방식 | JWT (JSON Web Token) |
+| 유효기간 | 24시간 |
+| 저장소 | 클라이언트 측 (localStorage) |
+| 갱신 | 재로그인 필요 |
 
-### Authorization
+### 인가 (Authorization)
 
-| Aspect | Implementation |
-|--------|----------------|
-| Model | Project-Scoped RBAC |
-| System Roles | ADMIN, AUDITOR |
-| Project Roles | PM, DEVELOPER, QA, etc. |
-| Enforcement | Spring Security + SpEL |
+| 측면 | 구현 |
+|------|------|
+| 모델 | 프로젝트 범위 RBAC |
+| 시스템 역할 | ADMIN, AUDITOR |
+| 프로젝트 역할 | PM, DEVELOPER, QA 등 |
+| 적용 | Spring Security + SpEL |
 
-### Data Isolation
+### 데이터 격리
 
-| Aspect | Implementation |
-|--------|----------------|
-| Pattern | Tenant per project |
-| Validation | Every API call validates project membership |
-| Cross-project | Blocked except for system roles |
-
----
-
-## 3. Security Rules
-
-### Decisions
-
-- Project roles are stored per-project in `project_members` table
-- System ADMIN has access to all projects
-- System AUDITOR has read-only access to all projects
-- LLM Service has no database write access
-
-### Prohibited
-
-- Storing passwords in plain text
-- Bypassing authorization checks
-- Cross-project data access without system role
-- Direct database queries from controllers
-- Embedding secrets in code
-
-### Required
-
-- JWT for all authenticated endpoints
-- Project membership check for project-scoped operations
-- Audit logging for security-sensitive operations
-- HTTPS for all communications (production)
+| 측면 | 구현 |
+|------|------|
+| 패턴 | 프로젝트별 테넌트 |
+| 검증 | 모든 API 호출에서 프로젝트 멤버십 확인 |
+| 교차 프로젝트 | 시스템 역할 제외 차단 |
 
 ---
 
-## 4. Quick Reference
+## 3. 보안 규칙
 
-### JWT Structure
+### 결정 사항
+
+- 프로젝트 역할은 `project_members` 테이블에 프로젝트별로 저장
+- 시스템 ADMIN은 모든 프로젝트에 접근 가능
+- 시스템 AUDITOR는 모든 프로젝트에 읽기 전용 접근
+- LLM 서비스는 데이터베이스 쓰기 권한 없음
+
+### 금지 사항
+
+- 비밀번호 평문 저장
+- 인가 확인 우회
+- 시스템 역할 없이 교차 프로젝트 데이터 접근
+- 컨트롤러에서 직접 데이터베이스 쿼리
+- 코드에 비밀키 내장
+
+### 필수 사항
+
+- 모든 인증 엔드포인트에 JWT
+- 프로젝트 범위 작업에 프로젝트 멤버십 확인
+- 보안 민감 작업에 감사 로깅
+- 모든 통신에 HTTPS (운영 환경)
+
+---
+
+## 4. 빠른 참조
+
+### JWT 구조
 
 ```json
 {
@@ -138,28 +137,51 @@
 }
 ```
 
-### Authorization Annotation
+### 인가 어노테이션
 
 ```java
-// Project-scoped authorization
+// 프로젝트 범위 인가
 @PreAuthorize("@projectSecurity.hasRole(#projectId, 'PM')")
 
-// Multiple roles
+// 다중 역할
 @PreAuthorize("@projectSecurity.hasAnyRole(#projectId, 'PM', 'PMO_HEAD')")
 
-// Membership only
+// 멤버십만 확인
 @PreAuthorize("@projectSecurity.isProjectMember(#projectId)")
 ```
 
 ---
 
-## 5. Related Documents
+## 5. 역할 정의
 
-| Document | Description |
-|----------|-------------|
-| [../00_overview/user_roles.md](../00_overview/user_roles.md) | Role definitions |
-| [../../docs/Project-Scoped-Authorization-Design.md](../Project-Scoped-Authorization-Design.md) | Full design doc |
+### 시스템 역할
+
+| 역할 | 설명 | 권한 |
+|------|------|------|
+| **ADMIN** | 시스템 관리자 | 모든 접근 |
+| **AUDITOR** | 감사자 | 모든 프로젝트 읽기 전용 |
+
+### 프로젝트 역할
+
+| 역할 | 설명 | 주요 권한 |
+|------|------|----------|
+| **SPONSOR** | 프로젝트 스폰서 | 프로젝트 승인 |
+| **PMO_HEAD** | PMO 책임자 | 프로젝트 삭제, 멤버 관리 |
+| **PM** | 프로젝트 관리자 | 태스크/산출물 관리 |
+| **DEVELOPER** | 개발자 | 태스크 수행 |
+| **QA** | 품질 보증 | 이슈 등록 |
+| **BUSINESS_ANALYST** | 비즈니스 분석가 | 요구사항 분석 |
+| **MEMBER** | 일반 멤버 | 조회 전용 |
 
 ---
 
-*Last Updated: 2026-02-02*
+## 6. 관련 문서
+
+| 문서 | 설명 |
+|------|------|
+| [../00_overview/user_roles.md](../00_overview/user_roles.md) | 역할 정의 |
+| [../99_decisions/ADR-005-query-validation-security.md](../99_decisions/ADR-005-query-validation-security.md) | 쿼리 검증 보안 결정 |
+
+---
+
+*최종 수정일: 2026-02-02*

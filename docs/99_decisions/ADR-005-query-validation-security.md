@@ -1,191 +1,191 @@
-# ADR-005: Query Validation Security Layer
+# ADR-005: 쿼리 검증 보안 계층
 
-> **Status**: Accepted
-> **Date**: 2026-02-02
-> **Decision Makers**: AI/LLM Team, Security Review
+> **상태**: 승인됨
+> **날짜**: 2026-02-02
+> **결정자**: AI/LLM 팀, 보안 검토
 
 <!-- affects: llm, security, backend -->
 
 ---
 
-## Questions This Document Answers
+## 이 문서가 답하는 질문
 
-- Why did we implement a 2-stage security validation for AI-generated queries?
-- What bypass patterns are we protecting against?
-- How do we balance security with legitimate query flexibility?
-
----
-
-## 1. Background
-
-### Context
-
-The LLM service generates SQL and Cypher queries from natural language user input. These queries are executed against production databases containing sensitive project data. The existing 4-layer validation (syntax, schema, security, performance) needed enhancement to protect against sophisticated bypass attempts.
-
-### Problem Statement
-
-AI-generated queries could potentially:
-1. Bypass project scope restrictions using OR tautologies (`OR 1=1`)
-2. Access sensitive columns like `password_hash` via UNION queries
-3. Query forbidden tables containing authentication tokens
-4. Use comment obfuscation to evade pattern detection (`OR/**/1=1`)
-
-### Constraints
-
-- Must not block legitimate OR conditions (e.g., `WHERE status='DONE' OR status='BLOCKED'`)
-- Must support valid CTE queries for business reporting
-- Must maintain sub-100ms validation overhead
-- Must not require database connectivity for validation
+- AI 생성 쿼리에 대해 왜 2단계 보안 검증을 구현했는가?
+- 어떤 우회 패턴을 방어하고 있는가?
+- 보안과 합법적인 쿼리 유연성 사이에서 어떻게 균형을 맞추는가?
 
 ---
 
-## 2. Considered Options
+## 1. 배경
 
-### Option A: Regex-Heavy Single Pass
+### 컨텍스트
 
-**Description**: Add more regex patterns to existing `_validate_security()` method.
+LLM 서비스는 자연어 사용자 입력에서 SQL 및 Cypher 쿼리를 생성합니다. 이 쿼리들은 민감한 프로젝트 데이터를 포함한 운영 데이터베이스에 대해 실행됩니다. 기존 4계층 검증(구문, 스키마, 보안, 성능)은 정교한 우회 시도를 방어하기 위해 강화가 필요했습니다.
 
-**Pros**:
-- Minimal code change
-- Single validation pass
+### 문제 정의
 
-**Cons**:
-- Regex complexity becomes unmaintainable
-- Hard to test individual patterns
-- Comment-based bypasses still possible
+AI 생성 쿼리가 잠재적으로:
+1. OR 항진식을 사용하여 프로젝트 범위 제한 우회 (`OR 1=1`)
+2. UNION 쿼리를 통해 `password_hash` 같은 민감한 컬럼 접근
+3. 인증 토큰을 포함한 금지된 테이블 쿼리
+4. 주석 난독화로 패턴 탐지 회피 (`OR/**/1=1`)
 
-**Effort**: Low
+### 제약사항
 
----
-
-### Option B: 2-Stage Modular Validation
-
-**Description**: Separate fail-fast bypass detection (Stage 1) from scope integrity checking (Stage 2) with dedicated helper functions.
-
-**Pros**:
-- Clear separation of concerns
-- Each stage is independently testable
-- `normalize_sql()` handles obfuscation before pattern matching
-- Easy to add new bypass patterns
-
-**Cons**:
-- Two validation passes
-- Slightly more code
-
-**Effort**: Medium
+- 합법적인 OR 조건 차단 금지 (예: `WHERE status='DONE' OR status='BLOCKED'`)
+- 비즈니스 보고를 위한 유효한 CTE 쿼리 지원 필수
+- 100ms 미만의 검증 오버헤드 유지 필수
+- 검증에 데이터베이스 연결 불필요해야 함
 
 ---
 
-### Option C: External SQL Parser (sqlparse/sqlglot)
+## 2. 검토한 옵션
 
-**Description**: Use full SQL parsing library for AST-based validation.
+### 옵션 A: Regex 중심 단일 패스
 
-**Pros**:
-- Complete SQL understanding
-- No regex complexity
+**설명**: 기존 `_validate_security()` 메서드에 더 많은 regex 패턴 추가.
 
-**Cons**:
-- Heavy dependency
-- Performance overhead (50-200ms per query)
-- May not support all PostgreSQL syntax
-- Overkill for bypass detection
+**장점**:
+- 최소한의 코드 변경
+- 단일 검증 패스
 
-**Effort**: High
+**단점**:
+- Regex 복잡성이 유지보수 불가 수준이 됨
+- 개별 패턴 테스트 어려움
+- 주석 기반 우회 여전히 가능
 
----
-
-## 3. Decision
-
-### Chosen Option
-
-**We chose Option B: 2-Stage Modular Validation**
-
-### Rationale
-
-1. **Maintainability**: Modular functions (`detect_bypass_patterns()`, `check_project_scope_integrity()`, `validate_column_denylist()`) are easier to test and extend
-2. **Performance**: Normalization + pattern matching is faster than full SQL parsing
-3. **Defense-in-depth**: Two stages catch different attack vectors
-4. **Testability**: 13 dedicated security tests verify each bypass category
-
-### Why Not Other Options?
-
-| Option | Why Rejected |
-|--------|--------------|
-| Option A | Regex complexity would become unmaintainable; comment bypass still possible |
-| Option C | Performance overhead too high; external dependency adds attack surface |
+**노력**: 낮음
 
 ---
 
-## 4. Consequences
+### 옵션 B: 2단계 모듈식 검증
 
-### Positive Impacts
+**설명**: 빠른 실패 우회 탐지(1단계)와 범위 무결성 확인(2단계)을 전용 헬퍼 함수로 분리.
 
-- Comment-obfuscated bypasses blocked (`OR/**/1=1`)
-- UNION-based column extraction blocked
-- Comparison tautologies detected (`OR 2>1`)
-- EXISTS/COALESCE bypass attempts detected
-- Project scope enforced with alias validation
+**장점**:
+- 명확한 관심사 분리
+- 각 단계를 독립적으로 테스트 가능
+- `normalize_sql()`이 패턴 매칭 전에 난독화 처리
+- 새 우회 패턴 추가 용이
 
-### Negative Impacts
+**단점**:
+- 두 번의 검증 패스
+- 약간 더 많은 코드
 
-- CTEs with inner WHERE clauses may trigger false positives (documented limitation)
-- Quoted identifiers not fully supported
-
-### Risks
-
-| Risk | Probability | Mitigation |
-|------|-------------|------------|
-| False positives on valid queries | Low | Golden tests for legitimate patterns |
-| New bypass pattern discovered | Medium | Modular design allows quick pattern addition |
-| Performance regression | Low | Normalization is O(n) string operation |
+**노력**: 중간
 
 ---
 
-## 5. Implementation Notes
+### 옵션 C: 외부 SQL 파서 (sqlparse/sqlglot)
 
-### Required Changes
+**설명**: AST 기반 검증을 위한 전체 SQL 파싱 라이브러리 사용.
 
-- [x] `normalize_sql()` - Replace comments with spaces (not empty string)
-- [x] `detect_bypass_patterns()` - Stage 1 fail-fast detection
-- [x] `check_project_scope_integrity()` - Stage 2 alias-aware validation
-- [x] `validate_column_denylist()` - Check all SELECT clauses including UNION
-- [x] `OR_BYPASS_PATTERNS` - Extended with comparison/EXISTS/function patterns
-- [x] 13 security regression tests added
+**장점**:
+- 완전한 SQL 이해
+- Regex 복잡성 없음
 
-### Files Modified
+**단점**:
+- 무거운 의존성
+- 성능 오버헤드 (쿼리당 50-200ms)
+- 모든 PostgreSQL 구문 미지원 가능
+- 우회 탐지에 과잉
 
-| File | Changes |
-|------|---------|
-| `llm-service/text2query/query_validator.py` | 2-stage validation, extended patterns |
-| `llm-service/tests/test_schema_graph_regression.py` | 13 security tests |
+**노력**: 높음
 
 ---
 
-## 6. Re-evaluation Conditions
+## 3. 결정
 
-This decision should be revisited when:
+### 선택된 옵션
 
-- New SQL injection technique bypasses current patterns
-- False positive rate exceeds 1% of legitimate queries
-- Performance overhead exceeds 100ms per validation
-- We adopt a query building library that provides built-in safety
+**옵션 B: 2단계 모듈식 검증**을 선택했습니다.
 
----
+### 근거
 
-## Related Documents
+1. **유지보수성**: 모듈식 함수(`detect_bypass_patterns()`, `check_project_scope_integrity()`, `validate_column_denylist()`)가 테스트와 확장이 더 용이
+2. **성능**: 정규화 + 패턴 매칭이 전체 SQL 파싱보다 빠름
+3. **심층 방어**: 두 단계가 다른 공격 벡터 포착
+4. **테스트 가능성**: 13개의 전용 보안 테스트가 각 우회 카테고리 검증
 
-- [Query Validation Security](../07_security/query_validation.md)
-- [LLM Service Architecture](../05_llm/README.md)
-- [Access Control](../07_security/access_control.md)
+### 왜 다른 옵션이 아닌가?
 
----
-
-## Decision History
-
-| Date | Status | Notes |
-|------|--------|-------|
-| 2026-02-02 | Accepted | Security review approved implementation |
+| 옵션 | 거부 이유 |
+|------|----------|
+| 옵션 A | Regex 복잡성이 유지보수 불가; 주석 우회 여전히 가능 |
+| 옵션 C | 성능 오버헤드 너무 높음; 외부 의존성이 공격 표면 추가 |
 
 ---
 
-*ADRs are memory devices for "Why did we do this?"*
+## 4. 결과
+
+### 긍정적 영향
+
+- 주석 난독화 우회 차단 (`OR/**/1=1`)
+- UNION 기반 컬럼 추출 차단
+- 비교 항진식 탐지 (`OR 2>1`)
+- EXISTS/COALESCE 우회 시도 탐지
+- 별칭 검증으로 프로젝트 범위 강제
+
+### 부정적 영향
+
+- 내부 WHERE 절이 있는 CTE가 거짓 양성 유발 가능 (문서화된 제한사항)
+- 따옴표로 묶인 식별자 완전 미지원
+
+### 위험
+
+| 위험 | 확률 | 완화 |
+|------|------|------|
+| 유효한 쿼리에 대한 거짓 양성 | 낮음 | 합법적 패턴에 대한 골든 테스트 |
+| 새 우회 패턴 발견 | 중간 | 모듈식 설계로 빠른 패턴 추가 가능 |
+| 성능 저하 | 낮음 | 정규화는 O(n) 문자열 연산 |
+
+---
+
+## 5. 구현 노트
+
+### 필요한 변경
+
+- [x] `normalize_sql()` - 주석을 공백으로 대체 (빈 문자열 아님)
+- [x] `detect_bypass_patterns()` - 1단계 빠른 실패 탐지
+- [x] `check_project_scope_integrity()` - 2단계 별칭 인식 검증
+- [x] `validate_column_denylist()` - UNION 포함 모든 SELECT 절 확인
+- [x] `OR_BYPASS_PATTERNS` - 비교/EXISTS/함수 패턴으로 확장
+- [x] 13개 보안 회귀 테스트 추가
+
+### 수정된 파일
+
+| 파일 | 변경 사항 |
+|------|----------|
+| `llm-service/text2query/query_validator.py` | 2단계 검증, 확장된 패턴 |
+| `llm-service/tests/test_schema_graph_regression.py` | 13개 보안 테스트 |
+
+---
+
+## 6. 재검토 조건
+
+다음 경우 이 결정을 재검토해야 합니다:
+
+- 새 SQL 인젝션 기법이 현재 패턴 우회
+- 거짓 양성률이 합법적 쿼리의 1% 초과
+- 검증당 성능 오버헤드가 100ms 초과
+- 내장 안전 기능을 제공하는 쿼리 빌딩 라이브러리 채택
+
+---
+
+## 관련 문서
+
+- [쿼리 검증 보안](../07_security/query_validation.md)
+- [LLM 서비스 아키텍처](../05_llm/README.md)
+- [접근 제어](../07_security/access_control.md)
+
+---
+
+## 결정 이력
+
+| 날짜 | 상태 | 비고 |
+|------|------|------|
+| 2026-02-02 | 승인됨 | 보안 검토에서 구현 승인 |
+
+---
+
+*ADR은 "왜 이렇게 했는가?"에 대한 기억 장치입니다.*

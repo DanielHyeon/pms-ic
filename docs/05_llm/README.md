@@ -1,53 +1,53 @@
-# LLM Service Architecture
+# LLM 서비스 아키텍처
 
-> **Version**: 2.0 | **Status**: Final | **Last Updated**: 2026-01-31
+> **버전**: 2.0 | **상태**: Final | **최종 수정일**: 2026-02-02
 
----
-
-## Questions This Document Answers
-
-- What does the AI do and NOT do?
-- How trustworthy are AI responses?
-- How does the RAG pipeline work?
-- When does which model get used?
+<!-- affects: llm, backend -->
 
 ---
 
-## Why This Section is Separate
+## 이 문서가 답하는 질문
 
-LLM systems are fundamentally different from traditional software:
-
-| Aspect | Traditional Software | LLM Systems |
-|--------|---------------------|-------------|
-| Determinism | Same input → Same output | Same input → Variable output |
-| Failure mode | Crashes, errors | Hallucinations, irrelevance |
-| Testing | Unit tests | Evaluation metrics |
-| Liability | Clear ownership | Shared human-AI responsibility |
+- AI는 무엇을 하고 하지 않는가?
+- AI 응답은 얼마나 신뢰할 수 있는가?
+- RAG 파이프라인은 어떻게 동작하는가?
+- 어떤 모델이 언제 사용되는가?
 
 ---
 
-## Documents in This Section
+## 왜 이 섹션이 분리되어 있는가
 
-| Document | Purpose |
-|----------|---------|
-| [llm_scope.md](./llm_scope.md) | What AI does and doesn't do |
-| [prompt_policy.md](./prompt_policy.md) | Prompt design guidelines |
-| [rag_pipeline.md](./rag_pipeline.md) | Retrieval-Augmented Generation |
-| [two_track_workflow.md](./two_track_workflow.md) | Model selection logic |
-| [evaluation.md](./evaluation.md) | Response quality metrics |
+LLM 시스템은 전통적인 소프트웨어와 근본적으로 다릅니다:
+
+| 측면 | 전통적 소프트웨어 | LLM 시스템 |
+|------|------------------|-----------|
+| 결정론성 | 같은 입력 → 같은 출력 | 같은 입력 → 다양한 출력 |
+| 장애 모드 | 크래시, 오류 | 환각, 무관련 응답 |
+| 테스트 | 유닛 테스트 | 평가 메트릭 |
+| 책임 | 명확한 소유권 | 인간-AI 공유 책임 |
 
 ---
 
-## Quick Reference
+## 이 섹션의 문서
 
-### Two-Track Workflow
+| 문서 | 목적 |
+|------|------|
+| [llm_scope.md](./llm_scope.md) | AI가 하는 것과 하지 않는 것 |
+| [rag_pipeline.md](./rag_pipeline.md) | 검색 증강 생성 |
+| [text2sql_improvement/](./text2sql_improvement/) | Text2SQL 개선 로드맵 |
+
+---
+
+## 빠른 참조
+
+### Two-Track 워크플로우
 
 ```
-User Query
+사용자 쿼리
     │
     ▼
 ┌─────────────────┐
-│ Intent Classify │
+│ 의도 분류        │
 └────────┬────────┘
          │
     ┌────┴────┐
@@ -56,62 +56,122 @@ User Query
 ┌───────┐ ┌───────┐
 │Track A│ │Track B│
 │ (L1)  │ │ (L2)  │
-│ Fast  │ │Quality│
+│ 빠름   │ │ 품질  │
 │ 2-4B  │ │ 8-12B │
 └───┬───┘ └───┬───┘
     │         │
     └────┬────┘
          │
          ▼
-    Final Response
+    최종 응답
 ```
 
-### Track Selection
+### 트랙 선택
 
-| Query Type | Track | Max Tokens | Model |
-|------------|-------|------------|-------|
-| Definition questions | A (L1) | 300 | LFM2-2.6B |
-| Simple FAQ | A (L1) | 1800 | LFM2-2.6B |
-| Report generation | B (L2) | 3000 | Gemma-12B |
-| Complex analysis | B (L2) | 3000 | Gemma-12B |
+| 쿼리 유형 | 트랙 | 최대 토큰 | 모델 |
+|-----------|------|----------|------|
+| 정의 질문 | A (L1) | 300 | LFM2-2.6B |
+| 간단한 FAQ | A (L1) | 1800 | LFM2-2.6B |
+| 보고서 생성 | B (L2) | 3000 | Gemma-12B |
+| 복잡한 분석 | B (L2) | 3000 | Gemma-12B |
 
-### RAG Pipeline
+### RAG 파이프라인
 
 ```
-Query → Embedding → Hybrid Search → RRF Merge → Context → LLM → Response
-         (E5)      (Vector+KW)    (Rank Fusion)
+쿼리 → 임베딩 → 하이브리드 검색 → RRF 병합 → 컨텍스트 → LLM → 응답
+         (E5)    (벡터+키워드)    (랭크 융합)
 ```
 
 ---
 
-## Key Decisions
+## 핵심 결정 사항
 
-### AI Authority Levels
+### AI 권한 수준
 
-| Level | Description | Human Approval |
-|-------|-------------|----------------|
-| **SUGGEST** | AI recommends only | Not needed |
-| **DECIDE** | AI makes decision | Review recommended |
-| **EXECUTE** | AI performs action | Logged, monitored |
-| **COMMIT** | AI commits change | Required |
+| 수준 | 설명 | 인간 승인 |
+|------|------|----------|
+| **SUGGEST** | AI가 추천만 함 | 필요 없음 |
+| **DECIDE** | AI가 결정 | 검토 권장 |
+| **EXECUTE** | AI가 작업 수행 | 로깅, 모니터링 |
+| **COMMIT** | AI가 변경 커밋 | 필수 |
 
-### Trust Boundaries
+### 신뢰 경계
 
-| Trust Level | Source | Example |
-|-------------|--------|---------|
-| HIGH | Database values | Task count, progress % |
-| MEDIUM | RAG retrieval | Referenced documents |
-| LOW | LLM generation | Summaries, suggestions |
-
----
-
-## Related Documents
-
-| Document | Description |
-|----------|-------------|
-| [../01_architecture/](../01_architecture/) | System architecture |
-| [../06_data/neo4j_model.md](../06_data/neo4j_model.md) | Graph schema for RAG |
+| 신뢰 수준 | 출처 | 예시 |
+|-----------|------|------|
+| 높음 | 데이터베이스 값 | 태스크 수, 진척률 % |
+| 중간 | RAG 검색 | 참조된 문서 |
+| 낮음 | LLM 생성 | 요약, 제안 |
 
 ---
 
-*Last Updated: 2026-01-31*
+## 기술 스택
+
+| 컴포넌트 | 기술 | 목적 |
+|----------|------|------|
+| Framework | Flask + LangGraph | 워크플로우 오케스트레이션 |
+| LLM 모델 | Gemma-3-12B-Q5_K_M | 메인 추론 모델 |
+| 임베딩 | multilingual-e5-large | 벡터 임베딩 |
+| Graph DB | Neo4j 2025.01 | RAG 저장소 |
+| 벡터 인덱스 | Neo4j Vector Index | 유사도 검색 |
+
+---
+
+## Text2Query 엔진
+
+### 아키텍처
+
+```
+사용자 쿼리
+    ↓
+┌─────────────────────────────────────┐
+│ 의도 분류 파이프라인                  │
+│ (TEXT_TO_SQL/CYPHER/GENERAL/        │
+│  MISLEADING/CLARIFICATION)          │
+└─────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────┐
+│ 시맨틱 레이어 해석                   │
+│ (MDL → 비즈니스 용어 → 스키마)       │
+└─────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────┐
+│ RAG 강화 생성                        │
+│ (벡터 few-shot + 스키마 + 규칙)      │
+└─────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────┐
+│ 4계층 검증                           │
+│ (구문 → 스키마 → 보안 → 성능)        │
+└─────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────┐
+│ 안전한 실행                          │
+│ (실행 → 성공 쌍 저장)                │
+└─────────────────────────────────────┘
+    ↓
+구조화된 응답
+```
+
+### 쿼리 검증 보안 (ADR-005)
+
+| 검증 계층 | 목적 |
+|-----------|------|
+| 구문 검증 | SQL/Cypher 문법 확인 |
+| 스키마 검증 | 테이블/컬럼 존재 확인 |
+| 보안 검증 | 인젝션 방지, 프로젝트 범위 강제 |
+| 성능 검증 | 위험한 쿼리 패턴 탐지 |
+
+---
+
+## 관련 문서
+
+| 문서 | 설명 |
+|------|------|
+| [../01_architecture/](../01_architecture/) | 시스템 아키텍처 |
+| [../06_data/neo4j_model.md](../06_data/neo4j_model.md) | RAG용 그래프 스키마 |
+| [../99_decisions/ADR-005-query-validation-security.md](../99_decisions/ADR-005-query-validation-security.md) | 쿼리 검증 보안 |
+
+---
+
+*최종 수정일: 2026-02-02*

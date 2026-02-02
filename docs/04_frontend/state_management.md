@@ -1,33 +1,33 @@
-# State Management
+# 상태 관리
 
-> **Version**: 1.0 | **Status**: Final | **Last Updated**: 2026-01-31
+> **버전**: 2.0 | **상태**: Final | **최종 수정일**: 2026-02-02
 
 <!-- affects: frontend -->
 
 ---
 
-## Questions This Document Answers
+## 이 문서가 답하는 질문
 
-- How is client state managed?
-- How is server state managed?
-- When to use Zustand vs React Query?
-
----
-
-## 1. State Management Strategy
-
-| State Type | Tool | Example |
-|------------|------|---------|
-| Client state | Zustand | Auth, UI preferences |
-| Server state | TanStack Query | API data, cache |
-| Local component state | useState | Form inputs, toggles |
-| Cross-component | Context | Current project |
+- 클라이언트 상태는 어떻게 관리되는가?
+- 서버 상태는 어떻게 관리되는가?
+- Zustand와 React Query는 언제 사용하는가?
 
 ---
 
-## 2. Zustand Stores
+## 1. 상태 관리 전략
 
-### Auth Store
+| 상태 유형 | 도구 | 예시 |
+|-----------|------|------|
+| 클라이언트 상태 | Zustand | 인증, UI 설정 |
+| 서버 상태 | TanStack Query | API 데이터, 캐시 |
+| 로컬 컴포넌트 상태 | useState | 폼 입력, 토글 |
+| 컴포넌트 간 공유 | Context | 현재 프로젝트 |
+
+---
+
+## 2. Zustand 스토어
+
+### Auth 스토어
 
 ```typescript
 // stores/authStore.ts
@@ -60,7 +60,7 @@ export const useAuthStore = create<AuthState>()(
 );
 ```
 
-### UI Store
+### UI 스토어
 
 ```typescript
 // stores/uiStore.ts
@@ -83,7 +83,7 @@ export const useUIStore = create<UIState>((set) => ({
 
 ## 3. TanStack Query (React Query)
 
-### Query Keys Pattern
+### Query Keys 패턴
 
 ```typescript
 // hooks/api/useProjects.ts
@@ -96,10 +96,10 @@ export const projectKeys = {
 };
 ```
 
-### Queries (Read Operations)
+### Queries (읽기 작업)
 
 ```typescript
-// Get all projects
+// 모든 프로젝트 조회
 export function useProjects() {
   return useQuery({
     queryKey: projectKeys.lists(),
@@ -107,17 +107,17 @@ export function useProjects() {
   });
 }
 
-// Get single project
+// 단일 프로젝트 조회
 export function useProject(id: string) {
   return useQuery({
     queryKey: projectKeys.detail(id),
     queryFn: () => apiService.getProject(id),
-    enabled: !!id,  // Only fetch if id exists
+    enabled: !!id,  // id가 있을 때만 페치
   });
 }
 ```
 
-### Mutations (Write Operations)
+### Mutations (쓰기 작업)
 
 ```typescript
 export function useCreateProject() {
@@ -126,7 +126,7 @@ export function useCreateProject() {
   return useMutation({
     mutationFn: (data) => apiService.createProject(data),
     onSuccess: () => {
-      // Invalidate cache to refetch list
+      // 캐시 무효화하여 목록 다시 페치
       queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
     },
   });
@@ -147,9 +147,9 @@ export function useUpdateProject() {
 
 ---
 
-## 4. Context Providers
+## 4. 컨텍스트 프로바이더
 
-### Project Context
+### Project 컨텍스트
 
 ```typescript
 // contexts/ProjectContext.tsx
@@ -181,7 +181,7 @@ export function ProjectProvider({ children }) {
   );
 }
 
-// Usage
+// 사용법
 export function useProject() {
   const context = useContext(ProjectContext);
   if (!context) throw new Error('useProject must be used within ProjectProvider');
@@ -191,29 +191,29 @@ export function useProject() {
 
 ---
 
-## 5. When to Use What
+## 5. 언제 무엇을 사용하는가
 
-| Scenario | Solution |
-|----------|----------|
-| User login state | Zustand (authStore) |
-| API data from server | TanStack Query |
-| Current selected project | Context + localStorage |
-| Form input values | useState |
-| Modal open/close | useState |
-| Global UI settings | Zustand (uiStore) |
-| Cached list data | TanStack Query |
+| 시나리오 | 솔루션 |
+|----------|--------|
+| 사용자 로그인 상태 | Zustand (authStore) |
+| 서버에서 가져온 API 데이터 | TanStack Query |
+| 현재 선택된 프로젝트 | Context + localStorage |
+| 폼 입력 값 | useState |
+| 모달 열기/닫기 | useState |
+| 전역 UI 설정 | Zustand (uiStore) |
+| 캐시된 목록 데이터 | TanStack Query |
 
 ---
 
-## 6. Query Client Configuration
+## 6. Query Client 설정
 
 ```typescript
 // lib/queryClient.ts
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000,  // 5 minutes
-      gcTime: 10 * 60 * 1000,    // 10 minutes (garbage collection)
+      staleTime: 5 * 60 * 1000,  // 5분
+      gcTime: 10 * 60 * 1000,    // 10분 (가비지 컬렉션)
       retry: 1,
       refetchOnWindowFocus: false,
     },
@@ -223,7 +223,7 @@ export const queryClient = new QueryClient({
 
 ---
 
-## 7. Data Flow Diagram
+## 7. 데이터 흐름 다이어그램
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -247,24 +247,24 @@ export const queryClient = new QueryClient({
 
 ---
 
-## 8. Best Practices
+## 8. 모범 사례
 
-### DO
+### 해야 할 것 (DO)
 
-- Use query keys consistently
-- Invalidate related queries on mutations
-- Use `enabled` option for conditional fetching
-- Persist critical state with Zustand persist middleware
-- Use TypeScript for type safety
+- Query keys를 일관되게 사용
+- Mutation 후 관련 쿼리 무효화
+- 조건부 페칭에 `enabled` 옵션 사용
+- Zustand persist 미들웨어로 중요 상태 영속화
+- 타입 안전성을 위해 TypeScript 사용
 
-### DON'T
+### 하지 말아야 할 것 (DON'T)
 
-- Mix server state in Zustand stores
-- Duplicate API data in local state
-- Forget to handle loading/error states
-- Use React Query for non-server state
-- Store derived state (compute on render)
+- Zustand 스토어에 서버 상태 혼합
+- 로컬 상태에 API 데이터 중복 저장
+- 로딩/에러 상태 처리 누락
+- 서버 상태가 아닌 것에 React Query 사용
+- 파생 상태 저장 (렌더링 시 계산)
 
 ---
 
-*Last Updated: 2026-01-31*
+*최종 수정일: 2026-02-02*
