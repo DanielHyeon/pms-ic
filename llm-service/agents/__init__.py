@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 # Import from Phase 1
 try:
-    from authority_classifier import AuthorityLevel
+    from classifiers.authority_classifier import AuthorityLevel
 except ImportError:
     class AuthorityLevel(Enum):
         """Fallback AuthorityLevel if not available."""

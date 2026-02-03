@@ -27,7 +27,7 @@ def test_answer_type_classifier():
     print("TEST 1: Answer Type Classifier")
     print("=" * 60)
 
-    from answer_type_classifier import classify_answer_type, AnswerType
+    from classifiers.answer_type_classifier import classify_answer_type, AnswerType
 
     test_cases = [
         # Status queries (should route to Status Query Engine)
@@ -74,7 +74,7 @@ def test_status_query_plan():
     print("TEST 2: Status Query Plan")
     print("=" * 60)
 
-    from status_query_plan import (
+    from query.status_query_plan import (
         create_default_plan, validate_plan, StatusQueryPlan,
         ALLOWED_METRICS
     )
@@ -114,8 +114,8 @@ def test_status_query_executor():
     print("TEST 3: Status Query Executor")
     print("=" * 60)
 
-    from status_query_plan import create_default_plan, validate_plan
-    from status_query_executor import get_status_query_executor
+    from query.status_query_plan import create_default_plan, validate_plan
+    from query.status_query_executor import get_status_query_executor
 
     # Create and validate plan
     plan = create_default_plan("proj-001", access_level=6)
@@ -158,9 +158,9 @@ def test_status_response_builder():
     print("TEST 4: Status Response Builder")
     print("=" * 60)
 
-    from status_query_plan import create_default_plan, validate_plan
-    from status_query_executor import get_status_query_executor
-    from status_response_contract import build_status_response
+    from query.status_query_plan import create_default_plan, validate_plan
+    from query.status_query_executor import get_status_query_executor
+    from contracts.status_response_contract import build_status_response
 
     # Execute a query first
     plan = create_default_plan("proj-001", access_level=6)
@@ -206,8 +206,8 @@ def test_source_policy_gate():
     print("TEST 5: Source Policy Gate")
     print("=" * 60)
 
-    from answer_type_classifier import AnswerType
-    from source_policy_gate import get_source_policy_gate
+    from classifiers.answer_type_classifier import AnswerType
+    from guards.source_policy_gate import get_source_policy_gate
 
     gate = get_source_policy_gate()
 
@@ -256,11 +256,11 @@ def test_end_to_end():
     print("TEST 6: End-to-End Flow Simulation")
     print("=" * 60)
 
-    from answer_type_classifier import classify_answer_type, get_answer_type_classifier
-    from status_query_plan import create_default_plan, validate_plan
-    from status_query_executor import get_status_query_executor
-    from status_response_contract import build_status_response
-    from source_policy_gate import get_source_policy_gate
+    from classifiers.answer_type_classifier import classify_answer_type, get_answer_type_classifier
+    from query.status_query_plan import create_default_plan, validate_plan
+    from query.status_query_executor import get_status_query_executor
+    from contracts.status_response_contract import build_status_response
+    from guards.source_policy_gate import get_source_policy_gate
 
     query = "현재 프로젝트 진행 현황을 알려줘"
     project_id = "proj-001"

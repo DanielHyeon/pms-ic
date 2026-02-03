@@ -24,7 +24,7 @@ from . import (
 )
 
 try:
-    from authority_classifier import AuthorityLevel
+    from classifiers.authority_classifier import AuthorityLevel
 except ImportError:
     from enum import Enum
     class AuthorityLevel(Enum):

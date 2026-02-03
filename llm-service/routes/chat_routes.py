@@ -71,7 +71,7 @@ def get_two_track_workflow():
     if state.two_track_workflow is None:
         try:
             from llama_cpp import Llama
-            from chat_workflow_v2 import TwoTrackWorkflow
+            from workflows.chat_workflow_v2 import TwoTrackWorkflow
 
             model_service = get_model_service()
 
@@ -137,7 +137,7 @@ def chat_v2():
         user_access_level = data.get("user_access_level")
 
         if user_access_level is None:
-            from rag_service_neo4j import get_access_level
+            from services.rag_service_neo4j import get_access_level
             user_access_level = get_access_level(user_role)
 
         if not message:
@@ -317,7 +317,7 @@ def chat_v2_stream():
         user_access_level = data.get("user_access_level")
 
         if user_access_level is None:
-            from rag_service_neo4j import get_access_level
+            from services.rag_service_neo4j import get_access_level
             user_access_level = get_access_level(user_role)
 
         if not message:

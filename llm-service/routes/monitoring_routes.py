@@ -8,7 +8,7 @@ import logging
 from flask import request, jsonify
 
 from . import monitoring_bp
-from response_monitoring import get_monitor, get_monitoring_logger
+from observability.response_monitoring import get_monitor, get_monitoring_logger
 
 logger = logging.getLogger(__name__)
 

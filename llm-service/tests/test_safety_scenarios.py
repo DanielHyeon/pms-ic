@@ -14,20 +14,20 @@ from datetime import datetime
 from unittest.mock import patch, MagicMock
 from psycopg2 import OperationalError, ProgrammingError
 
-from status_query_plan import (
+from query.status_query_plan import (
     StatusQueryPlan,
     QueryScope,
     TimeRange,
     QueryFilters,
     OutputConfig,
 )
-from status_query_executor import (
+from query.status_query_executor import (
     StatusQueryExecutor,
     StatusQueryResult,
     MetricResult,
     get_cursor,
 )
-from status_response_contract import (
+from contracts.status_response_contract import (
     build_status_response,
     StatusResponseContract,
     create_no_data_response,

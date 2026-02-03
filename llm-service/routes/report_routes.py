@@ -9,8 +9,8 @@ from flask import request, jsonify
 
 from . import report_bp
 from services.model_service import get_model_service
-from report_service import get_report_service
-from text_to_sql_service import get_text_to_sql_service
+from services.report_service import get_report_service
+from services.text_to_sql_service import get_text_to_sql_service
 
 logger = logging.getLogger(__name__)
 

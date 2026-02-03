@@ -21,7 +21,7 @@ def get_scrum_service():
     global _scrum_workflow_service
     if _scrum_workflow_service is None:
         try:
-            from scrum_workflow_service import ScrumWorkflowService
+            from services.scrum_workflow_service import ScrumWorkflowService
             _scrum_workflow_service = ScrumWorkflowService()
             logger.info("Scrum Workflow Service initialized")
         except Exception as e:

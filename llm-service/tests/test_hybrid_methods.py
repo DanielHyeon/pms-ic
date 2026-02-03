@@ -107,7 +107,7 @@ def main():
     # Initialize RAG service
     print("\nInitializing RAG service...")
     try:
-        from rag_service_neo4j import RAGServiceNeo4j
+        from services.rag_service_neo4j import RAGServiceNeo4j
         rag = RAGServiceNeo4j()
         print("✅ RAG service initialized")
     except Exception as e:

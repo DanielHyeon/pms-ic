@@ -11,7 +11,7 @@ Run: pytest tests/test_intent_classifier_regression.py -v
 """
 
 import pytest
-from answer_type_classifier import get_answer_type_classifier, AnswerType
+from classifiers.answer_type_classifier import get_answer_type_classifier, AnswerType
 
 
 class TestBacklogClassification:

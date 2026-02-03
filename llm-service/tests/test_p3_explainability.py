@@ -12,7 +12,7 @@ Run: pytest tests/test_p3_explainability.py -v
 """
 
 import pytest
-from explainability import (
+from observability.explainability import (
     Explainability,
     EvidenceKind,
     EvidenceItem,
@@ -20,8 +20,8 @@ from explainability import (
     EVIDENCE_CATEGORIES,
     create_explainability,
 )
-from explainability_policy import ExplainabilityPolicy
-from recovery_plan import (
+from observability.explainability_policy import ExplainabilityPolicy
+from recovery.recovery_plan import (
     RecoveryPlan,
     RecoveryAction,
     ActionType,
@@ -35,7 +35,7 @@ from recovery_plan import (
     can_ask_clarification,
     record_clarification_asked,
 )
-from attempt_tracker import (
+from recovery.attempt_tracker import (
     AttemptTracker,
     is_recovery_successful,
     RECOVERY_SUCCESS_CRITERIA,

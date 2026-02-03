@@ -10,7 +10,7 @@ IMPORTANT:
 
 import logging
 from typing import List
-from response_contract import ResponseContract
+from contracts.response_contract import ResponseContract
 
 logger = logging.getLogger(__name__)
 

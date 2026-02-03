@@ -42,7 +42,7 @@ class AccessControlTester:
 
     def __init__(self):
         # Import here to allow script to be run standalone
-        from rag_service_neo4j import Neo4jRAGService
+        from services.rag_service_neo4j import Neo4jRAGService
 
         self.rag = Neo4jRAGService()
         self.test_project_id = f"test-project-{uuid.uuid4().hex[:8]}"

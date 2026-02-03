@@ -284,7 +284,7 @@ def finalize_result(state: KnowledgeQAState) -> KnowledgeQAState:
 def _get_user_permissions(user_id: str, project_id: str) -> Dict:
     """Get user permissions for project."""
     try:
-        from policy_engine import PolicyEngine
+        from guards.policy_engine import PolicyEngine
         engine = PolicyEngine()
         return engine.get_user_permissions(user_id, project_id)
     except ImportError:
@@ -294,7 +294,7 @@ def _get_user_permissions(user_id: str, project_id: str) -> Dict:
 def _rag_search(project_id: str, query: str, top_k: int, filter_types: List[str]) -> List[Dict]:
     """RAG search for documents."""
     try:
-        from rag_service_neo4j import RAGServiceNeo4j
+        from services.rag_service_neo4j import RAGServiceNeo4j
         rag = RAGServiceNeo4j()
         return rag.search(project_id, query, top_k=top_k)
     except ImportError:
@@ -304,7 +304,7 @@ def _rag_search(project_id: str, query: str, top_k: int, filter_types: List[str]
 def _fetch_related_decisions(project_id: str, doc_ids: List[str]) -> List[Dict]:
     """Fetch related decisions from graph."""
     try:
-        from rag_service_neo4j import graph_query
+        from services.rag_service_neo4j import graph_query
         # Query: MATCH (d:Document)-[:RELATED_TO]->(dec:Decision) WHERE d.id IN $ids RETURN dec
         return []
     except ImportError:
@@ -319,7 +319,7 @@ def _generate_answer_with_citations(
 ) -> Dict:
     """Generate answer using LLM with citation requirements."""
     try:
-        from model_gateway import ModelGateway
+        from integrations.model_gateway import ModelGateway
         gateway = ModelGateway()
 
         # Build context from docs

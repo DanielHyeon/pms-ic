@@ -205,7 +205,7 @@ class MetricsAggregator:
     @classmethod
     def process_event(cls, event: "P4Event") -> None:
         """Process a P4 event and update metrics."""
-        from p4_events import EventType
+        from observability.p4_events import EventType
 
         if event.event_type == EventType.RESPONSE_GENERATED.value:
             cls._process_response(event)
@@ -362,7 +362,7 @@ def calculate_health_summary() -> HealthSummary:
 
     In production, this would query from Prometheus or PostgreSQL.
     """
-    from p4_events import FinalStatus
+    from observability.p4_events import FinalStatus
 
     summary = HealthSummary()
 
@@ -424,7 +424,7 @@ class IntentStats:
 
 def get_intent_stats() -> List[IntentStats]:
     """Get statistics per intent."""
-    from p4_events import FinalStatus
+    from observability.p4_events import FinalStatus
 
     intent_data: Dict[str, IntentStats] = {}
 

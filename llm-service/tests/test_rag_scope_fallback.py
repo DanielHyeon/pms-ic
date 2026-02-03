@@ -8,7 +8,7 @@ Tests:
 """
 
 import pytest
-from chat_workflow_v2 import (
+from workflows.chat_workflow_v2 import (
     decide_search_project_id_for_howto,
     should_fallback_to_global,
     merge_results_project_first,

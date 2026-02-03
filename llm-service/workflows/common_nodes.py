@@ -159,7 +159,7 @@ def build_context(state: CommonWorkflowState) -> CommonWorkflowState:
 def _fetch_phase_state(project_id: str) -> Optional[Dict]:
     """Fetch phase state from backend."""
     try:
-        from context_snapshot import ContextSnapshotService
+        from context.context_snapshot import ContextSnapshotService
         service = ContextSnapshotService()
         return service.get_phase_state(project_id)
     except ImportError:
@@ -173,7 +173,7 @@ def _fetch_phase_state(project_id: str) -> Optional[Dict]:
 def _fetch_wbs_state(project_id: str) -> Optional[Dict]:
     """Fetch WBS state from backend."""
     try:
-        from context_snapshot import ContextSnapshotService
+        from context.context_snapshot import ContextSnapshotService
         service = ContextSnapshotService()
         return service.get_wbs_state(project_id)
     except ImportError:
@@ -186,7 +186,7 @@ def _fetch_wbs_state(project_id: str) -> Optional[Dict]:
 def _fetch_backlog_state(project_id: str) -> Optional[Dict]:
     """Fetch backlog state from backend."""
     try:
-        from context_snapshot import ContextSnapshotService
+        from context.context_snapshot import ContextSnapshotService
         service = ContextSnapshotService()
         return service.get_backlog_state(project_id)
     except ImportError:
@@ -199,7 +199,7 @@ def _fetch_backlog_state(project_id: str) -> Optional[Dict]:
 def _fetch_sprint_state(project_id: str) -> Optional[Dict]:
     """Fetch sprint state from backend."""
     try:
-        from context_snapshot import ContextSnapshotService
+        from context.context_snapshot import ContextSnapshotService
         service = ContextSnapshotService()
         return service.get_sprint_state(project_id)
     except ImportError:
@@ -212,7 +212,7 @@ def _fetch_sprint_state(project_id: str) -> Optional[Dict]:
 def _fetch_user_permissions(user_id: str, project_id: str) -> Optional[Dict]:
     """Fetch user permissions."""
     try:
-        from policy_engine import PolicyEngine
+        from guards.policy_engine import PolicyEngine
         engine = PolicyEngine()
         return engine.get_user_permissions(user_id, project_id)
     except ImportError:
@@ -236,7 +236,7 @@ def retrieve_rag(state: CommonWorkflowState, query: str = None, top_k: int = 10)
     actual_query = query or state.get("intent", "")
 
     try:
-        from rag_service_neo4j import rag_search
+        from services.rag_service_neo4j import rag_search
 
         docs = rag_search(
             project_id=project_id,
@@ -273,7 +273,7 @@ def retrieve_graph_facts(state: CommonWorkflowState, cypher_query: str = None) -
     project_id = state.get("project_id")
 
     try:
-        from rag_service_neo4j import graph_query
+        from services.rag_service_neo4j import graph_query
 
         facts = graph_query(project_id, cypher_query) if cypher_query else []
 
@@ -328,7 +328,7 @@ def retrieve_metrics(state: CommonWorkflowState, date_range: Dict = None) -> Com
 def _fetch_project_metrics(project_id: str, date_range: Dict = None) -> Dict:
     """Fetch project metrics from backend."""
     try:
-        from pms_monitoring import PMSMonitoring
+        from observability.pms_monitoring import PMSMonitoring
         monitoring = PMSMonitoring()
         return monitoring.get_project_metrics(project_id, date_range)
     except ImportError:
@@ -386,7 +386,7 @@ def reason_generate(state: CommonWorkflowState, prompt: str, system_prompt: str 
     Used for summarization, planning, recommendations, etc.
     """
     try:
-        from model_gateway import ModelGateway
+        from integrations.model_gateway import ModelGateway
 
         gateway = ModelGateway()
         result = gateway.generate(
@@ -497,7 +497,7 @@ def verify_policy(state: CommonWorkflowState) -> CommonWorkflowState:
     decision_mode = state.get("decision_gate", {}).get("mode", DecisionMode.SUGGEST.value)
 
     try:
-        from policy_engine import PolicyEngine
+        from guards.policy_engine import PolicyEngine
         engine = PolicyEngine()
 
         policy_result = engine.check_policy(

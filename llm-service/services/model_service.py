@@ -115,7 +115,7 @@ class ModelService:
         if self.state.rag_service is None:
             try:
                 logger.info("Loading RAG service with Neo4j (vector + graph)...")
-                from rag_service_neo4j import RAGServiceNeo4j
+                from services.rag_service_neo4j import RAGServiceNeo4j
                 self.state.rag_service = RAGServiceNeo4j()
                 logger.info("RAG service with Neo4j loaded successfully")
             except Exception as e:

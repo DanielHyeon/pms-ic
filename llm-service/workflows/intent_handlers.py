@@ -26,9 +26,9 @@ from datetime import datetime, timedelta
 from typing import List, Optional, Callable
 from dataclasses import dataclass
 
-from response_contract import ResponseContract, ErrorCode
-from db_query import execute_query, execute_query_with_fallback, QueryResult
-from query_templates import (
+from contracts.response_contract import ResponseContract, ErrorCode
+from query.db_query import execute_query, execute_query_with_fallback, QueryResult
+from query.query_templates import (
     BACKLOG_LIST_QUERY, BACKLOG_LIST_FALLBACK_QUERY, BACKLOG_SUMMARY_QUERY,
     ACTIVE_SPRINT_QUERY, SPRINT_STORIES_QUERY, SPRINT_METRICS_QUERY,
     TASKS_DUE_THIS_WEEK_QUERY, TASKS_DUE_THIS_WEEK_FALLBACK_QUERY,
@@ -36,7 +36,7 @@ from query_templates import (
     RISKS_FROM_ISSUES_QUERY, RISKS_FALLBACK_QUERY, BLOCKERS_AS_RISKS_QUERY,
     calculate_kst_week_boundaries, get_kst_reference_time,
 )
-from degradation_tips import (
+from contracts.degradation_tips import (
     get_db_failure_plan, get_empty_data_plan, get_tips_for_intent,
     DegradationReason, DegradationPlan,
     EMPTY_DATA_TIPS, DB_FAILURE_TIPS,

@@ -182,7 +182,7 @@ def search_documents():
         user_access_level = data.get("user_access_level")
 
         if user_access_level is None:
-            from rag_service_neo4j import get_access_level
+            from services.rag_service_neo4j import get_access_level
             user_access_level = get_access_level(user_role)
 
         if not query:

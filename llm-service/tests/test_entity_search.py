@@ -4,7 +4,7 @@
 import logging
 logging.basicConfig(level=logging.WARNING)
 
-from rag_service_neo4j import RAGServiceNeo4j
+from services.rag_service_neo4j import RAGServiceNeo4j
 
 def main():
     print("Initializing RAG service...")

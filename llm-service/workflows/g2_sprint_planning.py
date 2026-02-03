@@ -295,7 +295,7 @@ def _fetch_backlog_items(project_id: str, status: List[str], include_estimates: 
 def _fetch_dependencies_from_graph(project_id: str, item_ids: List[str]) -> List[Dict]:
     """Fetch dependencies from Neo4j."""
     try:
-        from rag_service_neo4j import graph_query
+        from services.rag_service_neo4j import graph_query
         # Query dependencies
         return []
     except ImportError:

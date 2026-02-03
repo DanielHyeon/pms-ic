@@ -13,7 +13,7 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 
-from status_query_executor import StatusQueryResult
+from query.status_query_executor import StatusQueryResult
 
 logger = logging.getLogger(__name__)
 

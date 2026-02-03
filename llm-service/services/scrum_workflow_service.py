@@ -12,7 +12,7 @@ Architecture:
                              -> Neo4j (GraphRAG + Advanced Analysis)
 
 Usage:
-    from scrum_workflow_service import ScrumWorkflowService
+    from services.scrum_workflow_service import ScrumWorkflowService
 
     service = ScrumWorkflowService()
 

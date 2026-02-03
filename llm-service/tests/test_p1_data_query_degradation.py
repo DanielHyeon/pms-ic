@@ -17,19 +17,19 @@ from datetime import datetime, date, timedelta
 from unittest.mock import patch, MagicMock
 
 # Import modules under test
-from query_templates import (
+from query.query_templates import (
     calculate_kst_week_boundaries,
     get_kst_reference_time,
     KST,
 )
-from degradation_tips import (
+from contracts.degradation_tips import (
     get_empty_data_plan,
     get_db_failure_plan,
     DegradationReason,
     get_tips_for_intent,
 )
-from response_contract import ResponseContract, ErrorCode
-from response_renderer import render
+from contracts.response_contract import ResponseContract, ErrorCode
+from contracts.response_renderer import render
 
 
 # =============================================================================
@@ -119,7 +119,7 @@ class TestBacklogDegradation:
         assert plan.reason == DegradationReason.EMPTY_DATA
         assert len(plan.tips) >= 2
         assert plan.related_menu is not None
-        assert "Backlog" in plan.related_menu
+        assert "백로그" in plan.related_menu or "Backlog" in plan.related_menu
 
     def test_backlog_empty_response_shows_tips(self):
         """Rendered empty backlog must show tips"""
@@ -135,9 +135,9 @@ class TestBacklogDegradation:
 
         result = render(contract)
 
-        assert "Next steps" in result or "💡" in result
-        # Should have at least one actionable tip
-        assert "Add" in result or "Create" in result or "Click" in result
+        assert "다음 단계" in result or "💡" in result
+        # Should have at least one actionable tip (Korean: 추가, 클릭, etc.)
+        assert "추가" in result or "클릭" in result or "Add" in result or "Create" in result
 
 
 # =============================================================================
@@ -231,7 +231,8 @@ class TestSprintFlags:
 
         result = render(contract)
 
-        assert "overdue" in result.lower() or "passed" in result.lower()
+        # Korean: 기한 초과 (overdue)
+        assert "기한 초과" in result or "overdue" in result.lower() or "passed" in result.lower()
 
     def test_sprint_invalid_dates_warning_shown(self):
         """Invalid dates must show error"""
@@ -256,7 +257,8 @@ class TestSprintFlags:
 
         result = render(contract)
 
-        assert "invalid" in result.lower() or "before" in result.lower()
+        # Korean: 날짜 오류 (date error)
+        assert "날짜 오류" in result or "invalid" in result.lower() or "before" in result.lower()
 
 
 # =============================================================================

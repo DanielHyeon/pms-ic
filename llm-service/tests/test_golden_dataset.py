@@ -14,14 +14,14 @@ from unittest.mock import patch, MagicMock
 from dataclasses import dataclass
 from typing import Dict, List, Any
 
-from status_query_plan import (
+from query.status_query_plan import (
     StatusQueryPlan,
     QueryScope,
     TimeRange,
     QueryFilters,
     OutputConfig,
 )
-from status_query_executor import (
+from query.status_query_executor import (
     StatusQueryExecutor,
     StatusQueryResult,
     MetricResult,

@@ -7,15 +7,15 @@ import pytest
 import logging
 from typing import List
 from unittest.mock import Mock, patch, MagicMock
-from response_validator import ResponseValidator, ResponseFailureType
-from timeout_retry_handler import (
+from contracts.response_validator import ResponseValidator, ResponseFailureType
+from recovery.timeout_retry_handler import (
     TimeoutRetryConfig,
     CombinedTimeoutRetry,
     TimeoutException,
     RetryHandler,
     AdaptiveTimeoutRetry
 )
-from response_monitoring import ResponseMonitor, ResponseMetrics, ResponseMonitoringLogger
+from observability.response_monitoring import ResponseMonitor, ResponseMetrics, ResponseMonitoringLogger
 from datetime import datetime
 import time
 

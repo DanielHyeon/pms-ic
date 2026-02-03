@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Any, Optional
 from enum import Enum
 
-from answer_type_classifier import AnswerType
+from classifiers.answer_type_classifier import AnswerType
 
 logger = logging.getLogger(__name__)
 

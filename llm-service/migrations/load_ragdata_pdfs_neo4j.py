@@ -9,7 +9,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from rag_service_neo4j import RAGServiceNeo4j
+from services.rag_service_neo4j import RAGServiceNeo4j
 from pdf_ocr_pipeline import extract_text_from_pdf
 
 logging.basicConfig(

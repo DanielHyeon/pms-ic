@@ -21,9 +21,9 @@ PHILOSOPHY:
 from typing import List, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from explainability import Explainability
+    from observability.explainability import Explainability
 
-from explainability import EVIDENCE_CATEGORIES, EvidenceKind
+from observability.explainability import EVIDENCE_CATEGORIES, EvidenceKind
 
 
 class ExplainabilityPolicy:

@@ -7,8 +7,8 @@ Run: pytest tests/test_renderer_regression.py -v
 """
 
 import pytest
-from response_contract import ResponseContract, ErrorCode
-from response_renderer import render
+from contracts.response_contract import ResponseContract, ErrorCode
+from contracts.response_renderer import render
 
 
 class TestHeaderDifferentiation:

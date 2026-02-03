@@ -17,39 +17,39 @@ import os
 import time
 import uuid
 
-from policy_engine import get_policy_engine, PolicyAction
-from context_snapshot import get_snapshot_manager, ContextSnapshot
+from guards.policy_engine import get_policy_engine, PolicyAction
+from context.context_snapshot import get_snapshot_manager, ContextSnapshot
 
 # Phase 1: Gates & Foundation imports
-from authority_classifier import get_authority_classifier, AuthorityLevel, AuthorityResult
-from failure_taxonomy import get_failure_handler, FailureCode, classify_error
-from evidence_service import get_evidence_service, EvidenceItem
+from classifiers.authority_classifier import get_authority_classifier, AuthorityLevel, AuthorityResult
+from recovery.failure_taxonomy import get_failure_handler, FailureCode, classify_error
+from services.evidence_service import get_evidence_service, EvidenceItem
 from schemas.ai_response import AIResponse, Evidence, ResponseStatus, create_error_response
 
 # Status Query Engine imports
-from answer_type_classifier import (
+from classifiers.answer_type_classifier import (
     get_answer_type_classifier, classify_answer_type, is_status_query,
     AnswerType, AnswerTypeResult
 )
-from status_query_plan import (
+from query.status_query_plan import (
     StatusQueryPlan, create_default_plan, validate_plan,
     get_plan_generation_prompt, parse_llm_plan_response
 )
-from status_query_executor import get_status_query_executor, StatusQueryResult
-from source_policy_gate import get_source_policy_gate, get_status_summarization_prompt
-from text_to_sql import get_dynamic_query_executor, format_query_result
-from status_response_contract import (
+from query.status_query_executor import get_status_query_executor, StatusQueryResult
+from guards.source_policy_gate import get_source_policy_gate, get_status_summarization_prompt
+from query.text_to_sql import get_dynamic_query_executor, format_query_result
+from contracts.status_response_contract import (
     build_status_response, create_no_data_response, StatusResponseContract
 )
 
 # P0: Intent Routing & Handler Implementation
-from intent_handlers import (
+from workflows.intent_handlers import (
     get_handler,
     has_dedicated_handler,
     HandlerContext,
     INTENT_HANDLERS
 )
-from response_renderer import render as render_intent_response
+from contracts.response_renderer import render as render_intent_response
 
 logger = logging.getLogger(__name__)
 
@@ -865,8 +865,8 @@ class TwoTrackWorkflow:
         else:
             # Build response from query result
             # Reconstruct StatusQueryResult from dict
-            from status_query_executor import StatusQueryResult, MetricResult
-            from status_query_plan import StatusQueryPlan
+            from query.status_query_executor import StatusQueryResult, MetricResult
+            from query.status_query_plan import StatusQueryPlan
 
             plan_dict = state.get("status_query_plan", {})
             plan = StatusQueryPlan.from_dict(plan_dict) if plan_dict else create_default_plan(project_id)

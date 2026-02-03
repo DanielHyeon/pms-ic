@@ -319,7 +319,7 @@ def gate_publish(state: WeeklyReportState) -> WeeklyReportState:
 def _fetch_project_metrics(project_id: str, week_range: Dict) -> Dict:
     """Fetch project metrics from backend."""
     try:
-        from pms_monitoring import PMSMonitoring
+        from observability.pms_monitoring import PMSMonitoring
         monitoring = PMSMonitoring()
         return monitoring.get_weekly_metrics(project_id, week_range)
     except ImportError:
@@ -342,7 +342,7 @@ def _fetch_project_events(project_id: str, event_types: List[str], date_range: D
 def _rag_search(project_id: str, query: str, date_range: Dict, top_k: int) -> List[Dict]:
     """RAG search for documents."""
     try:
-        from rag_service_neo4j import RAGServiceNeo4j
+        from services.rag_service_neo4j import RAGServiceNeo4j
         rag = RAGServiceNeo4j()
         return rag.search(project_id, query, top_k=top_k)
     except ImportError:
@@ -352,7 +352,7 @@ def _rag_search(project_id: str, query: str, date_range: Dict, top_k: int) -> Li
 def _generate_report_sections(metrics: Dict, events: List, docs: List, audience: str) -> Dict[str, str]:
     """Generate report sections using LLM."""
     try:
-        from model_gateway import ModelGateway
+        from integrations.model_gateway import ModelGateway
         gateway = ModelGateway()
 
         prompt = f"""

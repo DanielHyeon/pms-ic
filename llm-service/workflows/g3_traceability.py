@@ -281,7 +281,7 @@ def _fetch_requirements(project_id: str, scope: Dict) -> List[Dict]:
 def _fetch_traceability_mappings(project_id: str, requirement_ids: List[str]) -> Dict[str, List[str]]:
     """Fetch traceability mappings from graph."""
     try:
-        from rag_service_neo4j import graph_query
+        from services.rag_service_neo4j import graph_query
         # Query: MATCH (r:Requirement)-[:TRACED_TO]->(b:Backlog) WHERE r.id IN $ids RETURN r.id, collect(b.id)
         return {}
     except ImportError:

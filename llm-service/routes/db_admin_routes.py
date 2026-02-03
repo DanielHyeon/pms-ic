@@ -18,7 +18,7 @@ from dataclasses import asdict
 from . import db_admin_bp
 from pg_neo4j_sync import PGNeo4jSyncService, SyncConfig, get_sync_service
 from services.backup_service import get_backup_service, BackupConfig
-from entity_chunk_service import get_entity_chunk_service
+from services.entity_chunk_service import get_entity_chunk_service
 
 logger = logging.getLogger(__name__)
 

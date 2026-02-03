@@ -104,7 +104,7 @@ class RetrieveDocsSkill(BaseSkill):
     ) -> List[Dict]:
         """Execute RAG search."""
         try:
-            from rag_service_neo4j import RAGServiceNeo4j
+            from services.rag_service_neo4j import RAGServiceNeo4j
             rag = RAGServiceNeo4j()
             return rag.search(project_id, query, top_k=top_k)
         except ImportError:
@@ -214,7 +214,7 @@ class RetrieveGraphSkill(BaseSkill):
     ) -> List[Dict]:
         """Execute Cypher query."""
         try:
-            from rag_service_neo4j import graph_query
+            from services.rag_service_neo4j import graph_query
             return graph_query(project_id, cypher_query, params)
         except ImportError:
             logger.warning("graph_query not available")
@@ -305,7 +305,7 @@ class RetrieveMetricsSkill(BaseSkill):
     ) -> Dict[str, Any]:
         """Fetch metrics from monitoring service."""
         try:
-            from pms_monitoring import PMSMonitoring
+            from observability.pms_monitoring import PMSMonitoring
             monitoring = PMSMonitoring()
             return monitoring.get_project_metrics(project_id, date_range)
         except ImportError:

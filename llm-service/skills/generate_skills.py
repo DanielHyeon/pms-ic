@@ -91,7 +91,7 @@ class GenerateSummarySkill(BaseSkill):
     def _generate_summary(self, content: str, max_length: int, style: str) -> str:
         """Generate summary using LLM."""
         try:
-            from model_gateway import ModelGateway
+            from integrations.model_gateway import ModelGateway
             gateway = ModelGateway()
 
             style_instructions = {

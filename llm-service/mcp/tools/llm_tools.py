@@ -23,7 +23,7 @@ def _get_llm():
     if _llm_client is None:
         try:
             # Try to import from model_gateway
-            from model_gateway import get_gateway
+            from integrations.model_gateway import get_gateway
             _llm_client = get_gateway()
         except ImportError:
             logger.warning("model_gateway not available, using stub")

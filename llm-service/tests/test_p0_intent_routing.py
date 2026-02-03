@@ -14,12 +14,12 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 # Import modules under test
-from answer_type_classifier import (
+from classifiers.answer_type_classifier import (
     AnswerTypeClassifier, AnswerType, get_answer_type_classifier
 )
-from response_contract import ResponseContract, ErrorCode
-from response_renderer import render
-from intent_handlers import (
+from contracts.response_contract import ResponseContract, ErrorCode
+from contracts.response_renderer import render
+from workflows.intent_handlers import (
     get_handler, has_dedicated_handler, HandlerContext, INTENT_HANDLERS
 )
 
@@ -188,7 +188,7 @@ class TestIntentHeaders:
         )
         result = render(contract)
 
-        assert "📋 **Product Backlog**" in result
+        assert "📋 **제품 백로그**" in result
         # REGRESSION CHECK: Must NOT have status header
         assert "📊 **Project Status**" not in result, \
             "REGRESSION: Status header in backlog response!"
@@ -203,7 +203,7 @@ class TestIntentHeaders:
         )
         result = render(contract)
 
-        assert "🏃 **Sprint Progress**" in result
+        assert "🏃 **스프린트 진행 현황**" in result
         assert "📊 **Project Status**" not in result, \
             "REGRESSION: Status header in sprint response!"
 
@@ -217,7 +217,7 @@ class TestIntentHeaders:
         )
         result = render(contract)
 
-        assert "📅 **Tasks Due This Week**" in result
+        assert "📅 **이번 주 마감 태스크**" in result
         assert "📊 **Project Status**" not in result, \
             "REGRESSION: Status header in task response!"
 
@@ -231,7 +231,7 @@ class TestIntentHeaders:
         )
         result = render(contract)
 
-        assert "⚠️ **Risk Analysis**" in result
+        assert "⚠️ **리스크 분석**" in result
         assert "📊 **Project Status**" not in result, \
             "REGRESSION: Status header in risk response!"
 

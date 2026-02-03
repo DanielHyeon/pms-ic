@@ -6,9 +6,9 @@ Simple Test Suite for Gemma 3 12B Q5 Stability Improvements
 import sys
 import logging
 from datetime import datetime
-from response_validator import ResponseValidator, ResponseFailureType
-from timeout_retry_handler import TimeoutRetryConfig, RetryHandler, AdaptiveTimeoutRetry
-from response_monitoring import ResponseMonitor, ResponseMetrics
+from contracts.response_validator import ResponseValidator, ResponseFailureType
+from recovery.timeout_retry_handler import TimeoutRetryConfig, RetryHandler, AdaptiveTimeoutRetry
+from observability.response_monitoring import ResponseMonitor, ResponseMetrics
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

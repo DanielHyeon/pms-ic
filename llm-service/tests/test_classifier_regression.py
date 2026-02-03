@@ -279,7 +279,7 @@ CASUAL_CASES = [
 
 def run_tests():
     """Run all regression tests"""
-    from answer_type_classifier import (
+    from classifiers.answer_type_classifier import (
         get_answer_type_classifier, AnswerType
     )
 
@@ -368,7 +368,7 @@ def run_tests():
 
 def test_secondary_gate_signals():
     """Test that secondary gate signals are working"""
-    from answer_type_classifier import get_answer_type_classifier
+    from classifiers.answer_type_classifier import get_answer_type_classifier
 
     print("\n" + "=" * 60)
     print("Secondary Gate Signal Test")
@@ -404,7 +404,7 @@ def test_secondary_gate_signals():
     for q in howto_queries:
         result = classifier.classify(q)
         is_howto = result.answer_type == classifier.classify("").answer_type.__class__.HOWTO_POLICY
-        from answer_type_classifier import AnswerType
+        from classifiers.answer_type_classifier import AnswerType
         is_howto = result.answer_type == AnswerType.HOWTO_POLICY
         status = "✅" if is_howto else "❌"
         print(f"  {status} \"{q}\" -> {result.answer_type.value}")

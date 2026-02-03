@@ -17,7 +17,7 @@ from contextlib import contextmanager
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-from status_query_plan import StatusQueryPlan, QueryScope, TimeRange
+from query.status_query_plan import StatusQueryPlan, QueryScope, TimeRange
 
 logger = logging.getLogger(__name__)
 

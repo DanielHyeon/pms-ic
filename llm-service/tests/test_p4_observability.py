@@ -21,7 +21,7 @@ from datetime import datetime
 from dataclasses import asdict
 import json
 
-from p4_events import (
+from observability.p4_events import (
     EventType,
     FinalStatus,
     EventTier,
@@ -53,7 +53,7 @@ from p4_events import (
     get_default_runtime,
 )
 
-from p4_metrics import (
+from observability.p4_metrics import (
     MetricType,
     MetricValue,
     SimpleMetricsRegistry,
@@ -947,7 +947,7 @@ class TestP4Integration:
 
     def test_metrics_from_events(self):
         """Metrics are updated from events via aggregator."""
-        from p4_events import P4Event
+        from observability.p4_events import P4Event
 
         # Create mock event
         event = P4Event(
