@@ -61,7 +61,7 @@ def render_backlog_list(contract: ResponseContract) -> str:
     lines = []
 
     # Header (distinct from Project Status - uses different emoji)
-    lines.append(f"📋 **Product Backlog** (as of: {contract.reference_time})")
+    lines.append(f"📋 **제품 백로그** (기준: {contract.reference_time})")
     lines.append(f"📍 {contract.scope}")
     lines.append("")
 
@@ -73,7 +73,7 @@ def render_backlog_list(contract: ResponseContract) -> str:
             lines.append(f"⚠️ {warning}")
         lines.append("")
         _append_tips(lines, contract.tips)
-        lines.append(f"_Data source: {contract.provenance}_")
+        lines.append(f"_데이터 출처: {contract.provenance}_")
         return "\n".join(lines)
 
     items = contract.data.get("items", [])
@@ -87,13 +87,13 @@ def render_backlog_list(contract: ResponseContract) -> str:
         critical_count = int(summary.get("critical", 0) or 0)
         high_count = int(summary.get("high", 0) or 0)
 
-        lines.append(f"**Total items**: {total}")
+        lines.append(f"**전체 항목**: {total}개")
         if total_points > 0:
-            lines.append(f"**Total story points**: {total_points}")
+            lines.append(f"**총 스토리 포인트**: {total_points}")
         if critical_count > 0 or high_count > 0:
-            lines.append(f"**Priority**: {critical_count} Critical, {high_count} High")
+            lines.append(f"**우선순위**: 긴급 {critical_count}개, 높음 {high_count}개")
         if contract.data.get("was_limited"):
-            lines.append("_(More items may exist)_")
+            lines.append("_(더 많은 항목이 있을 수 있습니다)_")
         lines.append("")
 
         # Group by priority
@@ -110,14 +110,14 @@ def render_backlog_list(contract: ResponseContract) -> str:
         for prio in priority_order:
             if prio in by_priority:
                 emoji = priority_emoji.get(prio, "⚪")
-                lines.append(f"{emoji} **{prio}** ({len(by_priority[prio])} items)")
+                lines.append(f"{emoji} **{prio}** ({len(by_priority[prio])}개)")
                 for item in by_priority[prio][:5]:
-                    title = (item.get("title") or "Untitled")[:50]
+                    title = (item.get("title") or "제목없음")[:50]
                     points = item.get("story_points") or "-"
                     status = _translate_status(item.get("status"))
-                    lines.append(f"  - {title} ({points}pts, {status})")
+                    lines.append(f"  - {title} ({points}pt, {status})")
                 if len(by_priority[prio]) > 5:
-                    lines.append(f"  - ... and {len(by_priority[prio]) - 5} more")
+                    lines.append(f"  - ... 외 {len(by_priority[prio]) - 5}개")
                 lines.append("")
     else:
         # P1: Show degradation message from warnings
@@ -126,7 +126,7 @@ def render_backlog_list(contract: ResponseContract) -> str:
         lines.append("")
 
     _append_tips(lines, contract.tips)
-    lines.append(f"_Data source: {contract.provenance}_")
+    lines.append(f"_데이터 출처: {contract.provenance}_")
     return "\n".join(lines)
 
 
@@ -141,7 +141,7 @@ def render_sprint_progress(contract: ResponseContract) -> str:
     """
     lines = []
 
-    lines.append(f"🏃 **Sprint Progress** (as of: {contract.reference_time})")
+    lines.append(f"🏃 **스프린트 진행 현황** (기준: {contract.reference_time})")
     lines.append(f"📍 {contract.scope}")
     lines.append("")
 
@@ -151,7 +151,7 @@ def render_sprint_progress(contract: ResponseContract) -> str:
             lines.append(f"⚠️ {warning}")
         lines.append("")
         _append_tips(lines, contract.tips)
-        lines.append(f"_Data source: {contract.provenance}_")
+        lines.append(f"_데이터 출처: {contract.provenance}_")
         return "\n".join(lines)
 
     sprint = contract.data.get("sprint")
@@ -159,28 +159,28 @@ def render_sprint_progress(contract: ResponseContract) -> str:
     stories = contract.data.get("stories", [])
 
     if sprint:
-        lines.append(f"**Sprint**: {sprint.get('name')}")
+        lines.append(f"**스프린트**: {sprint.get('name')}")
         if sprint.get("goal"):
-            lines.append(f"**Goal**: {sprint.get('goal')}")
-        lines.append(f"**Period**: {sprint.get('start_date')} ~ {sprint.get('end_date')}")
+            lines.append(f"**목표**: {sprint.get('goal')}")
+        lines.append(f"**기간**: {sprint.get('start_date')} ~ {sprint.get('end_date')}")
 
         # P1: Days remaining/elapsed
         days_remaining = sprint.get("days_remaining")
         days_elapsed = sprint.get("days_elapsed")
         if days_remaining is not None:
             if days_remaining > 0:
-                lines.append(f"**Days remaining**: {days_remaining}")
+                lines.append(f"**남은 일수**: {days_remaining}일")
             elif days_remaining == 0:
-                lines.append("**Days remaining**: Last day!")
+                lines.append("**남은 일수**: 오늘이 마지막 날!")
         if days_elapsed is not None:
-            lines.append(f"**Days elapsed**: {days_elapsed}")
+            lines.append(f"**경과 일수**: {days_elapsed}일")
         lines.append("")
 
         # P1: Sprint warnings (overdue/invalid)
         if sprint.get("is_overdue"):
-            lines.append("⚠️ **Sprint is overdue** - consider closing or extending")
+            lines.append("⚠️ **스프린트 기한 초과** - 종료하거나 연장을 검토해 주세요")
         if sprint.get("has_invalid_dates"):
-            lines.append("🚨 **Invalid dates** - end date is before start date")
+            lines.append("🚨 **날짜 오류** - 종료일이 시작일보다 이전입니다")
         if sprint.get("is_overdue") or sprint.get("has_invalid_dates"):
             lines.append("")
 
@@ -190,15 +190,15 @@ def render_sprint_progress(contract: ResponseContract) -> str:
         in_progress = int(metrics.get("in_progress", 0) or 0)
         rate = float(metrics.get("completion_rate", 0) or 0)
 
-        lines.append(f"**Completion**: {rate:.1f}% ({done}/{total} stories done)")
-        lines.append(f"**In Progress**: {in_progress}")
+        lines.append(f"**완료율**: {rate:.1f}% ({done}/{total}개 스토리 완료)")
+        lines.append(f"**진행 중**: {in_progress}개")
 
         # P1: Story points if available
         total_points = int(metrics.get("total_points", 0) or 0)
         done_points = int(metrics.get("done_points", 0) or 0)
         if total_points > 0:
             points_rate = round(done_points / total_points * 100, 1)
-            lines.append(f"**Story Points**: {done_points}/{total_points} pts ({points_rate}%)")
+            lines.append(f"**스토리 포인트**: {done_points}/{total_points}pt ({points_rate}%)")
         lines.append("")
 
         # Progress bar
@@ -214,7 +214,7 @@ def render_sprint_progress(contract: ResponseContract) -> str:
                 status = story.get("status", "UNKNOWN")
                 status_counts[status] = status_counts.get(status, 0) + 1
 
-            lines.append("**Status breakdown**:")
+            lines.append("**상태별 현황**:")
             status_order = ["IN_PROGRESS", "REVIEW", "READY", "IN_SPRINT", "DONE", "BLOCKED"]
             for status in status_order:
                 if status in status_counts:
@@ -233,7 +233,7 @@ def render_sprint_progress(contract: ResponseContract) -> str:
         lines.append("")
 
     _append_tips(lines, contract.tips)
-    lines.append(f"_Data source: {contract.provenance}_")
+    lines.append(f"_데이터 출처: {contract.provenance}_")
     return "\n".join(lines)
 
 
@@ -248,7 +248,7 @@ def render_tasks_due_this_week(contract: ResponseContract) -> str:
     """
     lines = []
 
-    lines.append(f"📅 **Tasks Due This Week** (as of: {contract.reference_time})")
+    lines.append(f"📅 **이번 주 마감 태스크** (기준: {contract.reference_time})")
     lines.append(f"📍 {contract.scope}")
     lines.append("")
 
@@ -258,7 +258,7 @@ def render_tasks_due_this_week(contract: ResponseContract) -> str:
             lines.append(f"⚠️ {warning}")
         lines.append("")
         _append_tips(lines, contract.tips)
-        lines.append(f"_Data source: {contract.provenance}_")
+        lines.append(f"_데이터 출처: {contract.provenance}_")
         return "\n".join(lines)
 
     tasks = contract.data.get("tasks", [])
@@ -267,24 +267,24 @@ def render_tasks_due_this_week(contract: ResponseContract) -> str:
 
     # P1: Overdue tasks section (MUST come first - urgent)
     if overdue:
-        lines.append(f"🚨 **Overdue**: {len(overdue)} task(s)")
+        lines.append(f"🚨 **기한 초과**: {len(overdue)}개")
         for task in overdue[:10]:
-            title = task.get("title", "Untitled")[:50]
+            title = task.get("title", "제목없음")[:50]
             due = str(task.get("due_date", ""))[:10]
             days = task.get("days_overdue", "?")
             priority = task.get("priority", "")
             priority_marker = _get_priority_marker(priority)
             lines.append(f"  - {priority_marker} {title}")
-            lines.append(f"    └─ Due: {due} ({days} days overdue)")
+            lines.append(f"    └─ 마감일: {due} ({days}일 초과)")
         if len(overdue) > 10:
-            lines.append(f"  - ... and {len(overdue) - 10} more overdue tasks")
+            lines.append(f"  - ... 외 {len(overdue) - 10}개 초과 태스크")
         lines.append("")
 
     # Tasks due this week
     if tasks:
-        lines.append(f"📋 **Due This Week**: {count} task(s)")
+        lines.append(f"📋 **이번 주 마감**: {count}개")
         if contract.data.get("was_limited"):
-            lines.append("_(More items may exist)_")
+            lines.append("_(더 많은 항목이 있을 수 있습니다)_")
         lines.append("")
 
         # Group by due date
@@ -296,16 +296,16 @@ def render_tasks_due_this_week(contract: ResponseContract) -> str:
             by_date[due].append(task)
 
         for date in sorted(by_date.keys()):
-            lines.append(f"**{date}** ({len(by_date[date])} tasks)")
+            lines.append(f"**{date}** ({len(by_date[date])}개)")
             for task in by_date[date]:
-                title = task.get("title", "Untitled")[:40]
+                title = task.get("title", "제목없음")[:40]
                 status = _translate_status(task.get("status"))
                 story = task.get("story_title", "")
                 priority = task.get("priority", "")
                 priority_marker = _get_priority_marker(priority)
                 lines.append(f"  - {priority_marker} [{status}] {title}")
                 if story:
-                    lines.append(f"    └─ Story: {story[:25]}")
+                    lines.append(f"    └─ 스토리: {story[:25]}")
             lines.append("")
     elif not overdue:
         # Show warning only if no tasks AND no overdue
@@ -314,7 +314,7 @@ def render_tasks_due_this_week(contract: ResponseContract) -> str:
         lines.append("")
 
     _append_tips(lines, contract.tips)
-    lines.append(f"_Data source: {contract.provenance}_")
+    lines.append(f"_데이터 출처: {contract.provenance}_")
     return "\n".join(lines)
 
 
@@ -335,7 +335,7 @@ def render_risk_analysis(contract: ResponseContract) -> str:
     """Render risks grouped by severity"""
     lines = []
 
-    lines.append(f"⚠️ **Risk Analysis** (as of: {contract.reference_time})")
+    lines.append(f"⚠️ **리스크 분석** (기준: {contract.reference_time})")
     lines.append(f"📍 {contract.scope}")
     lines.append("")
 
@@ -345,7 +345,7 @@ def render_risk_analysis(contract: ResponseContract) -> str:
             lines.append(f"⚠️ {warning}")
         lines.append("")
         _append_tips(lines, contract.tips)
-        lines.append(f"_Data source: {contract.provenance}_")
+        lines.append(f"_데이터 출처: {contract.provenance}_")
         return "\n".join(lines)
 
     risks = contract.data.get("risks", [])
@@ -353,9 +353,9 @@ def render_risk_analysis(contract: ResponseContract) -> str:
     by_severity = contract.data.get("by_severity", {})
 
     if risks:
-        lines.append(f"**Active risks**: {count}")
+        lines.append(f"**활성 리스크**: {count}개")
         if contract.data.get("was_limited"):
-            lines.append(f"_(More items may exist)_")
+            lines.append(f"_(더 많은 항목이 있을 수 있습니다)_")
         lines.append("")
 
         severity_emoji = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🟢", "UNKNOWN": "⚪"}
@@ -365,9 +365,9 @@ def render_risk_analysis(contract: ResponseContract) -> str:
             if sev in by_severity and by_severity[sev]:
                 emoji = severity_emoji.get(sev, "⚪")
                 sev_risks = by_severity[sev]
-                lines.append(f"{emoji} **{sev}** ({len(sev_risks)} items)")
+                lines.append(f"{emoji} **{sev}** ({len(sev_risks)}개)")
                 for risk in sev_risks[:3]:
-                    title = risk.get("title", "Untitled")[:50]
+                    title = risk.get("title", "제목없음")[:50]
                     status = _translate_status(risk.get("status"))
                     lines.append(f"  - {title} ({status})")
                 lines.append("")
@@ -376,42 +376,42 @@ def render_risk_analysis(contract: ResponseContract) -> str:
         critical_count = len(by_severity.get("CRITICAL", []))
         high_count = len(by_severity.get("HIGH", []))
         if critical_count > 0:
-            lines.append(f"🚨 **Alert**: {critical_count} critical risks require immediate action")
+            lines.append(f"🚨 **알림**: {critical_count}개 긴급 리스크가 즉각적인 조치가 필요합니다")
         elif high_count > 0:
-            lines.append(f"⚠️ **Note**: {high_count} high-risk items need attention")
+            lines.append(f"⚠️ **참고**: {high_count}개 높은 위험도 항목이 주의가 필요합니다")
         lines.append("")
     else:
-        lines.append("No active risks registered.")
+        lines.append("등록된 활성 리스크가 없습니다.")
         lines.append("")
 
     _append_tips(lines, contract.tips)
-    lines.append(f"_Data source: {contract.provenance}_")
+    lines.append(f"_데이터 출처: {contract.provenance}_")
     return "\n".join(lines)
 
 
 def render_casual(contract: ResponseContract) -> str:
     """Render casual greeting"""
     return (
-        "Hello! I'm the PMS Assistant 😊\n"
-        "Feel free to ask about project schedules, backlog, risks, issues, and more!"
+        "안녕하세요! PMS 어시스턴트입니다 😊\n"
+        "프로젝트 일정, 백로그, 리스크, 이슈 등에 대해 무엇이든 물어보세요!"
     )
 
 
 def render_default(contract: ResponseContract) -> str:
     """Default fallback - should rarely be used"""
     lines = []
-    lines.append(f"📝 **Response** (as of: {contract.reference_time})")
+    lines.append(f"📝 **응답** (기준: {contract.reference_time})")
     if contract.scope:
         lines.append(f"📍 {contract.scope}")
     lines.append("")
 
     if contract.has_data():
-        lines.append("Data retrieved successfully.")
+        lines.append("데이터를 성공적으로 조회했습니다.")
     else:
-        lines.append("Could not find the requested information.")
+        lines.append("요청하신 정보를 찾을 수 없습니다.")
 
     _append_tips(lines, contract.tips)
-    lines.append(f"_Data source: {contract.provenance}_")
+    lines.append(f"_데이터 출처: {contract.provenance}_")
     return "\n".join(lines)
 
 
@@ -423,7 +423,7 @@ def _append_tips(lines: List[str], tips: List[str]) -> None:
     """Append tips section if tips exist"""
     if tips:
         lines.append("")
-        lines.append("💡 **Next steps**:")
+        lines.append("💡 **다음 단계**:")
         for tip in tips:
             lines.append(f"  - {tip}")
         lines.append("")
@@ -432,24 +432,24 @@ def _append_tips(lines: List[str], tips: List[str]) -> None:
 def _translate_status(status: str | None) -> str:
     """Translate status to human-readable form"""
     if not status:
-        return "Unknown"
+        return "알 수 없음"
 
     translations = {
-        "IDEA": "Idea",
-        "REFINED": "Refined",
-        "READY": "Ready",
-        "BACKLOG": "Backlog",
-        "IN_SPRINT": "In Sprint",
-        "IN_PROGRESS": "In Progress",
-        "REVIEW": "Review",
-        "DONE": "Done",
-        "CANCELLED": "Cancelled",
-        "BLOCKED": "Blocked",
-        "OPEN": "Open",
-        "CLOSED": "Closed",
-        "TODO": "To Do",
-        "ACTIVE": "Active",
-        "COMPLETED": "Completed",
+        "IDEA": "아이디어",
+        "REFINED": "정제됨",
+        "READY": "준비완료",
+        "BACKLOG": "백로그",
+        "IN_SPRINT": "스프린트 중",
+        "IN_PROGRESS": "진행 중",
+        "REVIEW": "검토 중",
+        "DONE": "완료",
+        "CANCELLED": "취소됨",
+        "BLOCKED": "차단됨",
+        "OPEN": "진행 중",
+        "CLOSED": "종료",
+        "TODO": "할 일",
+        "ACTIVE": "활성",
+        "COMPLETED": "완료",
     }
 
     return translations.get(status.upper(), status)

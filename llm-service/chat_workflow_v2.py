@@ -657,8 +657,8 @@ class TwoTrackWorkflow:
     def _casual_response_node(self, state: TwoTrackState) -> TwoTrackState:
         """Node: Handle casual greetings directly"""
         state["response"] = (
-            "Hello! I'm the PMS Assistant 😊\n"
-            "Feel free to ask about project schedules, backlog, risks, issues, and more!"
+            "안녕하세요! PMS 어시스턴트입니다 😊\n"
+            "프로젝트 일정, 백로그, 리스크, 이슈 등에 대해 무엇이든 물어보세요!"
         )
         state["confidence"] = 1.0
         state["debug_info"]["handler"] = "casual"

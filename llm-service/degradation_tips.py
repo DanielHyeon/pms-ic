@@ -45,28 +45,28 @@ class DegradationPlan:
 DB_FAILURE_TIPS = {
     "default": DegradationPlan(
         reason=DegradationReason.DB_FAILURE,
-        message="Unable to retrieve data from the database.",
+        message="데이터베이스에서 정보를 가져올 수 없습니다.",
         tips=[
-            "The system may be experiencing temporary issues",
-            "Please try again in a few moments",
-            "Contact administrator if the issue persists",
+            "시스템에 일시적인 문제가 발생했을 수 있습니다",
+            "잠시 후 다시 시도해 주세요",
+            "문제가 지속되면 관리자에게 문의해 주세요",
         ],
         next_actions=[
-            "Retry the request",
-            "Check system status",
+            "요청 다시 시도",
+            "시스템 상태 확인",
         ],
     ),
     "timeout": DegradationPlan(
         reason=DegradationReason.DB_TIMEOUT,
-        message="Query took too long to complete.",
+        message="쿼리 실행 시간이 초과되었습니다.",
         tips=[
-            "The request may have been too complex",
-            "Try a more specific query",
-            "System may be under heavy load",
+            "요청이 너무 복잡했을 수 있습니다",
+            "더 구체적인 질문을 시도해 보세요",
+            "시스템에 부하가 많을 수 있습니다",
         ],
         next_actions=[
-            "Try a simpler query",
-            "Wait a moment and retry",
+            "더 간단한 질문 시도",
+            "잠시 기다린 후 재시도",
         ],
     ),
 }
@@ -79,88 +79,88 @@ DB_FAILURE_TIPS = {
 EMPTY_DATA_TIPS = {
     "backlog_list": DegradationPlan(
         reason=DegradationReason.EMPTY_DATA,
-        message="No backlog items found.",
+        message="백로그 항목이 없습니다.",
         tips=[
-            "The product backlog is currently empty",
-            "New stories can be added via the Backlog Management menu",
-            "Backlog items are user stories not yet assigned to a sprint",
+            "제품 백로그가 현재 비어있습니다",
+            "백로그 관리 메뉴에서 새 스토리를 추가할 수 있습니다",
+            "백로그 항목은 아직 스프린트에 할당되지 않은 사용자 스토리입니다",
         ],
         next_actions=[
-            "Click 'Add Story' in Backlog Management",
-            "Start with user stories in format: 'As a [user], I want [feature]...'",
-            "Set priority (Critical/High/Medium/Low) for ordering",
-            "Optionally add story points for estimation",
+            "백로그 관리에서 '스토리 추가' 클릭",
+            "'사용자로서, 나는 [기능]을 원한다...' 형식으로 시작하세요",
+            "우선순위(긴급/높음/중간/낮음) 설정",
+            "추정을 위한 스토리 포인트 추가(선택)",
         ],
-        related_menu="Backlog Management",
-        template_example='"As a claims adjuster, I want to auto-classify documents so that processing is faster."',
+        related_menu="백로그 관리",
+        template_example='"보험심사 담당자로서, 나는 문서를 자동 분류하여 처리 속도를 높이고 싶다."',
     ),
 
     "sprint_progress": DegradationPlan(
         reason=DegradationReason.NO_ACTIVE_SPRINT,
-        message="No active sprint found.",
+        message="활성 스프린트가 없습니다.",
         tips=[
-            "There is currently no sprint in 'ACTIVE' status",
-            "Sprints need to be created and started to track progress",
-            "Check if the sprint needs to be activated",
+            "현재 '활성' 상태인 스프린트가 없습니다",
+            "진행 상황을 추적하려면 스프린트를 생성하고 시작해야 합니다",
+            "스프린트를 활성화해야 하는지 확인하세요",
         ],
         next_actions=[
-            "Go to 'Sprint Management' to create a sprint",
-            "Move items from backlog to the new sprint",
-            "Set sprint goal and start date",
-            "Change sprint status to 'ACTIVE'",
+            "'스프린트 관리'에서 스프린트 생성",
+            "백로그에서 새 스프린트로 항목 이동",
+            "스프린트 목표 및 시작일 설정",
+            "스프린트 상태를 '활성'으로 변경",
         ],
-        related_menu="Sprint Management",
+        related_menu="스프린트 관리",
     ),
 
     "task_due_this_week": DegradationPlan(
         reason=DegradationReason.EMPTY_DATA,
-        message="No tasks due this week.",
+        message="이번 주 마감 태스크가 없습니다.",
         tips=[
-            "Great news - no tasks are due this week!",
-            "Or tasks may not have due dates set",
-            "Check the task board for overall status",
+            "좋은 소식입니다 - 이번 주 마감 태스크가 없습니다!",
+            "또는 태스크에 마감일이 설정되지 않았을 수 있습니다",
+            "전체 상태는 태스크 보드에서 확인하세요",
         ],
         next_actions=[
-            "Set due dates when creating tasks",
-            "Review overdue tasks if any",
-            "Use the Kanban board for task management",
+            "태스크 생성 시 마감일 설정",
+            "기한 초과 태스크가 있는지 검토",
+            "태스크 관리에는 칸반 보드 활용",
         ],
-        related_menu="Task Board / Kanban",
+        related_menu="태스크 보드 / 칸반",
     ),
 
     "task_due_no_due_dates": DegradationPlan(
         reason=DegradationReason.NO_DUE_DATES,
-        message="Tasks exist but most don't have due dates set.",
+        message="태스크는 있지만 대부분 마감일이 설정되지 않았습니다.",
         tips=[
-            "There are active tasks, but due_date is not set for most",
-            "Setting due dates helps with deadline tracking",
-            "Consider adding deadlines to important tasks",
+            "활성 태스크가 있지만 대부분 마감일이 설정되지 않았습니다",
+            "마감일 설정은 일정 추적에 도움이 됩니다",
+            "중요한 태스크에 마감일을 추가하는 것을 고려하세요",
         ],
         next_actions=[
-            "Review tasks in Task Board",
-            "Add due dates to high-priority tasks",
-            "Use sprint end date as a guide for deadlines",
+            "태스크 보드에서 태스크 검토",
+            "우선순위가 높은 태스크에 마감일 추가",
+            "스프린트 종료일을 마감일 가이드로 활용",
         ],
-        related_menu="Task Board",
+        related_menu="태스크 보드",
     ),
 
     "risk_analysis": DegradationPlan(
         reason=DegradationReason.NO_RISKS_EXPLICIT,
-        message="No active risks registered.",
+        message="등록된 활성 리스크가 없습니다.",
         tips=[
-            "No items with type='RISK' found",
-            "Risks can be registered via Issue Management",
-            "Consider running a risk identification session",
+            "유형='RISK'인 항목이 없습니다",
+            "이슈 관리에서 리스크를 등록할 수 있습니다",
+            "리스크 식별 세션을 진행하는 것을 고려하세요",
         ],
         next_actions=[
-            "Go to 'Issue Management' menu",
-            "Create new issue with Type = 'RISK'",
-            "Set severity (CRITICAL/HIGH/MEDIUM/LOW)",
-            "Assign owner and mitigation plan",
-            "Review risks in weekly meetings",
+            "'이슈 관리' 메뉴로 이동",
+            "유형 = 'RISK'로 새 이슈 생성",
+            "심각도(긴급/높음/중간/낮음) 설정",
+            "담당자 및 완화 계획 지정",
+            "주간 회의에서 리스크 검토",
         ],
-        related_menu="Issue Management",
-        template_example="Risk: 'Third-party API dependency may cause delays' | Severity: HIGH | Mitigation: 'Implement fallback mechanism'",
+        related_menu="이슈 관리",
+        template_example="리스크: '외부 API 의존성으로 지연 발생 가능' | 심각도: 높음 | 완화방안: '대체 메커니즘 구현'",
     ),
 }
 
@@ -178,8 +178,8 @@ def get_empty_data_plan(intent: str) -> DegradationPlan:
     """Get degradation plan for empty data by intent"""
     return EMPTY_DATA_TIPS.get(intent, DegradationPlan(
         reason=DegradationReason.EMPTY_DATA,
-        message="No data found.",
-        tips=["Try a different query", "Check if data has been created"],
+        message="데이터를 찾을 수 없습니다.",
+        tips=["다른 질문을 시도해 보세요", "데이터가 생성되었는지 확인하세요"],
         next_actions=[],
     ))
 
