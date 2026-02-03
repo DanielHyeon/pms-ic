@@ -26,13 +26,36 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 class AnswerType(Enum):
-    """Answer type classification"""
-    STATUS_METRIC = "status_metric"       # Numbers, percentages, counts
-    STATUS_LIST = "status_list"           # Task lists, issue lists, blockers
-    STATUS_DRILLDOWN = "status_drilldown" # Specific entity status
-    HOWTO_POLICY = "howto_policy"         # Methodology, guides, policies
-    MIXED = "mixed"                       # Status + explanation
-    CASUAL = "casual"                     # Greetings, small talk
+    """
+    Answer type classification with lowercase snake_case values.
+
+    IMPORTANT: Use .value directly as the intent key.
+    Do NOT use .upper() or string transformations.
+
+    Priority order for classification:
+    - Priority 1: Specific domain intents (check first)
+    - Priority 2: General status (constrained)
+    - Priority 3: Non-status
+    - Fallback: UNKNOWN (goes to RAG, NOT status)
+    """
+    # Priority 1: Specific domain intents (check first)
+    RISK_ANALYSIS = "risk_analysis"           # Risk queries
+    TASK_DUE_THIS_WEEK = "task_due_this_week" # Tasks due this week
+    SPRINT_PROGRESS = "sprint_progress"       # Sprint progress/burndown
+    BACKLOG_LIST = "backlog_list"             # Product backlog items
+
+    # Priority 2: General status (constrained)
+    STATUS_METRIC = "status_metric"           # Numbers, percentages, counts
+    STATUS_LIST = "status_list"               # Task lists, issue lists, blockers
+    STATUS_DRILLDOWN = "status_drilldown"     # Specific entity status
+
+    # Priority 3: Non-status
+    HOWTO_POLICY = "howto_policy"             # Methodology, guides, policies
+    MIXED = "mixed"                           # Status + explanation
+    CASUAL = "casual"                         # Greetings, small talk
+
+    # Fallback (goes to RAG, NOT status)
+    UNKNOWN = "unknown"                       # Ambiguous queries -> RAG
 
 
 class QueryScope(Enum):
@@ -70,7 +93,67 @@ class AnswerTypeResult:
 
 
 # =============================================================================
-# Pattern Definitions
+# Priority-Based Intent Patterns (P0 Implementation)
+# =============================================================================
+# These patterns are checked FIRST by priority order to prevent
+# "all questions → status template" regression.
+
+INTENT_PATTERNS = {
+    # =================================================================
+    # Priority 1 - Specific intents (check first, win over STATUS_*)
+    # =================================================================
+    AnswerType.RISK_ANALYSIS: {
+        "keywords": ["리스크", "위험", "risk", "위험요소", "리스크 분석"],
+        # NOTE: Removed "이슈" as it conflicts with general issues
+        "priority": 1,
+    },
+    AnswerType.TASK_DUE_THIS_WEEK: {
+        # COMBINATION RULE: "이번 주" + task-related word required
+        "keywords": ["이번 주", "이번주", "금주", "this week"],
+        "requires_any": ["태스크", "할 일", "task", "작업", "마감", "완료해야", "해야 할", "due", "what's", "tasks"],
+        "priority": 1,
+    },
+    AnswerType.SPRINT_PROGRESS: {
+        # COMBINATION RULE: sprint context + progress context
+        "keywords": ["스프린트", "sprint"],
+        "requires_any": ["진행", "상황", "진척", "번다운", "velocity", "속도", "현황", "진행률", "progress", "going", "status", "how"],
+        "priority": 1,
+    },
+    AnswerType.BACKLOG_LIST: {
+        "keywords": ["백로그", "backlog", "제품 백로그"],
+        "priority": 1,
+    },
+
+    # =================================================================
+    # Priority 2 - General status (CONSTRAINED to avoid black hole)
+    # =================================================================
+    AnswerType.STATUS_METRIC: {
+        # MUST have explicit status-domain keywords
+        "keywords": ["완료율", "진척률", "WIP", "진행률"],
+        "requires_any": ["프로젝트", "전체", "현재"],  # Context required
+        "priority": 2,
+    },
+    AnswerType.STATUS_LIST: {
+        # REMOVED: "목록", "리스트", "뭐가 있" - too broad
+        # Now requires explicit status context
+        "keywords": ["상태별", "스토리 수", "진행 상태"],
+        "requires_any": ["조회", "보여", "알려"],
+        "priority": 2,
+    },
+
+    # =================================================================
+    # Priority 3 - Casual (short messages only)
+    # =================================================================
+    AnswerType.CASUAL: {
+        "keywords": ["안녕", "고마워", "감사", "반가워", "hello", "hi", "thanks"],
+        "max_length": 15,
+        "priority": 3,
+    },
+}
+
+
+# =============================================================================
+# Pattern Definitions (Legacy - still used for detailed matching)
 # =============================================================================
 
 # Status/Metric patterns - require data aggregation/calculation
@@ -278,14 +361,73 @@ class AnswerTypeClassifier:
         """
         Classify a user query into an answer type.
 
+        IMPORTANT:
+        - Returns AnswerType enum
+        - Use result.answer_type.value for the intent key
+        - Fallback is UNKNOWN (→ RAG), NOT status_metric
+
+        Priority-based classification:
+        1. Priority 1: Specific intents (RISK, TASK_DUE, SPRINT, BACKLOG)
+        2. Priority 2: General status (STATUS_METRIC, STATUS_LIST)
+        3. Priority 3: Casual
+        4. Legacy pattern matching
+        5. Fallback to UNKNOWN
+
         Args:
             query: User's question text
 
         Returns:
             AnswerTypeResult with classification details
         """
+        if not query or not query.strip():
+            return AnswerTypeResult(
+                answer_type=AnswerType.UNKNOWN,
+                confidence=0.0,
+                reasoning="Empty query"
+            )
+
         query = query.strip()
         query_lower = query.lower()
+
+        # =================================================================
+        # PRIORITY-BASED CLASSIFICATION (P0 Implementation)
+        # Check by priority order (1, 2, 3)
+        # =================================================================
+        for priority in [1, 2, 3]:
+            for answer_type, config in INTENT_PATTERNS.items():
+                if config.get("priority") != priority:
+                    continue
+
+                # Check max_length constraint (for CASUAL)
+                max_len = config.get("max_length")
+                if max_len and len(query) > max_len:
+                    continue
+
+                # Check primary keywords
+                keywords = config.get("keywords", [])
+                matched = [kw for kw in keywords if kw in query_lower]
+
+                if not matched:
+                    continue
+
+                # Check requires_any constraint (combination rule)
+                requires_any = config.get("requires_any")
+                if requires_any:
+                    has_required = any(req in query_lower for req in requires_any)
+                    if not has_required:
+                        continue
+
+                confidence = min(0.95, 0.7 + len(matched) * 0.1)
+                return AnswerTypeResult(
+                    answer_type=answer_type,
+                    confidence=confidence,
+                    matched_patterns=matched,
+                    reasoning=f"Priority {priority} intent matched: {matched}"
+                )
+
+        # =================================================================
+        # LEGACY PATTERN MATCHING (for backward compatibility)
+        # =================================================================
 
         # 1. Check for casual (short messages, greetings)
         if len(query) <= 15:
@@ -422,12 +564,16 @@ class AnswerTypeClassifier:
                 reasoning="Aggregation signal detected, defaulting to status"
             )
 
-        # 11. Default to how-to for general questions
+        # =================================================================
+        # CRITICAL: Fallback to UNKNOWN, NOT status_metric
+        # This prevents "all questions → status template" regression
+        # UNKNOWN routes to document_query (RAG)
+        # =================================================================
         return AnswerTypeResult(
-            answer_type=AnswerType.HOWTO_POLICY,
-            confidence=0.5,
+            answer_type=AnswerType.UNKNOWN,
+            confidence=0.3,
             matched_patterns=[],
-            reasoning="No clear pattern match, defaulting to document search"
+            reasoning="No clear pattern match, routing to RAG (document_query)"
         )
 
     def _detect_howto_trap(self, query: str) -> bool:
@@ -567,11 +713,29 @@ class AnswerTypeClassifier:
         return any(kw in query_lower for kw in time_keywords)
 
     def is_status_query(self, answer_type: AnswerType) -> bool:
-        """Check if answer type is a status query type"""
+        """Check if answer type is a status query type (uses existing status engine)"""
         return answer_type in {
             AnswerType.STATUS_METRIC,
             AnswerType.STATUS_LIST,
             AnswerType.STATUS_DRILLDOWN,
+        }
+
+    def has_dedicated_handler(self, answer_type: AnswerType) -> bool:
+        """Check if answer type has a dedicated intent handler (P0 handlers)"""
+        return answer_type in {
+            AnswerType.BACKLOG_LIST,
+            AnswerType.SPRINT_PROGRESS,
+            AnswerType.TASK_DUE_THIS_WEEK,
+            AnswerType.RISK_ANALYSIS,
+            AnswerType.CASUAL,
+            AnswerType.UNKNOWN,
+        }
+
+    def should_use_rag(self, answer_type: AnswerType) -> bool:
+        """Check if answer type should be handled by RAG (document_query)"""
+        return answer_type in {
+            AnswerType.UNKNOWN,
+            AnswerType.HOWTO_POLICY,
         }
 
 

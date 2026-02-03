@@ -42,6 +42,15 @@ from status_response_contract import (
     build_status_response, create_no_data_response, StatusResponseContract
 )
 
+# P0: Intent Routing & Handler Implementation
+from intent_handlers import (
+    get_handler,
+    has_dedicated_handler,
+    HandlerContext,
+    INTENT_HANDLERS
+)
+from response_renderer import render as render_intent_response
+
 logger = logging.getLogger(__name__)
 
 
@@ -185,6 +194,9 @@ class TwoTrackState(TypedDict):
     # Response
     response: str
     confidence: float
+
+    # P0: Intent Routing - Single state key for intent routing
+    # CRITICAL: All modules use state["intent"] only (NOT "answer_type" for routing)
     intent: str
 
     # Phase 1: Authority Gate
@@ -359,6 +371,10 @@ class TwoTrackWorkflow:
         workflow.add_node("build_status_response", self._build_status_response_node)
         workflow.add_node("summarize_status", self._summarize_status_node)
 
+        # P0: Add intent handler nodes
+        workflow.add_node("casual_response", self._casual_response_node)
+        workflow.add_node("intent_handler", self._execute_intent_handler_node)
+
         # Entry point
         workflow.set_entry_point("classify_track")
 
@@ -376,14 +392,21 @@ class TwoTrackWorkflow:
         )
 
         # classify_answer_type -> conditional routing based on answer type
+        # P0: Enhanced routing with dedicated intent handlers
         workflow.add_conditional_edges(
             "classify_answer_type",
             self._route_after_answer_type,
             {
-                "status_query": "execute_status_query",  # Status queries -> direct DB
-                "document_query": "rag_search",  # Document queries -> RAG
+                "casual_response": "casual_response",        # P0: Casual greetings
+                "intent_handler": "intent_handler",          # P0: Dedicated handlers
+                "execute_status_query": "execute_status_query",  # Status queries -> direct DB
+                "document_query": "rag_search",              # Document queries -> RAG
             }
         )
+
+        # P0: Intent handler goes to monitor (end)
+        workflow.add_edge("casual_response", "monitor")
+        workflow.add_edge("intent_handler", "monitor")
 
         # Status Query workflow
         workflow.add_edge("execute_status_query", "build_status_response")
@@ -516,7 +539,13 @@ class TwoTrackWorkflow:
     # =========================================================================
 
     def _classify_answer_type_node(self, state: TwoTrackState) -> TwoTrackState:
-        """Node: Classify answer type to determine if status query or document query"""
+        """Node: Classify answer type to determine routing path.
+
+        P0 CRITICAL CHANGES:
+        - Single state key: state["intent"] only (NOT state["answer_type"] for routing)
+        - Intent value = lowercase snake_case (e.g., "backlog_list")
+        - Fallback is UNKNOWN -> RAG, NOT status_metric
+        """
         start_time = time.time()
         message = state.get("message") or ""
 
@@ -524,32 +553,184 @@ class TwoTrackWorkflow:
         classifier = get_answer_type_classifier()
         result = classifier.classify(message)
 
-        state["answer_type"] = result.answer_type.value
+        # ============================================================
+        # CRITICAL: Single state key - use "intent" ONLY
+        # DO NOT use "answer_type" for routing decisions
+        # ============================================================
+        intent_value = result.answer_type.value  # e.g., "backlog_list"
+        state["intent"] = intent_value
+
+        # Keep answer_type as read-only alias for legacy compatibility
+        # But NEVER read from this for routing decisions
+        state["answer_type"] = intent_value  # Alias only, DO NOT USE for routing
         state["answer_type_confidence"] = result.confidence
         state["use_status_workflow"] = classifier.is_status_query(result.answer_type)
 
         state["debug_info"]["answer_type"] = {
-            "type": result.answer_type.value,
+            "type": intent_value,
+            "intent": intent_value,  # P0: Add intent for clarity
             "confidence": result.confidence,
             "matched_patterns": result.matched_patterns,
-            "metrics_requested": result.metrics_requested,
-            "time_context": result.time_context,
+            "metrics_requested": getattr(result, 'metrics_requested', []),
+            "time_context": getattr(result, 'time_context', 'current'),
             "reasoning": result.reasoning,
+        }
+        state["debug_info"]["classifier_result"] = {
+            "intent": intent_value,
+            "confidence": result.confidence,
+            "matched_patterns": result.matched_patterns,
         }
         state["metrics"]["answer_type_time_ms"] = (time.time() - start_time) * 1000
 
         logger.info(
-            f"Answer type: {result.answer_type.value} "
-            f"(confidence={result.confidence:.2f}, use_status={state['use_status_workflow']})"
+            f"Classified intent: {intent_value} "
+            f"(confidence={result.confidence:.2f}, has_handler={has_dedicated_handler(intent_value)})"
         )
 
         return state
 
-    def _route_after_answer_type(self, state: TwoTrackState) -> Literal["status_query", "document_query"]:
-        """Route based on answer type classification"""
-        if state.get("use_status_workflow", False):
-            return "status_query"
+    def _normalize_intent(self, raw_intent: str) -> str:
+        """
+        Normalize intent to lowercase snake_case.
+
+        STRICT MODE: Normalizes and logs warning if needed.
+        """
+        if not raw_intent:
+            return "unknown"
+
+        normalized = raw_intent.lower().strip()
+
+        if normalized != raw_intent:
+            logger.warning(
+                f"Intent normalization applied: '{raw_intent}' -> '{normalized}'. "
+                "Upstream should return lowercase."
+            )
+
+        return normalized
+
+    def _route_after_answer_type(self, state: TwoTrackState) -> Literal[
+        "casual_response", "intent_handler", "execute_status_query", "document_query"
+    ]:
+        """
+        Route based on answer type classification.
+
+        P0 Routing rules:
+        1. casual -> casual_response
+        2. Dedicated handler exists -> intent_handler
+        3. status_metric/status_list -> execute_status_query (existing path)
+        4. unknown/howto -> document_query (RAG) - NOT status!
+
+        IMPORTANT:
+        - Reads from state["intent"] ONLY
+        - Normalizes at entry (strict mode)
+
+        CRITICAL (Risk 10): Return values MUST match actual graph node names exactly.
+        """
+        # Get and normalize intent (single normalization point)
+        raw_intent = state.get("intent", "unknown")
+        intent = self._normalize_intent(raw_intent)
+        state["intent"] = intent  # Store normalized value back
+
+        logger.debug(f"Routing intent: {intent}")
+
+        # 1. Casual: direct response
+        if intent == "casual":
+            return "casual_response"
+
+        # 2. Dedicated handlers (backlog, sprint, task, risk)
+        if has_dedicated_handler(intent):
+            return "intent_handler"
+
+        # 3. Status queries: use existing status engine
+        if intent in ("status_metric", "status_list", "status_drilldown"):
+            return "execute_status_query"
+
+        # 4. CRITICAL: Unknown/howto -> RAG, NOT status
+        # This prevents regression to "all questions -> status template"
+        logger.info(f"Intent '{intent}' routed to document_query (RAG)")
         return "document_query"
+
+    # =========================================================================
+    # P0: Intent Handler Nodes (New in P0)
+    # =========================================================================
+
+    def _casual_response_node(self, state: TwoTrackState) -> TwoTrackState:
+        """Node: Handle casual greetings directly"""
+        state["response"] = (
+            "Hello! I'm the PMS Assistant 😊\n"
+            "Feel free to ask about project schedules, backlog, risks, issues, and more!"
+        )
+        state["confidence"] = 1.0
+        state["debug_info"]["handler"] = "casual"
+        logger.info("Casual response generated")
+        return state
+
+    def _execute_intent_handler_node(self, state: TwoTrackState) -> TwoTrackState:
+        """
+        Node: Execute intent-specific handler.
+
+        For: backlog_list, sprint_progress, task_due_this_week, risk_analysis
+        Uses handlers from intent_handlers.py with graceful degradation.
+        """
+        start_time = time.time()
+
+        # Read from state["intent"] ONLY
+        intent = state.get("intent", "unknown")
+        project_id = state.get("project_id")
+        user_access_level = state.get("user_access_level", 6)
+        user_role = state.get("user_role", "MEMBER")
+        message = state.get("message", "")
+
+        if not project_id:
+            logger.warning("No project_id for intent handler, using default")
+            project_id = "proj-001"  # fallback
+
+        # Create handler context
+        ctx = HandlerContext(
+            project_id=project_id,
+            user_access_level=user_access_level,
+            user_role=user_role,
+            message=message,
+        )
+
+        # Get handler
+        handler = get_handler(intent)
+
+        if handler is None:
+            # Should not happen if routing is correct
+            logger.error(f"No handler for intent: {intent}")
+            state["response"] = "Unable to process this request."
+            state["confidence"] = 0.3
+            return state
+
+        # Execute handler (graceful degradation built into handlers)
+        try:
+            contract = handler(ctx)
+
+            # Render response using intent-specific renderer
+            response_text = render_intent_response(contract)
+
+            # Update state
+            state["response"] = response_text
+            state["confidence"] = 0.95 if contract.has_data() else 0.7
+            state["debug_info"]["handler"] = intent
+            state["debug_info"]["has_data"] = contract.has_data()
+            state["debug_info"]["error_code"] = contract.error_code  # Track errors
+
+            logger.info(
+                f"Intent handler executed: {intent}, "
+                f"has_data={contract.has_data()}, error_code={contract.error_code}"
+            )
+
+        except Exception as e:
+            logger.exception(f"Intent handler failed: {e}")
+            state["response"] = f"An error occurred while processing your request: {str(e)}"
+            state["confidence"] = 0.3
+            state["debug_info"]["handler_error"] = str(e)
+
+        state["metrics"]["handler_time_ms"] = (time.time() - start_time) * 1000
+
+        return state
 
     def _execute_status_query_node(self, state: TwoTrackState) -> TwoTrackState:
         """Node: Execute status query against database
