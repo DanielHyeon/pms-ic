@@ -1,4 +1,14 @@
 import { DEFAULT_TEMPLATES, getDefaultTemplateById } from '../data/defaultTemplates';
+import { getMockWbsGroups, getMockWbsItems, getMockWbsTasks } from '../mocks/wbs.mock';
+import {
+  getMockPhases,
+  getMockPhaseById,
+  getMockSprints,
+  getMockSprintById,
+  getMockParts,
+  getMockPartById,
+  getMockPartMembers,
+} from '../mocks/dashboard.mock';
 
 // Base URL without version prefix - version is added per-endpoint
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8083/api';
@@ -362,12 +372,12 @@ export class ApiService {
 
   // ========== Part (Sub-Project) API ==========
   async getParts(projectId: string) {
-    const response = await this.fetchWithFallback(`/projects/${projectId}/parts`, {}, { data: [] });
+    const response = await this.fetchWithFallback(`/projects/${projectId}/parts`, {}, { data: getMockParts(projectId) });
     return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
   }
 
   async getPart(partId: string) {
-    const response = await this.fetchWithFallback(`/parts/${partId}`, {}, { data: null });
+    const response = await this.fetchWithFallback(`/parts/${partId}`, {}, { data: getMockPartById(partId) || null });
     return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
   }
 
@@ -401,7 +411,7 @@ export class ApiService {
   }
 
   async getPartMembers(partId: string) {
-    const response = await this.fetchWithFallback(`/parts/${partId}/members`, {}, { data: [] });
+    const response = await this.fetchWithFallback(`/parts/${partId}/members`, {}, { data: getMockPartMembers(partId) });
     return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
   }
 
@@ -466,11 +476,11 @@ export class ApiService {
   // ========== Phase API ==========
   async getPhases(projectId?: string) {
     const params = projectId ? `?projectId=${projectId}` : '';
-    return this.fetchWithFallback(`/phases${params}`, {}, []);
+    return this.fetchWithFallback(`/phases${params}`, {}, getMockPhases(projectId));
   }
 
   async getPhase(phaseId: string) {
-    return this.fetchWithFallback(`/phases/${phaseId}`, {}, null);
+    return this.fetchWithFallback(`/phases/${phaseId}`, {}, getMockPhaseById(phaseId) || null);
   }
 
   async createPhase(projectId: string, data: {
@@ -1967,7 +1977,7 @@ export class ApiService {
 
   // ========== WBS API ==========
   async getWbsGroups(phaseId: string) {
-    const response = await this.fetchWithFallback(`/phases/${phaseId}/wbs-groups`, {}, { data: [] });
+    const response = await this.fetchWithFallback(`/phases/${phaseId}/wbs-groups`, {}, { data: getMockWbsGroups(phaseId) });
     return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
   }
 
@@ -2000,7 +2010,7 @@ export class ApiService {
   }
 
   async getWbsItems(groupId: string) {
-    const response = await this.fetchWithFallback(`/wbs/groups/${groupId}/items`, {}, { data: [] });
+    const response = await this.fetchWithFallback(`/wbs/groups/${groupId}/items`, {}, { data: getMockWbsItems(groupId) });
     return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
   }
 
@@ -2032,7 +2042,7 @@ export class ApiService {
   }
 
   async getWbsTasks(itemId: string) {
-    const response = await this.fetchWithFallback(`/wbs/items/${itemId}/tasks`, {}, { data: [] });
+    const response = await this.fetchWithFallback(`/wbs/items/${itemId}/tasks`, {}, { data: getMockWbsTasks(itemId) });
     return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
   }
 

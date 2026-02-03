@@ -1,47 +1,21 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Sprint, SprintFormData, SprintWithItems, UserStory } from '../../types/backlog';
+import { mockSprints } from '../../mocks/dashboard.mock';
 
-// Initial mock data for development
-const initialSprints: Sprint[] = [
-  {
-    id: 'sprint-1',
-    projectId: 'proj-001',
-    name: 'Sprint 1',
-    goal: 'OCR 기본 기능 구현',
-    startDate: '2026-01-06',
-    endDate: '2026-01-19',
-    status: 'COMPLETED',
-    velocity: 21,
-    plannedPoints: 24,
-    createdAt: '2026-01-06T00:00:00Z',
-    updatedAt: '2026-01-19T00:00:00Z',
-  },
-  {
-    id: 'sprint-2',
-    projectId: 'proj-001',
-    name: 'Sprint 2',
-    goal: 'OCR 정확도 개선 및 문서 분류',
-    startDate: '2026-01-20',
-    endDate: '2026-02-02',
-    status: 'ACTIVE',
-    velocity: 0,
-    plannedPoints: 26,
-    createdAt: '2026-01-20T00:00:00Z',
-    updatedAt: '2026-01-25T00:00:00Z',
-  },
-  {
-    id: 'sprint-3',
-    projectId: 'proj-001',
-    name: 'Sprint 3',
-    goal: 'AI 판단 엔진 기초 구현',
-    startDate: '2026-02-03',
-    endDate: '2026-02-16',
-    status: 'PLANNING',
-    plannedPoints: 0,
-    createdAt: '2026-01-25T00:00:00Z',
-    updatedAt: '2026-01-25T00:00:00Z',
-  },
-];
+// Initial mock data from comprehensive DB-based mock data
+const initialSprints: Sprint[] = mockSprints.map((s) => ({
+  id: s.id,
+  projectId: s.projectId,
+  name: s.name,
+  goal: s.goal,
+  startDate: s.startDate,
+  endDate: s.endDate,
+  status: s.status === 'PLANNED' ? 'PLANNING' : s.status,
+  velocity: s.status === 'COMPLETED' ? 21 : 0,
+  plannedPoints: s.conwipLimit,
+  createdAt: `${s.startDate}T00:00:00Z`,
+  updatedAt: `${s.startDate}T00:00:00Z`,
+}));
 
 const STORAGE_KEY = 'backlog_sprints';
 

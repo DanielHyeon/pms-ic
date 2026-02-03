@@ -323,24 +323,33 @@ ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.desc
 -- ============================================
 -- 3. PHASES (project.phases)
 -- ============================================
--- Project 1 Phases
-INSERT INTO project.phases (id, project_id, name, order_num, status, gate_status, start_date, end_date, progress, description, track_type, created_at, updated_at)
+-- Project 1 Main Phases
+INSERT INTO project.phases (id, project_id, parent_id, name, order_num, status, gate_status, start_date, end_date, progress, description, track_type, created_at, updated_at)
 VALUES
-    ('phase-001-01', 'proj-001', '요구사항 분석', 1, 'COMPLETED', 'APPROVED', '2026-01-15', '2026-01-31', 100, 'AI 보험심사 처리에 대한 모든 요구사항 수집 및 분석', 'COMMON', NOW(), NOW()),
-    ('phase-001-02', 'proj-001', '시스템 설계', 2, 'IN_PROGRESS', 'PENDING', '2026-02-01', '2026-02-28', 60, '시스템 아키텍처 및 데이터 모델 설계', 'COMMON', NOW(), NOW()),
-    ('phase-001-03', 'proj-001', 'AI 모델 개발', 3, 'NOT_STARTED', NULL, '2026-03-01', '2026-04-15', 0, '문서 처리 및 사기 탐지를 위한 AI 모델 개발 및 훈련', 'AI', NOW(), NOW()),
-    ('phase-001-04', 'proj-001', '백엔드 개발', 4, 'NOT_STARTED', NULL, '2026-03-15', '2026-05-15', 0, '백엔드 서비스 및 API 구현', 'SI', NOW(), NOW()),
-    ('phase-001-05', 'proj-001', '통합 및 테스트', 5, 'NOT_STARTED', NULL, '2026-05-01', '2026-06-15', 0, '시스템 통합 및 종합 테스트', 'COMMON', NOW(), NOW()),
-    ('phase-001-06', 'proj-001', '배포 및 오픈', 6, 'NOT_STARTED', NULL, '2026-06-15', '2026-06-30', 0, '운영 환경 배포 및 사용자 교육', 'COMMON', NOW(), NOW()),
+    ('phase-001-01', 'proj-001', NULL, '요구사항 분석', 1, 'COMPLETED', 'APPROVED', '2026-01-15', '2026-01-31', 100, 'AI 보험심사 처리에 대한 모든 요구사항 수집 및 분석', 'COMMON', NOW(), NOW()),
+    ('phase-001-02', 'proj-001', NULL, '시스템 설계', 2, 'IN_PROGRESS', 'PENDING', '2026-02-01', '2026-02-28', 60, '시스템 아키텍처 및 데이터 모델 설계', 'COMMON', NOW(), NOW()),
+    ('phase-001-03', 'proj-001', NULL, 'AI 모델 개발', 3, 'IN_PROGRESS', 'PENDING', '2025-01-02', '2025-12-31', 85, '문서 처리 및 사기 탐지를 위한 AI 모델 개발 및 훈련', 'AI', NOW(), NOW()),
+    ('phase-001-04', 'proj-001', NULL, '백엔드 개발', 4, 'NOT_STARTED', NULL, '2026-03-15', '2026-05-15', 0, '백엔드 서비스 및 API 구현', 'SI', NOW(), NOW()),
+    ('phase-001-05', 'proj-001', NULL, '통합 및 테스트', 5, 'NOT_STARTED', NULL, '2026-05-01', '2026-06-15', 0, '시스템 통합 및 종합 테스트', 'COMMON', NOW(), NOW()),
+    ('phase-001-06', 'proj-001', NULL, '배포', 6, 'NOT_STARTED', NULL, '2026-06-15', '2026-06-30', 0, '운영 환경 배포 및 사용자 교육', 'COMMON', NOW(), NOW()),
 
-    -- Project 2 Phases
-    ('phase-002-01', 'proj-002', '시장조사 및 기획', 1, 'IN_PROGRESS', 'PENDING', '2026-02-01', '2026-02-28', 30, '시장 니즈 조사 및 상세 프로젝트 계획 수립', 'COMMON', NOW(), NOW()),
-    ('phase-002-02', 'proj-002', 'UX/UI 디자인', 2, 'NOT_STARTED', NULL, '2026-03-01', '2026-03-31', 0, '모바일 앱 사용자 경험 및 인터페이스 디자인', 'COMMON', NOW(), NOW()),
-    ('phase-002-03', 'proj-002', '모바일 앱 개발', 3, 'NOT_STARTED', NULL, '2026-04-01', '2026-06-30', 0, 'iOS 및 Android 애플리케이션 개발', 'SI', NOW(), NOW()),
-    ('phase-002-04', 'proj-002', '백엔드 API 개발', 4, 'NOT_STARTED', NULL, '2026-04-01', '2026-06-15', 0, '모바일 플랫폼을 위한 백엔드 API 구축', 'SI', NOW(), NOW()),
-    ('phase-002-05', 'proj-002', '테스트 및 QA', 5, 'NOT_STARTED', NULL, '2026-06-15', '2026-08-15', 0, '품질 보증 및 사용자 수용 테스트', 'COMMON', NOW(), NOW()),
-    ('phase-002-06', 'proj-002', '출시 및 마케팅', 6, 'NOT_STARTED', NULL, '2026-08-15', '2026-08-31', 0, '앱스토어 등록 및 마케팅 캠페인', 'COMMON', NOW(), NOW())
-ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description;
+    -- Project 2 Main Phases
+    ('phase-002-01', 'proj-002', NULL, '시장 조사', 1, 'IN_PROGRESS', 'PENDING', '2026-02-01', '2026-02-28', 40, '시장 니즈 조사 및 상세 프로젝트 계획 수립', 'COMMON', NOW(), NOW()),
+    ('phase-002-02', 'proj-002', NULL, 'UX/UI 디자인', 2, 'NOT_STARTED', NULL, '2026-03-01', '2026-03-31', 0, '모바일 앱 사용자 경험 및 인터페이스 디자인', 'COMMON', NOW(), NOW()),
+    ('phase-002-03', 'proj-002', NULL, '모바일 앱 개발', 3, 'NOT_STARTED', NULL, '2026-04-01', '2026-06-15', 0, 'iOS 및 Android 애플리케이션 개발', 'SI', NOW(), NOW()),
+    ('phase-002-04', 'proj-002', NULL, '백엔드 API', 4, 'NOT_STARTED', NULL, '2026-04-01', '2026-06-30', 0, '모바일 플랫폼을 위한 백엔드 API 구축', 'SI', NOW(), NOW())
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, progress = EXCLUDED.progress, status = EXCLUDED.status;
+
+-- Child Phases under "AI 모델 개발" (phase-001-03)
+INSERT INTO project.phases (id, project_id, parent_id, name, order_num, status, gate_status, start_date, end_date, progress, description, track_type, created_at, updated_at)
+VALUES
+    ('phase-001-03-01', 'proj-001', 'phase-001-03', '1단계: 업무 현황 진단/분석', 1, 'COMPLETED', 'APPROVED', '2025-01-02', '2025-02-15', 100, '지급심사 프로세스 현황 파악 및 AI 적용 타당성 검토', 'AI', NOW(), NOW()),
+    ('phase-001-03-02', 'proj-001', 'phase-001-03', '2단계: 데이터 수집/정제', 2, 'COMPLETED', 'APPROVED', '2025-02-16', '2025-04-30', 100, '데이터 수집, 정제, 라벨링 및 피처 엔지니어링', 'AI', NOW(), NOW()),
+    ('phase-001-03-03', 'proj-001', 'phase-001-03', '3단계: AI모델 설계/학습', 3, 'IN_PROGRESS', 'PENDING', '2025-05-01', '2025-08-31', 85, 'AI 모델 설계, 학습, 평가 및 하이브리드 로직 구축', 'AI', NOW(), NOW()),
+    ('phase-001-03-04', 'proj-001', 'phase-001-03', '4단계: 업무시스템 연동/운영 자동화', 4, 'NOT_STARTED', NULL, '2025-09-01', '2025-10-31', 0, '기존 업무시스템과 AI 통합 및 MLOps 구축', 'AI', NOW(), NOW()),
+    ('phase-001-03-05', 'proj-001', 'phase-001-03', '5단계: 효과 검증/운영고도화', 5, 'NOT_STARTED', NULL, '2025-11-01', '2025-11-30', 0, 'PoC 검증, 성능 평가 및 지속적 개선', 'AI', NOW(), NOW()),
+    ('phase-001-03-06', 'proj-001', 'phase-001-03', '6단계: 조직/프로세스 변화관리', 6, 'NOT_STARTED', NULL, '2025-12-01', '2025-12-31', 0, '교육, 가이드라인, AI 거버넌스 체계 구축', 'AI', NOW(), NOW())
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, progress = EXCLUDED.progress, status = EXCLUDED.status;
 
 -- ============================================
 -- 4. KANBAN COLUMNS (task.kanban_columns)
@@ -409,13 +418,20 @@ ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.de
 -- ============================================
 -- 5.1. SPRINTS (task.sprints) - For Lineage Tracking
 -- ============================================
-INSERT INTO task.sprints (id, project_id, name, goal, status, start_date, end_date, enable_wip_validation, created_at, updated_at)
+INSERT INTO task.sprints (id, project_id, name, goal, status, start_date, end_date, enable_wip_validation, conwip_limit, created_at, updated_at)
 VALUES
-    ('sprint-001-01', 'proj-001', '스프린트 1 - 기반 구축', '프로젝트 기반 구축 및 요구사항 분석 완료', 'COMPLETED', '2026-01-15', '2026-01-31', true, NOW(), NOW()),
-    ('sprint-001-02', 'proj-001', '스프린트 2 - 설계', '시스템 설계 및 아키텍처 완료', 'ACTIVE', '2026-02-01', '2026-02-14', true, NOW(), NOW()),
-    ('sprint-001-03', 'proj-001', '스프린트 3 - AI 개발', '핵심 AI 모델 개발', 'PLANNED', '2026-02-15', '2026-02-28', true, NOW(), NOW()),
-    ('sprint-002-01', 'proj-002', '스프린트 1 - 리서치', '시장조사 및 기획', 'ACTIVE', '2026-02-01', '2026-02-14', true, NOW(), NOW())
-ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, goal = EXCLUDED.goal;
+    -- Project 1 Sprints (5 sprints)
+    ('sprint-001-01', 'proj-001', '스프린트 1 - 기획', '요구사항 분석 및 설계 완료', 'COMPLETED', '2026-01-15', '2026-01-28', true, 15, NOW(), NOW()),
+    ('sprint-001-02', 'proj-001', '스프린트 2 - 설계', '아키텍처 및 데이터 모델 설계', 'COMPLETED', '2026-01-29', '2026-02-11', true, 15, NOW(), NOW()),
+    ('sprint-001-03', 'proj-001', '스프린트 3 - API 설계', 'RESTful API 명세 및 보안 설계', 'ACTIVE', '2026-02-12', '2026-02-25', true, 15, NOW(), NOW()),
+    ('sprint-001-04', 'proj-001', '스프린트 4 - AI 모델 기초', 'OCR 데이터 수집 및 기초 모델 개발', 'PLANNED', '2026-03-01', '2026-03-14', true, 15, NOW(), NOW()),
+    ('sprint-001-05', 'proj-001', '스프린트 5 - AI 모델 훈련', 'OCR/사기탐지 모델 훈련 및 검증', 'PLANNED', '2026-03-15', '2026-03-28', true, 15, NOW(), NOW()),
+
+    -- Project 2 Sprints (3 sprints)
+    ('sprint-002-01', 'proj-002', '스프린트 1 - 시장 조사', '시장 분석 및 사용자 리서치', 'ACTIVE', '2026-02-01', '2026-02-14', true, 12, NOW(), NOW()),
+    ('sprint-002-02', 'proj-002', '스프린트 2 - UX 설계', 'UX 리서치 완료 및 와이어프레임', 'PLANNED', '2026-02-15', '2026-02-28', true, 12, NOW(), NOW()),
+    ('sprint-002-03', 'proj-002', '스프린트 3 - UI 디자인', 'UI 디자인 및 프로토타입', 'PLANNED', '2026-03-01', '2026-03-14', true, 12, NOW(), NOW())
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, goal = EXCLUDED.goal, status = EXCLUDED.status, conwip_limit = EXCLUDED.conwip_limit;
 
 -- ============================================
 -- 5.2. USER STORIES (task.user_stories) - For Lineage Tracking
@@ -500,42 +516,50 @@ ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.de
 -- ============================================
 INSERT INTO project.parts (id, project_id, name, description, leader_id, leader_name, status, start_date, end_date, progress, created_at, updated_at)
 VALUES
-    -- Project 1 Parts
-    ('part-001-01', 'proj-001', 'AI 개발', '보험청구 처리를 위한 AI/ML 모델 개발팀', 'user-dev-002', '최은지', 'ACTIVE', '2026-01-15', '2026-06-30', 30, NOW(), NOW()),
-    ('part-001-02', 'proj-001', '백엔드 개발', '백엔드 API 및 서비스 개발', 'user-dev-001', '박성호', 'ACTIVE', '2026-01-15', '2026-06-30', 25, NOW(), NOW()),
-    ('part-001-03', 'proj-001', 'QA 및 테스트', '품질 보증 및 테스트팀', 'user-qa-001', '한수진', 'ACTIVE', '2026-01-15', '2026-06-30', 20, NOW(), NOW()),
+    -- Project 1 Parts (4 parts: AI, SI, Common, QA)
+    ('part-001-ai', 'proj-001', 'AI 개발 파트', 'AI/ML 모델 개발 및 OCR, 사기탐지 시스템 구현', 'user-dev-002', '박민수', 'ACTIVE', '2026-01-15', '2026-06-30', 45, NOW(), NOW()),
+    ('part-001-si', 'proj-001', 'SI 개발 파트', '백엔드 API 및 레거시 시스템 연동 개발', 'user-dev-001', '김철수', 'ACTIVE', '2026-02-01', '2026-06-30', 67, NOW(), NOW()),
+    ('part-001-common', 'proj-001', '공통 파트', '보안, 인프라, 테스트 자동화 및 품질 관리', 'user-dev-003', '한지영', 'ACTIVE', '2026-01-15', '2026-06-30', 35, NOW(), NOW()),
+    ('part-001-qa', 'proj-001', 'QA 파트', '테스트 계획, 테스트 케이스 설계 및 품질 보증', 'user-qa-001', '최지훈', 'ACTIVE', '2026-02-15', '2026-06-30', 20, NOW(), NOW()),
 
-    -- Project 2 Parts
-    ('part-002-01', 'proj-002', '모바일 개발', 'iOS 및 Android 앱 개발', 'user-dev-001', '박성호', 'ACTIVE', '2026-02-01', '2026-08-31', 10, NOW(), NOW()),
-    ('part-002-02', 'proj-002', 'UX/UI 디자인', '사용자 경험 및 인터페이스 디자인', NULL, NULL, 'ACTIVE', '2026-02-01', '2026-08-31', 5, NOW(), NOW()),
-    ('part-002-03', 'proj-002', '백엔드 API', '모바일 백엔드 API 개발', 'user-dev-003', '정원재', 'ACTIVE', '2026-02-01', '2026-08-31', 0, NOW(), NOW())
-ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description;
+    -- Project 2 Parts (2 parts: UX/UI, Mobile)
+    ('part-002-ux', 'proj-002', 'UX/UI 파트', '모바일 앱 UX 설계 및 UI 디자인', 'user-ba-001', '이영희', 'ACTIVE', '2026-02-01', '2026-04-30', 25, NOW(), NOW()),
+    ('part-002-mobile', 'proj-002', '모바일 개발 파트', 'iOS/Android 네이티브 앱 개발', 'user-dev-001', '김철수', 'ACTIVE', '2026-03-01', '2026-06-30', 0, NOW(), NOW())
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, progress = EXCLUDED.progress, leader_name = EXCLUDED.leader_name;
 
 -- ============================================
 -- 9. PART MEMBERS (project.part_members)
 -- ============================================
 INSERT INTO project.part_members (part_id, user_id)
 VALUES
-    -- AI Development Part members
-    ('part-001-01', 'user-dev-002'),
-    ('part-001-01', 'user-ba-001'),
+    -- AI Part Members (part-001-ai) - 4 members
+    ('part-001-ai', 'user-dev-002'),  -- Leader: Park Minsu
+    ('part-001-ai', 'user-ba-001'),   -- Member: Lee Younghee
+    ('part-001-ai', 'user-dev-004'),  -- Member: Jung Sumin
+    ('part-001-ai', 'user-dev-005'),  -- Member: Oh Minseok
 
-    -- Backend Development Part members
-    ('part-001-02', 'user-dev-001'),
-    ('part-001-02', 'user-dev-003'),
+    -- SI Part Members (part-001-si) - 3 members
+    ('part-001-si', 'user-dev-001'),  -- Leader: Kim Cheolsu
+    ('part-001-si', 'user-dev-006'),  -- Member: Kang Minho
+    ('part-001-si', 'user-dev-007'),  -- Member: Yoon Seoyeon
 
-    -- QA Part members
-    ('part-001-03', 'user-qa-001'),
+    -- Common Part Members (part-001-common) - 3 members
+    ('part-001-common', 'user-dev-003'),  -- Leader: Han Jiyoung
+    ('part-001-common', 'user-dev-008'),  -- Member: Im Jaehyun
+    ('part-001-common', 'user-dev-009'),  -- Member: Song Yuna
 
-    -- Mobile Development Part members
-    ('part-002-01', 'user-dev-001'),
-    ('part-002-01', 'user-dev-003'),
+    -- QA Part Members (part-001-qa) - 2 members
+    ('part-001-qa', 'user-qa-001'),   -- Leader: Choi Jihoon
+    ('part-001-qa', 'user-qa-002'),   -- Member: Bae Jiwon
 
-    -- UX/UI Design Part members (no leader yet)
-    ('part-002-02', 'user-ba-001'),
+    -- UX Part Members (part-002-ux) - 2 members
+    ('part-002-ux', 'user-ba-001'),   -- Leader: Lee Younghee
+    ('part-002-ux', 'user-ux-001'),   -- Member: Kim Daeun
 
-    -- Backend API Part members
-    ('part-002-03', 'user-dev-003')
+    -- Mobile Part Members (part-002-mobile) - 3 members
+    ('part-002-mobile', 'user-dev-001'),    -- Leader: Kim Cheolsu
+    ('part-002-mobile', 'user-ios-001'),    -- Member: Hong Gildong
+    ('part-002-mobile', 'user-android-001') -- Member: Lee Sunsin
 ON CONFLICT DO NOTHING;
 
 -- ============================================
@@ -1070,13 +1094,9 @@ VALUES
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 
 -- ============================================
--- 34. ADDITIONAL SPRINTS for Velocity Data
+-- 34. SPRINTS data consolidated in section 5.1
 -- ============================================
-INSERT INTO task.sprints (id, project_id, name, goal, status, start_date, end_date, enable_wip_validation, created_at, updated_at)
-VALUES
-    ('sprint-001-04', 'proj-001', '스프린트 4 - AI 훈련', '문서 분류 AI 모델 훈련 완료', 'PLANNED', '2026-03-01', '2026-03-14', true, NOW(), NOW()),
-    ('sprint-001-05', 'proj-001', '스프린트 5 - 사기 탐지', '사기 탐지 모델 기초 구현', 'PLANNED', '2026-03-15', '2026-03-28', true, NOW(), NOW())
-ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
+-- (All 8 sprints are now defined in a single INSERT statement above)
 
 -- ============================================
 -- Summary (Updated):

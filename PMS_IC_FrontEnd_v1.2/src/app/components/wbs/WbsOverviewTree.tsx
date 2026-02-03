@@ -319,7 +319,7 @@ function GroupRow({
       </div>
 
       {isExpanded && hasVisibleItems && (
-        <div className="mt-1 border-l-2 border-blue-100 ml-3">
+        <div className="mt-1 ml-3">
           {filteredItems.map((item) => (
             <ItemRow
               key={item.id}
@@ -459,10 +459,9 @@ function PhaseRow({
           {hasChildPhases && (
             <div className="p-4 space-y-2">
               {/* Tree connector for child phases */}
-              <div className="border-l-2 border-indigo-200 ml-3">
+              <div className="ml-3">
                 {phase.childPhases!.map((childPhase) => (
-                  <div key={childPhase.id} className="relative">
-                    <div className="absolute -left-[9px] top-8 w-2 h-px bg-indigo-200" />
+                  <div key={childPhase.id}>
                     <PhaseRow
                       phase={childPhase}
                       isExpanded={expandedChildPhases?.has(childPhase.id) || false}

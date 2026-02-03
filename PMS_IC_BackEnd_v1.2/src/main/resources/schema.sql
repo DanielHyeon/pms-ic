@@ -96,6 +96,7 @@ CREATE TABLE IF NOT EXISTS project.project_members (
 CREATE TABLE IF NOT EXISTS project.phases (
     id VARCHAR(36) PRIMARY KEY,
     project_id VARCHAR(36) NOT NULL REFERENCES project.projects(id) ON DELETE CASCADE,
+    parent_id VARCHAR(36) REFERENCES project.phases(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
     order_num INTEGER NOT NULL,
     status VARCHAR(50) DEFAULT 'NOT_STARTED',
@@ -720,6 +721,7 @@ CREATE INDEX IF NOT EXISTS idx_projects_status ON project.projects(status);
 CREATE INDEX IF NOT EXISTS idx_project_members_project ON project.project_members(project_id);
 CREATE INDEX IF NOT EXISTS idx_project_members_user ON project.project_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_phases_project ON project.phases(project_id);
+CREATE INDEX IF NOT EXISTS idx_phases_parent ON project.phases(parent_id);
 CREATE INDEX IF NOT EXISTS idx_wbs_items_group ON project.wbs_items(group_id);
 CREATE INDEX IF NOT EXISTS idx_wbs_tasks_item ON project.wbs_tasks(item_id);
 CREATE INDEX IF NOT EXISTS idx_issues_project ON project.issues(project_id);
