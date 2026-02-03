@@ -13,7 +13,7 @@ from typing import Dict, List, Optional
 from neo4j import GraphDatabase
 from sentence_transformers import SentenceTransformer
 
-from document_parser import DocumentParser, LayoutAwareChunker
+from ocr.document_parser import DocumentParser, LayoutAwareChunker
 
 logger = logging.getLogger(__name__)
 

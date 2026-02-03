@@ -94,8 +94,8 @@ SELECT
     us.created_at,
     us.updated_at,
     u.name as creator_name
-FROM user_story us
-LEFT JOIN users u ON us.created_by = u.id
+FROM task.user_stories us
+LEFT JOIN auth.users u ON us.created_by = u.id
 WHERE us.project_id = %(project_id)s
   AND us.sprint_id IS NULL
   AND us.status NOT IN ('DONE', 'CANCELLED', 'ARCHIVED')
@@ -119,7 +119,7 @@ SELECT
     us.status,
     us.story_points,
     us.created_at
-FROM user_story us
+FROM task.user_stories us
 WHERE us.project_id = %(project_id)s
   AND us.sprint_id IS NULL
   AND us.status NOT IN ('DONE', 'CANCELLED', 'ARCHIVED')
@@ -138,7 +138,7 @@ SELECT
     COUNT(CASE WHEN priority IS NULL THEN 1 END) as no_priority,
     COALESCE(SUM(story_points), 0) as total_points,
     COUNT(DISTINCT priority) as priority_diversity
-FROM user_story
+FROM task.user_stories
 WHERE project_id = %(project_id)s
   AND sprint_id IS NULL
   AND status NOT IN ('DONE', 'CANCELLED', 'ARCHIVED')
@@ -173,7 +173,7 @@ SELECT
     END as total_days,
     CASE WHEN s.end_date < CURRENT_DATE THEN true ELSE false END as is_overdue,
     CASE WHEN s.end_date < s.start_date THEN true ELSE false END as has_invalid_dates
-FROM sprint s
+FROM task.sprints s
 WHERE s.project_id = %(project_id)s
   AND s.status = 'ACTIVE'
 ORDER BY s.start_date DESC
@@ -187,7 +187,7 @@ SELECT
     us.status,
     us.story_points,
     us.priority
-FROM user_story us
+FROM task.user_stories us
 WHERE us.sprint_id = %(sprint_id)s
   AND us.project_id = %(project_id)s
 ORDER BY
@@ -218,7 +218,7 @@ SELECT
     COALESCE(SUM(story_points), 0) as total_points,
     COALESCE(SUM(CASE WHEN status = 'DONE' THEN story_points ELSE 0 END), 0) as done_points,
     COUNT(CASE WHEN assignee_id IS NULL AND status != 'DONE' THEN 1 END) as unassigned_count
-FROM user_story
+FROM task.user_stories
 WHERE sprint_id = %(sprint_id)s
   AND project_id = %(project_id)s
 """
@@ -232,7 +232,7 @@ SELECT
     s.status,
     s.start_date,
     s.end_date
-FROM sprint s
+FROM task.sprints s
 WHERE s.project_id = %(project_id)s
   AND s.status = 'COMPLETED'
 ORDER BY s.end_date DESC
@@ -254,8 +254,8 @@ SELECT
     t.due_date,
     t.estimated_hours,
     us.title as story_title
-FROM task t
-LEFT JOIN user_story us ON t.user_story_id = us.id AND us.project_id = %(project_id)s
+FROM task.tasks t
+LEFT JOIN task.user_stories us ON t.user_story_id = us.id AND us.project_id = %(project_id)s
 WHERE t.project_id = %(project_id)s
   AND t.due_date >= %(week_start)s
   AND t.due_date < %(week_end)s
@@ -278,7 +278,7 @@ SELECT
     title,
     status,
     due_date
-FROM task
+FROM task.tasks
 WHERE project_id = %(project_id)s
   AND due_date >= %(week_start)s
   AND due_date < %(week_end)s
@@ -297,8 +297,8 @@ SELECT
     t.due_date,
     (CURRENT_DATE - t.due_date) as days_overdue,
     us.title as story_title
-FROM task t
-LEFT JOIN user_story us ON t.user_story_id = us.id AND us.project_id = %(project_id)s
+FROM task.tasks t
+LEFT JOIN task.user_stories us ON t.user_story_id = us.id AND us.project_id = %(project_id)s
 WHERE t.project_id = %(project_id)s
   AND t.due_date < CURRENT_DATE
   AND t.status NOT IN ('DONE', 'CANCELLED')
@@ -312,7 +312,7 @@ SELECT
     COUNT(*) as all_tasks_count,
     COUNT(CASE WHEN due_date IS NULL AND status NOT IN ('DONE', 'CANCELLED') THEN 1 END) as no_due_date_count,
     COUNT(CASE WHEN status NOT IN ('DONE', 'CANCELLED') THEN 1 END) as active_tasks_count
-FROM task
+FROM task.tasks
 WHERE project_id = %(project_id)s
 """
 
@@ -335,7 +335,7 @@ SELECT
     i.type,
     i.created_at,
     i.updated_at
-FROM issue i
+FROM project.issues i
 WHERE i.project_id = %(project_id)s
   AND (
       i.type = 'RISK'
@@ -367,7 +367,7 @@ SELECT
     title,
     status,
     created_at
-FROM issue
+FROM project.issues
 WHERE project_id = %(project_id)s
   AND (
       LOWER(title) LIKE '%%risk%%'
@@ -388,7 +388,7 @@ SELECT
     i.status,
     i.type,
     i.created_at
-FROM issue i
+FROM project.issues i
 WHERE i.project_id = %(project_id)s
   AND i.type = 'BLOCKER'
   AND i.severity IN ('CRITICAL', 'HIGH')
@@ -406,7 +406,7 @@ SELECT
     COUNT(CASE WHEN type = 'RISK' THEN 1 END) as explicit_risks,
     COUNT(CASE WHEN type = 'BLOCKER' AND severity IN ('CRITICAL', 'HIGH') THEN 1 END) as high_blockers,
     COUNT(CASE WHEN status NOT IN ('CLOSED', 'RESOLVED', 'CANCELLED') THEN 1 END) as active_issues
-FROM issue
+FROM project.issues
 WHERE project_id = %(project_id)s
 """
 
@@ -423,7 +423,7 @@ WITH date_series AS (
         LEAST(s.end_date::date, CURRENT_DATE),
         '1 day'::interval
     )::date as burn_date
-    FROM sprint s
+    FROM task.sprints s
     WHERE s.id = %(sprint_id)s
       AND s.project_id = %(project_id)s
 ),
@@ -431,7 +431,7 @@ daily_done AS (
     SELECT
         us.updated_at::date as done_date,
         COALESCE(SUM(us.story_points), 0) as points_done
-    FROM user_story us
+    FROM task.user_stories us
     WHERE us.sprint_id = %(sprint_id)s
       AND us.project_id = %(project_id)s
       AND us.status = 'DONE'
@@ -439,7 +439,7 @@ daily_done AS (
 ),
 total_points AS (
     SELECT COALESCE(SUM(story_points), 0) as total
-    FROM user_story
+    FROM task.user_stories
     WHERE sprint_id = %(sprint_id)s
       AND project_id = %(project_id)s
 )
@@ -476,8 +476,8 @@ SELECT
         COALESCE(SUM(CASE WHEN us.status = 'DONE' THEN us.story_points ELSE 0 END), 0)::numeric /
         NULLIF(s.end_date - s.start_date, 0), 2
     ) as velocity_per_day
-FROM sprint s
-LEFT JOIN user_story us ON us.sprint_id = s.id AND us.project_id = %(project_id)s
+FROM task.sprints s
+LEFT JOIN task.user_stories us ON us.sprint_id = s.id AND us.project_id = %(project_id)s
 WHERE s.project_id = %(project_id)s
   AND s.status = 'COMPLETED'
 GROUP BY s.id, s.name, s.start_date, s.end_date
@@ -495,7 +495,7 @@ WITH sprint_data AS (
         s.end_date - s.start_date as total_days,
         CURRENT_DATE - s.start_date as elapsed_days,
         s.end_date - CURRENT_DATE as remaining_days
-    FROM sprint s
+    FROM task.sprints s
     WHERE s.id = %(sprint_id)s
       AND s.project_id = %(project_id)s
 ),
@@ -508,7 +508,7 @@ story_metrics AS (
         COUNT(CASE WHEN assignee_id IS NULL AND status NOT IN ('DONE', 'CANCELLED') THEN 1 END) as unassigned,
         COALESCE(SUM(story_points), 0) as total_points,
         COALESCE(SUM(CASE WHEN status = 'DONE' THEN story_points ELSE 0 END), 0) as done_points
-    FROM user_story
+    FROM task.user_stories
     WHERE sprint_id = %(sprint_id)s
       AND project_id = %(project_id)s
 )
@@ -552,13 +552,13 @@ WITH sprint_info AS (
         start_date,
         end_date,
         end_date - start_date as total_days
-    FROM sprint
+    FROM task.sprints
     WHERE id = %(sprint_id)s
       AND project_id = %(project_id)s
 ),
 total_scope AS (
     SELECT COALESCE(SUM(story_points), 0) as total_points
-    FROM user_story
+    FROM task.user_stories
     WHERE sprint_id = %(sprint_id)s
       AND project_id = %(project_id)s
 )
@@ -570,7 +570,7 @@ SELECT
     ROUND(ts.total_points::numeric / NULLIF(si.total_days, 0), 2) as ideal_daily_burn,
     ts.total_points - (
         SELECT COALESCE(SUM(story_points), 0)
-        FROM user_story
+        FROM task.user_stories
         WHERE sprint_id = %(sprint_id)s
           AND project_id = %(project_id)s
           AND status = 'DONE'

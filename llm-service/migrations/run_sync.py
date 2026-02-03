@@ -8,7 +8,7 @@ Usage:
 
 import sys
 import logging
-from pg_neo4j_sync import PGNeo4jSyncService, SyncConfig
+from migrations.pg_neo4j_sync import PGNeo4jSyncService, SyncConfig
 
 logging.basicConfig(
     level=logging.INFO,

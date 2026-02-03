@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 from services.rag_service_neo4j import RAGServiceNeo4j
-from pdf_ocr_pipeline import extract_text_from_pdf
+from ocr.pdf_ocr_pipeline import extract_text_from_pdf
 
 logging.basicConfig(
     level=logging.INFO,

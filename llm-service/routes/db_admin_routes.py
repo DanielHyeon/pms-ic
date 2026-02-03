@@ -16,7 +16,7 @@ from flask import request, jsonify
 from dataclasses import asdict
 
 from . import db_admin_bp
-from pg_neo4j_sync import PGNeo4jSyncService, SyncConfig, get_sync_service
+from migrations.pg_neo4j_sync import PGNeo4jSyncService, SyncConfig, get_sync_service
 from services.backup_service import get_backup_service, BackupConfig
 from services.entity_chunk_service import get_entity_chunk_service
 
