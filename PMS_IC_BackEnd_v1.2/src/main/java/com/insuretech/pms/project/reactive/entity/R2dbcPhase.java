@@ -54,6 +54,10 @@ public class R2dbcPhase extends R2dbcBaseEntity {
     @Column("description")
     private String description;
 
+    @Nullable
+    @Column("parent_id")
+    private String parentId;
+
     @Column("track_type")
     @Builder.Default
     private String trackType = "COMMON";

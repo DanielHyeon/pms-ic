@@ -18,6 +18,7 @@ export interface Phase {
   endDate: string;
   deliverables: Deliverable[];
   kpis: KPI[];
+  parentId?: string;
 }
 
 export type RagStatus = 'PENDING' | 'INDEXING' | 'READY' | 'FAILED';
@@ -142,6 +143,7 @@ export const mapPhaseFromApi = (phase: any): Phase => ({
   endDate: phase.endDate || '',
   deliverables: [],
   kpis: [],
+  parentId: phase.parentId || undefined,
 });
 
 // Utility functions

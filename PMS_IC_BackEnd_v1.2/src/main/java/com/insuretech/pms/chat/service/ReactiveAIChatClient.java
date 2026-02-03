@@ -58,7 +58,7 @@ public class ReactiveAIChatClient {
         AtomicInteger chunkCounter = new AtomicInteger(0);
 
         Map<String, Object> request = buildRequest(
-                message, chatHistory, userId, projectId, userRole, userAccessLevel);
+                message, chatHistory, userId, projectId, userRole, userAccessLevel, null);
 
         log.info("Starting streaming chat request: project={}, role={}, level={}",
                 projectId, userRole, userAccessLevel);
@@ -91,7 +91,8 @@ public class ReactiveAIChatClient {
                 context.getUserId(),
                 context.getProjectId(),
                 context.getUserRole(),
-                context.getUserAccessLevel()
+                context.getUserAccessLevel(),
+                context.getRetrievedDocs()
         );
 
         WebClient webClient = webClientBuilder.baseUrl(aiServiceUrl).build();
@@ -119,7 +120,8 @@ public class ReactiveAIChatClient {
             String userId,
             String projectId,
             String userRole,
-            Integer userAccessLevel
+            Integer userAccessLevel,
+            List<String> retrievedDocs
     ) {
         List<Map<String, String>> contextList = chatHistory.stream()
                 .map(msg -> Map.of(
@@ -131,7 +133,7 @@ public class ReactiveAIChatClient {
         Map<String, Object> request = new HashMap<>();
         request.put("message", message);
         request.put("context", contextList);
-        request.put("retrieved_docs", List.of());
+        request.put("retrieved_docs", retrievedDocs != null ? retrievedDocs : List.of());
 
         if (userId != null) request.put("user_id", userId);
         if (projectId != null) request.put("project_id", projectId);

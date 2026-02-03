@@ -38,4 +38,17 @@ public interface ReactiveWbsTaskRepository extends ReactiveCrudRepository<R2dbcW
     Mono<Void> deleteByPhaseId(String phaseId);
 
     Mono<Void> deleteByItemId(String itemId);
+
+    @Query("""
+        SELECT wt.* FROM project.wbs_tasks wt
+        JOIN project.phases p ON wt.phase_id = p.id
+        WHERE p.project_id = :projectId
+        AND (
+            LOWER(wt.name) LIKE LOWER(CONCAT('%', :keyword, '%'))
+            OR LOWER(wt.description) LIKE LOWER(CONCAT('%', :keyword, '%'))
+        )
+        ORDER BY p.order_num ASC, wt.order_num ASC
+        LIMIT 10
+        """)
+    Flux<R2dbcWbsTask> searchByKeyword(String projectId, String keyword);
 }

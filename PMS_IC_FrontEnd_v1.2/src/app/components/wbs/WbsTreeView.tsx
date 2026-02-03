@@ -40,6 +40,16 @@ import {
 } from '../../../hooks/api/useWbs';
 import WbsProgressBar from './WbsProgressBar';
 
+// Child phase type for hierarchical display
+interface ChildPhase {
+  id: string;
+  name: string;
+  description?: string;
+  status?: string;
+  progress?: number;
+  orderNum?: number;
+}
+
 interface WbsTreeViewProps {
   phaseId: string;
   phaseName: string;
@@ -47,6 +57,8 @@ interface WbsTreeViewProps {
   canEdit: boolean;
   onLinkStory?: (wbsItemId: string) => void;
   onLinkTask?: (wbsTaskId: string) => void;
+  childPhases?: ChildPhase[];
+  hideHeader?: boolean; // Hide the WBS header when embedded in child phase view
 }
 
 interface WbsTaskItemProps {
@@ -488,6 +500,95 @@ function WbsGroupRow({
   );
 }
 
+// Child Phase WBS Section Component
+function ChildPhaseWbsSection({
+  childPhase,
+  canEdit,
+  onLinkStory,
+  onLinkTask,
+  isExpanded,
+  onToggle,
+}: {
+  childPhase: ChildPhase;
+  canEdit: boolean;
+  onLinkStory?: (wbsItemId: string) => void;
+  onLinkTask?: (wbsTaskId: string) => void;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  const { data: groups = [], isLoading } = usePhaseWbs(childPhase.id);
+
+  const statusColor = childPhase.status === 'COMPLETED'
+    ? 'bg-green-100 text-green-700'
+    : childPhase.status === 'IN_PROGRESS'
+      ? 'bg-blue-100 text-blue-700'
+      : 'bg-gray-100 text-gray-700';
+
+  const statusLabel = childPhase.status === 'COMPLETED'
+    ? '완료'
+    : childPhase.status === 'IN_PROGRESS'
+      ? '진행중'
+      : '대기';
+
+  return (
+    <div className="border border-gray-200 rounded-lg mb-3 overflow-hidden">
+      {/* Child Phase Header */}
+      <div
+        className="flex items-center gap-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 cursor-pointer hover:from-blue-100 hover:to-indigo-100 transition-colors"
+        onClick={onToggle}
+      >
+        <button type="button" className="w-6 h-6 flex items-center justify-center">
+          {isExpanded ? (
+            <ChevronDown size={18} className="text-blue-600" />
+          ) : (
+            <ChevronRight size={18} className="text-blue-600" />
+          )}
+        </button>
+        <Folder size={18} className="text-blue-600" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-gray-900">{childPhase.name}</span>
+            <span className={`px-2 py-0.5 text-xs rounded-full ${statusColor}`}>
+              {statusLabel}
+            </span>
+          </div>
+          {childPhase.description && (
+            <p className="text-xs text-gray-500 truncate">{childPhase.description}</p>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-600">{groups.length} 그룹</span>
+          <div className="w-24">
+            <WbsProgressBar progress={childPhase.progress || 0} size="sm" />
+          </div>
+        </div>
+      </div>
+
+      {/* Child Phase WBS Content */}
+      {isExpanded && (
+        <div className="p-4 bg-white border-t border-gray-200">
+          {isLoading ? (
+            <div className="text-center py-4 text-gray-500">로딩 중...</div>
+          ) : groups.length === 0 ? (
+            <div className="text-center py-4 text-gray-500">
+              이 단계에 WBS 그룹이 없습니다.
+            </div>
+          ) : (
+            <WbsTreeView
+              phaseId={childPhase.id}
+              phaseName={childPhase.name}
+              canEdit={canEdit}
+              onLinkStory={onLinkStory}
+              onLinkTask={onLinkTask}
+              hideHeader={true}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Main WBS Tree View Component
 export default function WbsTreeView({
   phaseId,
@@ -496,8 +597,11 @@ export default function WbsTreeView({
   canEdit,
   onLinkStory,
   onLinkTask,
+  childPhases = [],
+  hideHeader = false,
 }: WbsTreeViewProps) {
-  const { data: groups = [], isLoading } = usePhaseWbs(phaseId);
+  const hasChildPhases = childPhases.length > 0;
+  const { data: groups = [], isLoading } = usePhaseWbs(hasChildPhases ? '' : phaseId);
   const createGroupMutation = useCreateWbsGroup();
   const updateGroupMutation = useUpdateWbsGroup();
   const deleteGroupMutation = useDeleteWbsGroup();
@@ -511,6 +615,7 @@ export default function WbsTreeView({
 
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [expandedChildPhases, setExpandedChildPhases] = useState<Set<string>>(new Set());
 
   // Modal states
   const [showGroupModal, setShowGroupModal] = useState(false);
@@ -807,7 +912,27 @@ export default function WbsTreeView({
     }, 100);
   };
 
-  if (isLoading) {
+  // Toggle child phase expansion
+  const toggleChildPhase = (childPhaseId: string) => {
+    setExpandedChildPhases((prev) => {
+      const next = new Set(prev);
+      if (next.has(childPhaseId)) {
+        next.delete(childPhaseId);
+      } else {
+        next.add(childPhaseId);
+      }
+      return next;
+    });
+  };
+
+  // Auto-expand all child phases on load
+  useEffect(() => {
+    if (childPhases && childPhases.length > 0) {
+      setExpandedChildPhases(new Set(childPhases.map(cp => cp.id)));
+    }
+  }, [childPhases]);
+
+  if (isLoading && !hasChildPhases) {
     return (
       <div className="flex items-center justify-center h-48">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
@@ -815,42 +940,50 @@ export default function WbsTreeView({
     );
   }
 
+  // Render child phases hierarchy
+  if (hasChildPhases) {
+    const sortedChildPhases = [...childPhases].sort((a, b) => (a.orderNum || 0) - (b.orderNum || 0));
+
+    return (
+      <div className="space-y-3">
+        {/* Child Phases List - directly rendered without header */}
+        {sortedChildPhases.map((childPhase) => (
+          <ChildPhaseWbsSection
+            key={childPhase.id}
+            childPhase={childPhase}
+            canEdit={canEdit}
+            onLinkStory={onLinkStory}
+            onLinkTask={onLinkTask}
+            isExpanded={expandedChildPhases.has(childPhase.id)}
+            onToggle={() => toggleChildPhase(childPhase.id)}
+          />
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-            <FolderTree className="text-blue-600" size={20} />
-            WBS 관리
-          </h3>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Work Breakdown Structure (총 진행률: {totalProgress}%)
-          </p>
+      {/* Minimal toolbar with add button - only shown when not embedded */}
+      {!hideHeader && canEdit && groups.length > 0 && (
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            onClick={handleAddGroup}
+            className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
+          >
+            <Plus size={16} />
+            카테고리 추가
+          </button>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-32">
-            <WbsProgressBar progress={totalProgress} size="md" />
-          </div>
-          {canEdit && (
-            <button
-              type="button"
-              onClick={handleAddGroup}
-              className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
-            >
-              <Plus size={16} />
-              카테고리 추가
-            </button>
-          )}
-        </div>
-      </div>
+      )}
 
       {/* WBS Tree */}
       <div className="space-y-2">
         {groups.length === 0 ? (
-          <div className="bg-white rounded-lg border border-dashed border-gray-300 p-8 text-center">
-            <FolderTree className="mx-auto text-gray-300 mb-2" size={32} />
-            <p className="text-gray-500 mb-2">WBS 항목이 없습니다</p>
+          <div className="bg-white rounded-lg border border-dashed border-gray-300 p-6 text-center">
+            <FolderTree className="mx-auto text-gray-300 mb-2" size={28} />
+            <p className="text-gray-500 text-sm mb-2">WBS 항목이 없습니다</p>
             {canEdit && (
               <button
                 type="button"

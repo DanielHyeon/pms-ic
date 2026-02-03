@@ -1,8 +1,10 @@
-import { CheckCircle2, Circle, Clock, Settings } from 'lucide-react';
+import { CheckCircle2, Circle, Clock, Settings, ChevronDown, ChevronRight } from 'lucide-react';
+import { useState } from 'react';
 import type { Phase } from './types';
 
 interface PhaseListProps {
   phases: Phase[];
+  parentPhase?: Phase;
   selectedPhaseId: string;
   canManagePhases: boolean;
   onPhaseSelect: (phase: Phase) => void;
@@ -11,23 +13,85 @@ interface PhaseListProps {
 
 export function PhaseList({
   phases,
+  parentPhase,
   selectedPhaseId,
   canManagePhases,
   onPhaseSelect,
   onEditPhase,
 }: PhaseListProps) {
+  const [isExpanded, setIsExpanded] = useState(true);
+
+  // If no parent phase, render flat list (backward compatible)
+  if (!parentPhase) {
+    return (
+      <div className="space-y-3">
+        {phases.map((phase) => (
+          <PhaseCard
+            key={phase.id}
+            phase={phase}
+            isSelected={selectedPhaseId === phase.id}
+            canManagePhases={canManagePhases}
+            onSelect={() => onPhaseSelect(phase)}
+            onEdit={() => onEditPhase(phase)}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  // Render hierarchical tree structure
   return (
-    <div className="space-y-3">
-      {phases.map((phase) => (
-        <PhaseCard
-          key={phase.id}
-          phase={phase}
-          isSelected={selectedPhaseId === phase.id}
-          canManagePhases={canManagePhases}
-          onSelect={() => onPhaseSelect(phase)}
-          onEdit={() => onEditPhase(phase)}
-        />
-      ))}
+    <div className="space-y-2">
+      {/* Parent Phase Header */}
+      <div
+        className="flex items-center gap-2 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-200 cursor-pointer hover:border-blue-300 transition-all"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <button type="button" className="p-1 hover:bg-blue-100 rounded transition-colors">
+          {isExpanded ? (
+            <ChevronDown className="text-blue-600" size={20} />
+          ) : (
+            <ChevronRight className="text-blue-600" size={20} />
+          )}
+        </button>
+        <PhaseStatusIcon status={parentPhase.status} />
+        <div className="flex-1 min-w-0">
+          <h3 className="font-semibold text-gray-900">{parentPhase.name}</h3>
+          <p className="text-xs text-gray-500">{parentPhase.description}</p>
+          <div className="mt-2">
+            <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+              <span>전체 진행률</span>
+              <span className="font-medium">{parentPhase.progress}%</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div
+                className="h-2 rounded-full bg-blue-500 transition-all"
+                style={{ width: `${parentPhase.progress}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Child Phases (Sub-phases) */}
+      {isExpanded && (
+        <div className="ml-4 pl-4 border-l-2 border-blue-200 space-y-2">
+          {phases.map((phase, index) => (
+            <div key={phase.id} className="relative">
+              {/* Tree connector line */}
+              <div className="absolute -left-4 top-1/2 w-4 h-px bg-blue-200" />
+              <PhaseCard
+                phase={phase}
+                isSelected={selectedPhaseId === phase.id}
+                canManagePhases={canManagePhases}
+                onSelect={() => onPhaseSelect(phase)}
+                onEdit={() => onEditPhase(phase)}
+                isChild={true}
+              />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -40,12 +104,15 @@ interface PhaseCardProps {
   canManagePhases: boolean;
   onSelect: () => void;
   onEdit: () => void;
+  isChild?: boolean;
 }
 
-function PhaseCard({ phase, isSelected, canManagePhases, onSelect, onEdit }: PhaseCardProps) {
+function PhaseCard({ phase, isSelected, canManagePhases, onSelect, onEdit, isChild = false }: PhaseCardProps) {
   return (
     <div
-      className={`relative w-full text-left p-4 rounded-xl border-2 transition-all ${
+      className={`relative w-full text-left rounded-xl border-2 transition-all ${
+        isChild ? 'p-3' : 'p-4'
+      } ${
         isSelected
           ? 'border-blue-500 bg-blue-50 shadow-md'
           : 'border-gray-200 bg-white hover:border-gray-300'

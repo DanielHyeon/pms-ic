@@ -23,6 +23,7 @@ public class PhaseDto {
     private LocalDate endDate;
     private Integer progress;
     private String description;
+    private String parentId;
 
     public static PhaseDto from(R2dbcPhase phase) {
         return PhaseDto.builder()
@@ -36,6 +37,7 @@ public class PhaseDto {
                 .endDate(phase.getEndDate())
                 .progress(phase.getProgress())
                 .description(phase.getDescription())
+                .parentId(phase.getParentId())
                 .build();
     }
 }

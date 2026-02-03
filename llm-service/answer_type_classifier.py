@@ -164,6 +164,12 @@ HOWTO_POLICY_PATTERNS = [
 
     # Best practices
     (r"(모범\s*사례|베스트\s*프랙티스|best\s*practice)", "best_practice"),
+
+    # Task assignment questions (require RAG lookup)
+    (r"누가\s*(하고\s*있|맡고\s*있|담당|진행)", "task_assignment"),
+    (r"(담당자|담당).*(누구|알려|보여)", "assignee_query"),
+    (r".+(은|는)\s*누가\s*(하|맡|담당)", "specific_task_assignee"),
+    (r"(who|assignee|assigned)", "task_assignment_en"),
 ]
 
 # Mixed patterns - both status and explanation
@@ -199,6 +205,10 @@ HOWTO_SIGNALS = [
     r"(보는|읽는|작성하는)\s*(법|방법)",
     r"(정의|개념|의미)\s*(가|이)\s*(뭐|무엇)",
     r"(기준|규칙|정책)\s*(이|가)\s*(뭐|무엇|어떻게)",
+    # Task assignment signals - require RAG lookup
+    r"누가\s*(하고|맡고|담당|진행)",
+    r"(담당자|담당).*(누구|누가)",
+    r".+(은|는)\s*누가",
 ]
 
 # Casual patterns - greetings, thanks

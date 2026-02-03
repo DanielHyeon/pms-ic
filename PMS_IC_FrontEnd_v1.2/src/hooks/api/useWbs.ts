@@ -415,6 +415,7 @@ interface PhaseInfo {
   progress: number;
   startDate?: string;
   endDate?: string;
+  parentId?: string;
 }
 
 export function useProjectWbs(projectId: string, phases: PhaseInfo[]) {
@@ -495,6 +496,7 @@ export function useProjectWbs(projectId: string, phases: PhaseInfo[]) {
           progress: phase.progress,
           startDate: phase.startDate,
           endDate: phase.endDate,
+          parentId: phase.parentId,
           groups: groupsWithItems,
           totalGroups,
           completedGroups,

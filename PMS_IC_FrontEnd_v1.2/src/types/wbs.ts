@@ -169,10 +169,12 @@ export interface PhaseWithWbs {
   progress: number;
   startDate?: string;
   endDate?: string;
+  parentId?: string;
   groups: WbsGroupWithItems[];
   totalGroups: number;
   completedGroups: number;
   calculatedProgress: number;
+  childPhases?: PhaseWithWbs[];
 }
 
 // Progress calculation utilities

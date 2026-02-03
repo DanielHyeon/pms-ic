@@ -47,4 +47,10 @@ public class AIChatContext {
      * User's access level for permission checks
      */
     private Integer userAccessLevel;
+
+    /**
+     * Retrieved documents for RAG context (optional).
+     * Task data or other contextual information to help answer the query.
+     */
+    private List<String> retrievedDocs;
 }

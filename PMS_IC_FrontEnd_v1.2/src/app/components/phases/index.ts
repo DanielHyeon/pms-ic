@@ -12,7 +12,7 @@ export type {
 } from './types';
 
 // Constants
-export { INITIAL_PHASES } from './constants';
+export { INITIAL_PHASES, AI_MODEL_DEVELOPMENT_PHASE_ID, AI_MODEL_DEVELOPMENT_PHASE } from './constants';
 
 // Components
 export { PhaseList } from './PhaseList';

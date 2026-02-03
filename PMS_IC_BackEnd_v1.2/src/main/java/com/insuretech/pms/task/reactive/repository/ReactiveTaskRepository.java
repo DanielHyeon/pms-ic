@@ -42,4 +42,20 @@ public interface ReactiveTaskRepository extends ReactiveCrudRepository<R2dbcTask
     // Legacy join-based query (kept for backwards compatibility)
     @Query("SELECT t.* FROM task.tasks t JOIN task.kanban_columns kc ON t.column_id = kc.id WHERE kc.project_id = :projectId ORDER BY kc.order_num, t.order_num")
     Flux<R2dbcTask> findByProjectIdWithColumnOrder(String projectId);
+
+    /**
+     * Search tasks by keyword in title or description.
+     * Used by AI assistant to find task assignments.
+     */
+    @Query("""
+        SELECT t.* FROM task.tasks t
+        WHERE t.project_id = :projectId
+        AND (
+            LOWER(t.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
+            OR LOWER(t.description) LIKE LOWER(CONCAT('%', :keyword, '%'))
+        )
+        ORDER BY t.order_num ASC
+        LIMIT 10
+        """)
+    Flux<R2dbcTask> searchByKeyword(String projectId, String keyword);
 }

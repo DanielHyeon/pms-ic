@@ -57,6 +57,7 @@ public class ReactiveChatService {
     private final SseEventBuilder sseBuilder;
     private final StreamingToolOrchestrator streamingToolOrchestrator;
     private final ToolRegistry toolRegistry;
+    private final ChatContextEnrichmentService contextEnrichmentService;
 
     /**
      * Legacy streaming chat method.
@@ -132,53 +133,84 @@ public class ReactiveChatService {
                                 return getRecentMessages(session.getId(), MAX_CONTEXT_MESSAGES)
                                         .collectList()
                                         .flatMapMany(recentMessages -> {
-                                            // Build gateway request
-                                            GatewayRequest gatewayRequest = buildGatewayRequest(
-                                                    traceId, request, recentMessages);
-
-                                            // Choose stream strategy based on tool support
-                                            Flux<ServerSentEvent<String>> stream;
-                                            if (request.isEnableTools() && toolRegistry.hasTools()) {
-                                                // Use tool orchestrator for tool-enabled requests
-                                                ToolContext toolContext = buildToolContext(
-                                                        userId, session.getId(), request, traceId);
-                                                stream = streamingToolOrchestrator.streamWithTools(
-                                                        llmGatewayService, gatewayRequest, toolContext);
-                                            } else {
-                                                // Standard streaming without tools
-                                                stream = llmGatewayService.streamChat(gatewayRequest);
-                                            }
-
-                                            return stream
-                                                    .doOnNext(event -> {
-                                                        // Accumulate content from delta events
-                                                        if ("delta".equals(event.event())) {
-                                                            String data = event.data();
-                                                            if (data != null) {
-                                                                extractDeltaText(data).ifPresent(
-                                                                        text -> contentAccumulator.get().append(text)
-                                                                );
+                                            // Get task context for RAG enrichment
+                                            return contextEnrichmentService.getTaskDocsForContext(
+                                                            request.getMessage(),
+                                                            request.getProjectId())
+                                                    .flatMapMany(taskDocs -> {
+                                                        // Merge task docs with any existing retrieved docs
+                                                        ChatStreamRequest enrichedRequest = request;
+                                                        if (!taskDocs.isEmpty()) {
+                                                            log.info("StreamV2: Retrieved {} task documents for RAG context, traceId={}",
+                                                                    taskDocs.size(), traceId);
+                                                            List<String> allDocs = new ArrayList<>();
+                                                            if (request.getRetrievedDocs() != null) {
+                                                                allDocs.addAll(request.getRetrievedDocs());
                                                             }
+                                                            allDocs.addAll(taskDocs);
+                                                            enrichedRequest = ChatStreamRequest.builder()
+                                                                    .sessionId(request.getSessionId())
+                                                                    .message(request.getMessage())
+                                                                    .engine(request.getEngine())
+                                                                    .context(request.getContext())
+                                                                    .retrievedDocs(allDocs)
+                                                                    .projectId(request.getProjectId())
+                                                                    .userRole(request.getUserRole())
+                                                                    .userAccessLevel(request.getUserAccessLevel())
+                                                                    .generation(request.getGeneration())
+                                                                    .enableTools(request.isEnableTools())
+                                                                    .tools(request.getTools())
+                                                                    .build();
                                                         }
-                                                    })
-                                                    .doOnComplete(() -> {
-                                                        String fullContent = contentAccumulator.get().toString();
-                                                        if (!fullContent.isEmpty()) {
-                                                            saveAssistantMessageWithTrace(
-                                                                    session.getId(),
-                                                                    fullContent,
-                                                                    traceId,
-                                                                    request.getEngine()
-                                                            ).subscribe(
-                                                                    saved -> log.debug("Saved assistant message: id={}, traceId={}",
-                                                                            saved.getId(), traceId),
-                                                                    error -> log.error("Failed to save assistant message: traceId={}, error={}",
-                                                                            traceId, error.getMessage())
-                                                            );
+
+                                                        // Build gateway request with enriched context
+                                                        GatewayRequest gatewayRequest = buildGatewayRequest(
+                                                                traceId, enrichedRequest, recentMessages);
+
+                                                        // Choose stream strategy based on tool support
+                                                        Flux<ServerSentEvent<String>> stream;
+                                                        if (enrichedRequest.isEnableTools() && toolRegistry.hasTools()) {
+                                                            // Use tool orchestrator for tool-enabled requests
+                                                            ToolContext toolContext = buildToolContext(
+                                                                    userId, session.getId(), enrichedRequest, traceId);
+                                                            stream = streamingToolOrchestrator.streamWithTools(
+                                                                    llmGatewayService, gatewayRequest, toolContext);
+                                                        } else {
+                                                            // Standard streaming without tools
+                                                            stream = llmGatewayService.streamChat(gatewayRequest);
                                                         }
-                                                    })
-                                                    .doOnError(error -> log.error("Stream error: traceId={}, error={}",
-                                                            traceId, error.getMessage()));
+
+                                                        return stream
+                                                                .doOnNext(event -> {
+                                                                    // Accumulate content from delta events
+                                                                    if ("delta".equals(event.event())) {
+                                                                        String data = event.data();
+                                                                        if (data != null) {
+                                                                            extractDeltaText(data).ifPresent(
+                                                                                    text -> contentAccumulator.get().append(text)
+                                                                            );
+                                                                        }
+                                                                    }
+                                                                })
+                                                                .doOnComplete(() -> {
+                                                                    String fullContent = contentAccumulator.get().toString();
+                                                                    if (!fullContent.isEmpty()) {
+                                                                        saveAssistantMessageWithTrace(
+                                                                                session.getId(),
+                                                                                fullContent,
+                                                                                traceId,
+                                                                                request.getEngine()
+                                                                        ).subscribe(
+                                                                                saved -> log.debug("Saved assistant message: id={}, traceId={}",
+                                                                                        saved.getId(), traceId),
+                                                                                error -> log.error("Failed to save assistant message: traceId={}, error={}",
+                                                                                        traceId, error.getMessage())
+                                                                        );
+                                                                    }
+                                                                })
+                                                                .doOnError(error -> log.error("Stream error: traceId={}, error={}",
+                                                                        traceId, error.getMessage()));
+                                                    });
                                         });
                             });
                 })
@@ -210,16 +242,35 @@ public class ReactiveChatService {
                                         getRecentMessages(session.getId(), MAX_CONTEXT_MESSAGES)
                                                 .collectList()
                                                 .flatMap(recentMessages -> {
-                                                    AIChatContext context = buildContext(
-                                                            userId, request, toJpaMessages(recentMessages));
+                                                    // Get task docs for RAG context (passed as retrieved_docs)
+                                                    return contextEnrichmentService.getTaskDocsForContext(
+                                                                    request.getMessage(),
+                                                                    request.getProjectId())
+                                                            .flatMap(taskDocs -> {
+                                                                if (!taskDocs.isEmpty()) {
+                                                                    log.info("Retrieved {} task documents for RAG context, user: {}",
+                                                                            taskDocs.size(), userId);
+                                                                }
 
-                                                    return reactiveAIChatClient.chat(context)
-                                                            .flatMap(response -> saveAssistantMessage(session.getId(), response.getReply())
-                                                                    .then(cacheMessages(session.getId(), userMessage))
-                                                                    .thenReturn(response))
-                                                            .map(response -> {
-                                                                response.setSessionId(session.getId());
-                                                                return response;
+                                                                // Build context with retrieved docs (original message unchanged)
+                                                                AIChatContext context = AIChatContext.builder()
+                                                                        .userId(userId)
+                                                                        .message(request.getMessage())
+                                                                        .recentMessages(toJpaMessages(recentMessages))
+                                                                        .projectId(request.getProjectId())
+                                                                        .userRole(request.getUserRole())
+                                                                        .userAccessLevel(request.getUserAccessLevel())
+                                                                        .retrievedDocs(taskDocs)
+                                                                        .build();
+
+                                                                return reactiveAIChatClient.chat(context)
+                                                                        .flatMap(response -> saveAssistantMessage(session.getId(), response.getReply())
+                                                                                .then(cacheMessages(session.getId(), userMessage))
+                                                                                .thenReturn(response))
+                                                                        .map(response -> {
+                                                                            response.setSessionId(session.getId());
+                                                                            return response;
+                                                                        });
                                                             });
                                                 })
                                 )

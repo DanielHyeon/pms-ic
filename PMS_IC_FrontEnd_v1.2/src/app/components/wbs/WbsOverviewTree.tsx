@@ -342,19 +342,25 @@ function PhaseRow({
   isExpanded,
   expandedGroups,
   expandedItems,
+  expandedChildPhases,
   onToggle,
   onToggleGroup,
   onToggleItem,
+  onToggleChildPhase,
   filters,
+  isChild = false,
 }: {
   phase: PhaseWithWbs;
   isExpanded: boolean;
   expandedGroups: Set<string>;
   expandedItems: Set<string>;
+  expandedChildPhases?: Set<string>;
   onToggle: () => void;
   onToggleGroup: (groupId: string) => void;
   onToggleItem: (itemId: string) => void;
+  onToggleChildPhase?: (phaseId: string) => void;
   filters: WbsFilters;
+  isChild?: boolean;
 }) {
   const filteredGroups = useMemo(() => {
     return phase.groups.filter(group => {
@@ -377,14 +383,18 @@ function PhaseRow({
   }, [phase.groups, filters]);
 
   const hasVisibleGroups = filteredGroups.length > 0;
+  const hasChildPhases = phase.childPhases && phase.childPhases.length > 0;
   const phaseColor = phase.status === 'COMPLETED'
     ? 'from-green-500 to-green-600'
     : phase.status === 'IN_PROGRESS'
       ? 'from-blue-500 to-blue-600'
       : 'from-gray-400 to-gray-500';
 
+
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-4">
+    <div className={`bg-white rounded-xl border overflow-hidden mb-4 ${
+      isChild ? 'border-gray-200 ml-6' : 'border-gray-200'
+    }`}>
       {/* Phase Header */}
       <div
         className="flex items-center gap-3 p-4 cursor-pointer hover:bg-gray-50 transition-colors"
@@ -404,7 +414,9 @@ function PhaseRow({
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-gray-900 truncate">{phase.name}</h3>
+            <h3 className="font-semibold text-gray-900 truncate">
+              {phase.name}
+            </h3>
             <span className={`px-2 py-0.5 text-xs rounded-full ${
               phase.status === 'COMPLETED' ? 'bg-green-100 text-green-700' :
               phase.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700' :
@@ -440,30 +452,62 @@ function PhaseRow({
         </div>
       </div>
 
-      {/* Phase Content */}
-      {isExpanded && hasVisibleGroups && (
-        <div className="p-4 pt-0 border-t border-gray-100">
-          {filteredGroups.map((group) => (
-            <GroupRow
-              key={group.id}
-              group={group}
-              phaseName={phase.name}
-              level={0}
-              isExpanded={expandedGroups.has(group.id)}
-              expandedItems={expandedItems}
-              onToggle={() => onToggleGroup(group.id)}
-              onToggleItem={onToggleItem}
-              filters={filters}
-            />
-          ))}
-        </div>
-      )}
+      {/* Phase Content - Child Phases or Groups */}
+      {isExpanded && (
+        <div className="border-t border-gray-100">
+          {/* Render child phases if present */}
+          {hasChildPhases && (
+            <div className="p-4 space-y-2">
+              {/* Tree connector for child phases */}
+              <div className="border-l-2 border-indigo-200 ml-3">
+                {phase.childPhases!.map((childPhase) => (
+                  <div key={childPhase.id} className="relative">
+                    <div className="absolute -left-[9px] top-8 w-2 h-px bg-indigo-200" />
+                    <PhaseRow
+                      phase={childPhase}
+                      isExpanded={expandedChildPhases?.has(childPhase.id) || false}
+                      expandedGroups={expandedGroups}
+                      expandedItems={expandedItems}
+                      expandedChildPhases={expandedChildPhases}
+                      onToggle={() => onToggleChildPhase?.(childPhase.id)}
+                      onToggleGroup={onToggleGroup}
+                      onToggleItem={onToggleItem}
+                      onToggleChildPhase={onToggleChildPhase}
+                      filters={filters}
+                      isChild={true}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
-      {isExpanded && !hasVisibleGroups && (
-        <div className="p-8 text-center text-gray-400 border-t border-gray-100">
-          {filters.searchTerm || filters.status !== 'ALL' || filters.dateRange !== 'all'
-            ? '필터 조건에 맞는 항목이 없습니다'
-            : 'WBS 항목이 없습니다'}
+          {/* Render groups if no child phases or this is a child phase */}
+          {(!hasChildPhases || isChild) && hasVisibleGroups && (
+            <div className="p-4 pt-2">
+              {filteredGroups.map((group) => (
+                <GroupRow
+                  key={group.id}
+                  group={group}
+                  phaseName={phase.name}
+                  level={0}
+                  isExpanded={expandedGroups.has(group.id)}
+                  expandedItems={expandedItems}
+                  onToggle={() => onToggleGroup(group.id)}
+                  onToggleItem={onToggleItem}
+                  filters={filters}
+                />
+              ))}
+            </div>
+          )}
+
+          {(!hasChildPhases || isChild) && !hasVisibleGroups && (
+            <div className="p-8 text-center text-gray-400">
+              {filters.searchTerm || filters.status !== 'ALL' || filters.dateRange !== 'all'
+                ? '필터 조건에 맞는 항목이 없습니다'
+                : 'WBS 항목이 없습니다'}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -479,6 +523,7 @@ export default function WbsOverviewTree({
 }: WbsOverviewTreeProps) {
   // Expansion states
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set(phases.map(p => p.id)));
+  const [expandedChildPhases, setExpandedChildPhases] = useState<Set<string>>(new Set());
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
@@ -569,22 +614,45 @@ export default function WbsOverviewTree({
     });
   };
 
+  const toggleChildPhase = (phaseId: string) => {
+    setExpandedChildPhases(prev => {
+      const next = new Set(prev);
+      if (next.has(phaseId)) next.delete(phaseId);
+      else next.add(phaseId);
+      return next;
+    });
+  };
+
   const expandAll = () => {
     setExpandedPhases(new Set(phases.map(p => p.id)));
+    const allChildPhases = new Set<string>();
     const allGroups = new Set<string>();
     const allItems = new Set<string>();
     phases.forEach(phase => {
+      // Handle child phases
+      if (phase.childPhases) {
+        phase.childPhases.forEach(child => {
+          allChildPhases.add(child.id);
+          child.groups.forEach(group => {
+            allGroups.add(group.id);
+            group.items.forEach(item => allItems.add(item.id));
+          });
+        });
+      }
+      // Handle direct groups
       phase.groups.forEach(group => {
         allGroups.add(group.id);
         group.items.forEach(item => allItems.add(item.id));
       });
     });
+    setExpandedChildPhases(allChildPhases);
     setExpandedGroups(allGroups);
     setExpandedItems(allItems);
   };
 
   const collapseAll = () => {
     setExpandedPhases(new Set());
+    setExpandedChildPhases(new Set());
     setExpandedGroups(new Set());
     setExpandedItems(new Set());
   };
@@ -732,9 +800,11 @@ export default function WbsOverviewTree({
               isExpanded={expandedPhases.has(phase.id)}
               expandedGroups={expandedGroups}
               expandedItems={expandedItems}
+              expandedChildPhases={expandedChildPhases}
               onToggle={() => togglePhase(phase.id)}
               onToggleGroup={toggleGroup}
               onToggleItem={toggleItem}
+              onToggleChildPhase={toggleChildPhase}
               filters={filters}
             />
           ))}

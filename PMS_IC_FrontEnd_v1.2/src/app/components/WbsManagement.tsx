@@ -3,18 +3,17 @@ import {
   FolderTree,
   Calendar,
   ChevronDown,
-  LayoutTemplate,
   Link2,
   GanttChartSquare,
   TreeDeciduous,
   Layers,
 } from 'lucide-react';
 import { WbsTreeView, StoryLinkModal, WbsOverviewTree, WbsGanttChart } from './wbs';
-import { TemplateLibrary } from './templates';
 import { WbsBacklogIntegration } from './integration';
-import { useAllPhases } from '../../hooks/api/usePhases';
+import { usePhases } from '../../hooks/api/usePhases';
 import { useStories } from '../../hooks/api/useStories';
 import { useProjectWbs } from '../../hooks/api/useWbs';
+import { AI_MODEL_DEVELOPMENT_PHASE_ID, AI_MODEL_DEVELOPMENT_PHASE } from './phases';
 import {
   useDownloadWbsTemplate,
   useExportWbs,
@@ -30,7 +29,7 @@ interface WbsManagementProps {
   projectId?: string;
 }
 
-type TabType = 'wbs' | 'templates' | 'integration';
+type TabType = 'wbs' | 'integration';
 type ViewMode = 'phase' | 'overview' | 'gantt';
 
 // Phase data type from API
@@ -44,6 +43,7 @@ interface ApiPhaseData {
   endDate?: string;
   code?: string;
   projectId?: string;
+  parentId?: string;
   [key: string]: unknown;
 }
 
@@ -55,9 +55,9 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
   const [selectedWbsItemId, setSelectedWbsItemId] = useState<string>('');
   const [selectedWbsItemName, setSelectedWbsItemName] = useState<string>('');
 
-  // API hooks
-  const { data: phasesRaw } = useAllPhases();
-  const phasesData = phasesRaw as ApiPhaseData[] | undefined;
+  // API hooks - use usePhases with projectId for direct filtering
+  const { data: phasesRaw } = usePhases(projectId);
+  const phases = (phasesRaw || []) as ApiPhaseData[];
   const { data: stories = [] } = useStories();
 
   // Excel import/export hooks
@@ -69,11 +69,19 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
   const permissions = getRolePermissions(userRole);
   const canEdit = permissions.canEdit;
 
-  // Phases data - filter by projectId
-  const phases = useMemo(() => {
-    return (phasesData || []).filter(p => p.projectId === projectId);
-  }, [phasesData, projectId]);
+  // Display phases for category dropdown - show only main phases (no parentId)
+  // This includes: 요구사항 분석, 시스템 설계, AI 모델 개발, 백엔드 개발, 통합 및 테스트, 배포 및 오픈
+  const displayPhases = useMemo(() => {
+    return phases.filter(p => !p.parentId);
+  }, [phases]);
+
   const selectedPhase = phases.find(p => p.id === selectedPhaseId);
+
+  // Get child phases for the selected phase (for hierarchical display)
+  const childPhasesOfSelected = useMemo(() => {
+    if (!selectedPhaseId) return [];
+    return phases.filter(p => p.parentId === selectedPhaseId);
+  }, [phases, selectedPhaseId]);
 
   // Prepare phases info for project-wide WBS query
   const phasesInfo = useMemo(() => {
@@ -85,6 +93,7 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
       progress: p.progress || 0,
       startDate: p.startDate || '',
       endDate: p.endDate || '',
+      parentId: (p as any).parentId,
     }));
   }, [phases]);
 
@@ -94,10 +103,64 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
     phasesInfo
   );
 
-  // Convert to PhaseWithWbs type
+  // Convert to PhaseWithWbs type with hierarchical structure
   const phasesWithWbs: PhaseWithWbs[] = useMemo(() => {
-    return (projectWbsData || []) as PhaseWithWbs[];
-  }, [projectWbsData]);
+    const allPhases = (projectWbsData || []) as PhaseWithWbs[];
+
+    // Separate parent and child phases
+    const childPhases = allPhases.filter(p => p.parentId === AI_MODEL_DEVELOPMENT_PHASE_ID);
+    const otherPhases = allPhases.filter(p => p.parentId !== AI_MODEL_DEVELOPMENT_PHASE_ID && p.id !== AI_MODEL_DEVELOPMENT_PHASE_ID);
+
+    // If we have child phases under AI_MODEL_DEVELOPMENT_PHASE_ID, create parent phase
+    if (childPhases.length > 0) {
+      // Calculate parent progress from children
+      const childProgress = childPhases.reduce((sum, p) => sum + (p.calculatedProgress || p.progress || 0), 0) / childPhases.length;
+
+      const parentPhase: PhaseWithWbs = {
+        id: AI_MODEL_DEVELOPMENT_PHASE_ID,
+        name: AI_MODEL_DEVELOPMENT_PHASE.name,
+        description: AI_MODEL_DEVELOPMENT_PHASE.description,
+        status: childPhases.every(p => p.status === 'COMPLETED')
+          ? 'COMPLETED'
+          : childPhases.some(p => p.status === 'IN_PROGRESS')
+            ? 'IN_PROGRESS'
+            : 'PENDING',
+        progress: Math.round(childProgress),
+        startDate: AI_MODEL_DEVELOPMENT_PHASE.startDate,
+        endDate: AI_MODEL_DEVELOPMENT_PHASE.endDate,
+        groups: [],
+        totalGroups: childPhases.reduce((sum, p) => sum + (p.totalGroups || 0), 0),
+        completedGroups: childPhases.reduce((sum, p) => sum + (p.completedGroups || 0), 0),
+        calculatedProgress: Math.round(childProgress),
+        childPhases: childPhases,
+      };
+
+      // Find the correct position for parent phase based on original phases order
+      // The parent phase should be at orderNum 3 (after 시스템 설계)
+      const parentOrderNum = phases.find(p => p.id === AI_MODEL_DEVELOPMENT_PHASE_ID)?.orderNum ?? 3;
+
+      // Insert parent at correct position based on orderNum
+      const result: PhaseWithWbs[] = [];
+      let inserted = false;
+
+      for (const phase of otherPhases) {
+        const phaseOrderNum = phases.find(p => p.id === phase.id)?.orderNum ?? 999;
+        if (!inserted && parentOrderNum < phaseOrderNum) {
+          result.push(parentPhase);
+          inserted = true;
+        }
+        result.push(phase);
+      }
+
+      if (!inserted) {
+        result.push(parentPhase);
+      }
+
+      return result;
+    }
+
+    return allPhases;
+  }, [projectWbsData, phases]);
 
   // Auto-select the first IN_PROGRESS phase when phases data loads
   useEffect(() => {
@@ -133,7 +196,6 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
 
   const tabs = [
     { id: 'wbs' as TabType, label: 'WBS 구조', icon: FolderTree },
-    { id: 'templates' as TabType, label: '템플릿', icon: LayoutTemplate },
     { id: 'integration' as TabType, label: '백로그 연결', icon: Link2 },
   ];
 
@@ -204,7 +266,7 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
                 className="w-full appearance-none px-4 py-2 pr-10 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">카테고리를 선택하세요</option>
-                {phases.map((phase) => (
+                {displayPhases.map((phase) => (
                   <option key={phase.id} value={phase.id}>
                     {phase.name}
                   </option>
@@ -307,14 +369,7 @@ export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsM
                       phaseCode={selectedPhase.code || '1'}
                       canEdit={canEdit}
                       onLinkStory={handleLinkStory}
-                    />
-                  )}
-
-                  {activeTab === 'templates' && (
-                    <TemplateLibrary
-                      projectId={projectId}
-                      canEdit={canEdit}
-                      onApplySuccess={() => refetchWbs()}
+                      childPhases={childPhasesOfSelected}
                     />
                   )}
 

@@ -1,15 +1,33 @@
 import type { Phase } from './types';
 
+// Parent phase ID for AI model development (from API: phase-001-03)
+export const AI_MODEL_DEVELOPMENT_PHASE_ID = 'phase-001-03';
+
+// Parent phase: AI 모델 개발
+export const AI_MODEL_DEVELOPMENT_PHASE: Phase = {
+  id: AI_MODEL_DEVELOPMENT_PHASE_ID,
+  name: 'AI 모델 개발',
+  description: 'AI 기반 보험 심사 자동화 시스템 개발',
+  status: 'inProgress',
+  progress: 64,
+  startDate: '2025-01-02',
+  endDate: '2025-12-31',
+  deliverables: [],
+  kpis: [],
+};
+
 // Initial methodology phases for AI Insurance Claims project
+// These are sub-phases under "AI 모델 개발" (phase-001-03)
 export const INITIAL_PHASES: Phase[] = [
   {
-    id: '1',
+    id: 'phase-001-03-01',
     name: '1단계: 업무 현황 진단/분석',
     description: '지급심사 프로세스 현황 파악 및 AI 적용 타당성 검토',
     status: 'completed',
     progress: 100,
     startDate: '2025-01-02',
     endDate: '2025-02-15',
+    parentId: AI_MODEL_DEVELOPMENT_PHASE_ID,
     deliverables: [
       { id: '1', name: 'AS-IS 프로세스 분석 보고서', status: 'approved', uploadDate: '2025-02-10', approver: 'PMO 총괄' },
       { id: '2', name: 'KPI 정의서', status: 'approved', uploadDate: '2025-02-14', approver: 'PMO 총괄' },
@@ -21,13 +39,14 @@ export const INITIAL_PHASES: Phase[] = [
     ],
   },
   {
-    id: '2',
+    id: 'phase-001-03-02',
     name: '2단계: 데이터 수집/정제',
     description: '데이터 수집, 정제, 라벨링 및 피처 엔지니어링',
     status: 'completed',
     progress: 100,
     startDate: '2025-02-16',
     endDate: '2025-04-30',
+    parentId: AI_MODEL_DEVELOPMENT_PHASE_ID,
     deliverables: [
       { id: '4', name: '데이터셋 인벤토리', status: 'approved', uploadDate: '2025-03-15', approver: 'PM' },
       { id: '5', name: '개인정보 비식별화 결과 보고서', status: 'approved', uploadDate: '2025-04-20', approver: '정보보호팀장' },
@@ -39,13 +58,14 @@ export const INITIAL_PHASES: Phase[] = [
     ],
   },
   {
-    id: '3',
+    id: 'phase-001-03-03',
     name: '3단계: AI모델 설계/학습',
     description: 'AI 모델 설계, 학습, 평가 및 하이브리드 로직 구축',
     status: 'inProgress',
     progress: 85,
     startDate: '2025-05-01',
     endDate: '2025-08-31',
+    parentId: AI_MODEL_DEVELOPMENT_PHASE_ID,
     deliverables: [
       { id: '7', name: 'OCR 모델 v2.0 개발 보고서', status: 'review', uploadDate: '2025-07-15' },
       { id: '8', name: '분류 모델 성능 평가서', status: 'review', uploadDate: '2025-08-10' },
@@ -59,13 +79,14 @@ export const INITIAL_PHASES: Phase[] = [
     ],
   },
   {
-    id: '4',
+    id: 'phase-001-03-04',
     name: '4단계: 업무시스템 연동/운영 자동화',
     description: '기존 업무시스템과 AI 통합 및 MLOps 구축',
     status: 'pending',
     progress: 0,
     startDate: '2025-09-01',
     endDate: '2025-10-31',
+    parentId: AI_MODEL_DEVELOPMENT_PHASE_ID,
     deliverables: [
       { id: '11', name: 'API 명세서', status: 'pending' },
       { id: '12', name: '통합 테스트 시나리오', status: 'pending' },
@@ -74,13 +95,14 @@ export const INITIAL_PHASES: Phase[] = [
     kpis: [],
   },
   {
-    id: '5',
+    id: 'phase-001-03-05',
     name: '5단계: 효과 검증/운영고도화',
     description: 'PoC 검증, 성능 평가 및 지속적 개선',
     status: 'pending',
     progress: 0,
     startDate: '2025-11-01',
     endDate: '2025-11-30',
+    parentId: AI_MODEL_DEVELOPMENT_PHASE_ID,
     deliverables: [
       { id: '14', name: 'PoC 결과 보고서', status: 'pending' },
       { id: '15', name: 'AS-IS vs TO-BE 비교 분석', status: 'pending' },
@@ -89,13 +111,14 @@ export const INITIAL_PHASES: Phase[] = [
     kpis: [],
   },
   {
-    id: '6',
+    id: 'phase-001-03-06',
     name: '6단계: 조직/프로세스 변화관리',
     description: '교육, 가이드라인, AI 거버넌스 체계 구축',
     status: 'pending',
     progress: 0,
     startDate: '2025-12-01',
     endDate: '2025-12-31',
+    parentId: AI_MODEL_DEVELOPMENT_PHASE_ID,
     deliverables: [
       { id: '17', name: '사용자 매뉴얼', status: 'pending' },
       { id: '18', name: '교육 일정 및 이수 현황', status: 'pending' },

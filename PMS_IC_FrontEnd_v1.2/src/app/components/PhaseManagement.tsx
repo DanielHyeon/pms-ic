@@ -30,6 +30,7 @@ import {
 
 import {
   INITIAL_PHASES,
+  AI_MODEL_DEVELOPMENT_PHASE_ID,
   PhaseList,
   PhaseDetail,
   ReadOnlyBanner,
@@ -53,8 +54,7 @@ interface PhaseManagementProps {
 }
 
 export default function PhaseManagement({ userRole, projectId = 'proj-001' }: PhaseManagementProps) {
-  // Core state
-  const [phases, setPhases] = useState<Phase[]>(INITIAL_PHASES);
+  // Core state - selectedPhase defaults to 3단계 (inProgress phase)
   const [selectedPhase, setSelectedPhase] = useState<Phase>(INITIAL_PHASES[2]);
   const [activeTab, setActiveTab] = useState<PhaseDetailTab>('deliverables');
   const [pendingSelectPhaseId, setPendingSelectPhaseId] = useState<string | null>(null);
@@ -102,9 +102,11 @@ export default function PhaseManagement({ userRole, projectId = 'proj-001' }: Ph
 
   // TanStack Query hooks
   const { data: allPhasesData } = useAllPhases();
-  // Filter phases by projectId
-  const phasesData = (allPhasesData as any[] | undefined)?.filter((p: any) => p.projectId === projectId);
-  const isValidApiPhaseId = selectedPhase.id && !/^[1-6]$/.test(selectedPhase.id);
+  // Filter phases by projectId and parentId (sub-phases under AI 모델 개발)
+  const phasesData = (allPhasesData as any[] | undefined)?.filter(
+    (p: any) => p.projectId === projectId && p.parentId === AI_MODEL_DEVELOPMENT_PHASE_ID
+  );
+  const isValidApiPhaseId = selectedPhase.id && selectedPhase.id.startsWith('phase-');
   const { data: deliverables } = usePhaseDeliverables(isValidApiPhaseId ? selectedPhase.id : '');
   const { data: kpis } = usePhaseKpis(isValidApiPhaseId ? selectedPhase.id : '');
 
@@ -153,11 +155,14 @@ export default function PhaseManagement({ userRole, projectId = 'proj-001' }: Ph
             return;
           }
         }
-        const currentIndex = phases.findIndex((p) => p.id === selectedPhase.id);
-        const apiPhase = phasesArray[currentIndex >= 0 ? currentIndex : 0];
-        if (apiPhase && apiPhase.id !== selectedPhase.id) {
+        // Match by ID for the selected phase
+        const apiPhase = phasesArray.find((p: ApiPhase) => p.id === selectedPhase.id);
+        if (apiPhase) {
           const mappedPhase = mapPhaseFromApi(apiPhase);
-          setSelectedPhase(mappedPhase);
+          // Only update if API has newer data
+          if (mappedPhase.progress !== selectedPhase.progress || mappedPhase.status !== selectedPhase.status) {
+            setSelectedPhase({ ...selectedPhase, ...mappedPhase });
+          }
         }
       }
     }
@@ -172,8 +177,9 @@ export default function PhaseManagement({ userRole, projectId = 'proj-001' }: Ph
     const phasesArray: ApiPhase[] = Array.isArray(phaseData) ? phaseData : [];
     if (!phasesArray.length) return methodologyPhases;
 
-    return methodologyPhases.map((methodologyPhase, index) => {
-      const apiPhase = phasesArray.find((p: ApiPhase) => p.orderNum === index + 1) || phasesArray[index];
+    return methodologyPhases.map((methodologyPhase) => {
+      // Match by ID (phase-001-03-01, phase-001-03-02, etc.)
+      const apiPhase = phasesArray.find((p: ApiPhase) => p.id === methodologyPhase.id);
       if (apiPhase) {
         const mappedPhase = mapPhaseFromApi(apiPhase);
         const phaseDeliverables = Array.isArray(apiPhase.deliverables)
@@ -184,13 +190,13 @@ export default function PhaseManagement({ userRole, projectId = 'proj-001' }: Ph
           : [];
         return {
           ...methodologyPhase,
-          id: mappedPhase.id,
           status: mappedPhase.status || methodologyPhase.status,
           progress: mappedPhase.progress ?? methodologyPhase.progress,
           startDate: mappedPhase.startDate || methodologyPhase.startDate,
           endDate: mappedPhase.endDate || methodologyPhase.endDate,
           deliverables: phaseDeliverables.length > 0 ? phaseDeliverables : methodologyPhase.deliverables,
           kpis: phaseKpis.length > 0 ? phaseKpis : methodologyPhase.kpis,
+          parentId: methodologyPhase.parentId,
         };
       }
       return methodologyPhase;
@@ -198,13 +204,14 @@ export default function PhaseManagement({ userRole, projectId = 'proj-001' }: Ph
   })();
 
   // Current phase with merged deliverables and KPIs
+  // Use API data only if it has actual items, otherwise fall back to mock data
   const currentPhaseWithDetails: Phase = {
     ...selectedPhase,
-    deliverables: deliverables
-      ? (Array.isArray(deliverables) ? deliverables.map(mapDeliverableFromApi) : selectedPhase.deliverables)
+    deliverables: (Array.isArray(deliverables) && deliverables.length > 0)
+      ? deliverables.map(mapDeliverableFromApi)
       : selectedPhase.deliverables,
-    kpis: kpis
-      ? (Array.isArray(kpis) ? kpis.map(mapKpiFromApi) : selectedPhase.kpis)
+    kpis: (Array.isArray(kpis) && kpis.length > 0)
+      ? kpis.map(mapKpiFromApi)
       : selectedPhase.kpis,
   };
 
@@ -331,7 +338,6 @@ export default function PhaseManagement({ userRole, projectId = 'proj-001' }: Ph
       if (editingPhase) {
         await updatePhaseMutation.mutateAsync({ id: editingPhase.id, data: payload });
       } else {
-        const projectId = 'proj-001';
         await createPhaseMutation.mutateAsync({ projectId, data: payload });
       }
     } catch (error) {
