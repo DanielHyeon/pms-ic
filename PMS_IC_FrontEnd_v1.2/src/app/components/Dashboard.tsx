@@ -1,13 +1,27 @@
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { TrendingUp, AlertTriangle, CheckCircle2, Clock, Target, DollarSign, Lock, Cpu, Cog, Layers, User, FolderKanban, ChevronRight, Star } from 'lucide-react';
 import { UserRole } from '../App';
-import { subProjectData, partLeaderData, phaseData, sprintVelocity, burndownData } from '../../mocks';
 import { getStatusColor, getStatusLabel, getTrackColor, getActivityColor } from '../../utils/status';
 import { useProject } from '../../contexts/ProjectContext';
 import { useProjectsWithDetails } from '../../hooks/api/useProjects';
-import { usePortfolioActivities, useProjectActivities, useProjectDashboardStats, useWeightedProgress } from '../../hooks/api/useDashboard';
+import {
+  usePortfolioActivities,
+  useProjectActivities,
+  useProjectDashboardStats,
+  useWeightedProgress,
+  usePhaseProgress,
+  usePartStats,
+  useSprintVelocity,
+  useBurndown,
+  useInsights,
+} from '../../hooks/api/useDashboard';
+import { StatValue } from './dashboard/StatValue';
+import { SectionStatus, DataSourceBadge } from './dashboard/DataSourceBadge';
+import type { DashboardStats, DerivedStatus, InsightDto, PhaseMetric, PartLeaderMetric, SprintMetric, BurndownPoint } from '../../types/dashboard';
+import type { WeightedProgressDto } from '../../hooks/api/useDashboard';
 
-// 포트폴리오 뷰 (전체 프로젝트 현황)
+// ========== Portfolio View (unchanged - already DB-backed) ==========
+
 function PortfolioView({ userRole, onSelectProject }: { userRole: UserRole; onSelectProject: (projectId: string) => void }) {
   const { data: projects = [], isLoading } = useProjectsWithDetails();
   const { data: activities = [] } = usePortfolioActivities();
@@ -40,13 +54,11 @@ function PortfolioView({ userRole, onSelectProject }: { userRole: UserRole; onSe
 
   return (
     <div className="p-6 space-y-6">
-      {/* 포트폴리오 헤더 */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">포트폴리오 대시보드</h1>
         <p className="text-gray-600 mt-1">전체 프로젝트 현황을 한눈에 확인하세요</p>
       </div>
 
-      {/* 요약 카드 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between">
@@ -109,7 +121,6 @@ function PortfolioView({ userRole, onSelectProject }: { userRole: UserRole; onSe
         </div>
       </div>
 
-      {/* 프로젝트 목록 */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200">
           <h3 className="font-semibold text-gray-900">프로젝트별 현황</h3>
@@ -168,7 +179,6 @@ function PortfolioView({ userRole, onSelectProject }: { userRole: UserRole; onSe
         </div>
       </div>
 
-      {/* 프로젝트 진행 상태 차트 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h3 className="font-semibold text-gray-900 mb-4">프로젝트별 진행률</h3>
@@ -218,7 +228,6 @@ function PortfolioView({ userRole, onSelectProject }: { userRole: UserRole; onSe
         </div>
       </div>
 
-      {/* Portfolio Recent Activities */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <h3 className="font-semibold text-gray-900 mb-4">포트폴리오 최근 활동</h3>
         <div className="space-y-3">
@@ -246,38 +255,66 @@ function PortfolioView({ userRole, onSelectProject }: { userRole: UserRole; onSe
   );
 }
 
+// ========== Insight rendering helper ==========
+
+const INSIGHT_ICON: Record<string, { icon: typeof AlertTriangle; color: string; border: string }> = {
+  RISK: { icon: AlertTriangle, color: 'text-amber-500', border: 'border-amber-200' },
+  ACHIEVEMENT: { icon: CheckCircle2, color: 'text-green-500', border: 'border-green-200' },
+  RECOMMENDATION: { icon: TrendingUp, color: 'text-blue-500', border: 'border-blue-200' },
+};
+
+function InsightCard({ insight }: { insight: InsightDto }) {
+  const config = INSIGHT_ICON[insight.type] || INSIGHT_ICON.RECOMMENDATION;
+  const Icon = config.icon;
+  return (
+    <div className={`bg-white rounded-lg p-4 border ${config.border}`}>
+      <div className="flex items-start gap-2">
+        <Icon className={`${config.color} mt-0.5`} size={18} />
+        <div>
+          <p className="text-sm font-medium text-gray-900">{insight.title}</p>
+          <p className="text-xs text-gray-600 mt-1">{insight.description}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ========== Project Dashboard View ==========
+
 export default function Dashboard({ userRole }: { userRole: UserRole }) {
   const { currentProject, selectProject } = useProject();
 
-  // PMO, Admin이고 프로젝트 미선택 시 포트폴리오 뷰
   const showPortfolioView = ['pmo_head', 'admin'].includes(userRole) && !currentProject;
 
-  // Fetch project dashboard stats and activities when a project is selected
-  const { data: projectActivities = [] } = useProjectActivities(currentProject?.id || null);
-  const { data: dashboardStats, isLoading: isLoadingStats } = useProjectDashboardStats(currentProject?.id || null);
-  const { data: weightedProgress, isLoading: isLoadingProgress } = useWeightedProgress(currentProject?.id || null);
+  const projectId = currentProject?.id || null;
+
+  // Core stats (existing)
+  const { data: projectActivities = [] } = useProjectActivities(projectId);
+  const { data: dashboardStats, isLoading: isLoadingStats } = useProjectDashboardStats(projectId);
+  const { data: weightedProgress, isLoading: isLoadingProgress } = useWeightedProgress(projectId);
+
+  // New section hooks (DashboardSection contract)
+  const { data: phaseSection } = usePhaseProgress(projectId);
+  const { data: partSection } = usePartStats(projectId);
+  const { data: velocitySection } = useSprintVelocity(projectId);
+  const { data: burndownSection } = useBurndown(projectId);
+  const { data: insightSection } = useInsights(projectId);
 
   if (showPortfolioView) {
     return <PortfolioView userRole={userRole} onSelectProject={selectProject} />;
   }
 
-  // 역할별 접근 권한
   const canViewBudget = ['sponsor', 'pmo_head', 'pm'].includes(userRole);
   const isReadOnly = ['auditor', 'business_analyst'].includes(userRole);
 
-  // Extract stats from API response (with fallbacks)
-  const stats = dashboardStats || {};
-  const progress = weightedProgress || {};
+  const stats: Partial<DashboardStats> = dashboardStats || {};
+  const progress: Partial<WeightedProgressDto> = weightedProgress || {};
 
-  // KPI values from real data
   const avgProgress = stats.avgProgress ?? 0;
   const totalTasks = stats.totalTasks ?? 0;
   const completedTasks = stats.completedTasks ?? 0;
   const openIssues = stats.openIssues ?? 0;
   const highPriorityIssues = stats.highPriorityIssues ?? 0;
-  const budgetTotal = stats.budgetTotal ?? 0;
-  const budgetSpent = stats.budgetSpent ?? 0;
-  const budgetExecutionRate = stats.budgetExecutionRate ?? 0;
 
   // Track progress data from real API
   const trackProgressData = {
@@ -301,7 +338,37 @@ export default function Dashboard({ userRole }: { userRole: UserRole }) {
     },
   };
 
-  // Loading state
+  // Phase progress → chart data
+  const phaseChartData = (phaseSection?.data?.phases ?? []).map((p: PhaseMetric) => ({
+    phase: p.phaseName,
+    planned: 100,
+    actual: p.derivedProgress,
+  }));
+
+  // Sprint velocity → chart data
+  const velocityChartData = (velocitySection?.data?.sprints ?? []).map((s: SprintMetric) => ({
+    sprint: s.sprintName,
+    planned: s.plannedPoints,
+    velocity: s.completedPoints,
+  }));
+
+  // Burndown → chart data
+  const burndown = burndownSection?.data;
+  const burndownChartData = (burndown?.dataPoints ?? []).map((p: BurndownPoint) => ({
+    day: p.date,
+    ideal: p.idealPoints,
+    remaining: p.remainingPoints,
+  }));
+
+  // Insights data
+  const insights: InsightDto[] = insightSection?.data ?? [];
+
+  // Part stats data
+  const parts: PartLeaderMetric[] = partSection?.data?.parts ?? [];
+
+  // Phase table data
+  const phases: PhaseMetric[] = phaseSection?.data?.phases ?? [];
+
   if (isLoadingStats || isLoadingProgress) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[400px]">
@@ -349,9 +416,21 @@ export default function Dashboard({ userRole }: { userRole: UserRole }) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500">예산 집행률</p>
-                <p className="text-3xl font-semibold text-gray-900 mt-2">{budgetExecutionRate}%</p>
+                <p className="text-3xl font-semibold text-gray-900 mt-2">
+                  <StatValue
+                    value={stats.budgetExecutionRate}
+                    suffix="%"
+                    naReason="Budget spent tracking not yet implemented"
+                    className="text-3xl font-semibold text-gray-900"
+                  />
+                </p>
                 <p className="text-xs text-gray-600 mt-1">
-                  ₩{(Number(budgetSpent) / 100000000).toFixed(0)}억 / ₩{(Number(budgetTotal) / 100000000).toFixed(0)}억
+                  <StatValue
+                    value={stats.budgetSpent != null ? Number(stats.budgetSpent) : null}
+                    format={(v) => `₩${(v / 100000000).toFixed(0)}억`}
+                    naReason="Budget spent tracking not yet implemented"
+                  />
+                  {stats.budgetTotal != null && <> / ₩{(Number(stats.budgetTotal) / 100000000).toFixed(0)}억</>}
                 </p>
               </div>
               <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center">
@@ -400,7 +479,7 @@ export default function Dashboard({ userRole }: { userRole: UserRole }) {
         </div>
       </div>
 
-      {/* AI/SI/공통 투트랙 진척률 */}
+      {/* AI/SI/Common Track Progress */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className={`bg-white rounded-xl shadow-sm border p-6 ${getStatusColor(trackProgressData.ai.status).border}`}>
           <div className="flex items-center gap-3 mb-4">
@@ -475,190 +554,202 @@ export default function Dashboard({ userRole }: { userRole: UserRole }) {
         </div>
       </div>
 
-      {/* 서브 프로젝트별 상태 */}
+      {/* Phase Progress Table (DB-backed, replaces mock subProjectData) */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h3 className="font-semibold text-gray-900 mb-4">서브 프로젝트별 상태</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left py-3 px-4 font-medium text-gray-600">프로젝트명</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-600">트랙</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-600">담당자</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-600">진척률</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-600">상태</th>
-              </tr>
-            </thead>
-            <tbody>
-              {subProjectData.map((project, idx) => (
-                <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-3 px-4 font-medium text-gray-900">{project.name}</td>
-                  <td className="py-3 px-4">
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${getTrackColor(project.track)}`}>{project.track}</span>
-                  </td>
-                  <td className="py-3 px-4 text-gray-600">{project.leader}</td>
-                  <td className="py-3 px-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-20 bg-gray-200 rounded-full h-2">
-                        <div className={`h-2 rounded-full ${
-                          project.status === 'normal' ? 'bg-green-500' :
-                          project.status === 'warning' ? 'bg-yellow-500' : 'bg-red-500'
-                        }`} style={{ width: `${project.progress}%` }}></div>
-                      </div>
-                      <span className="text-gray-700">{project.progress}%</span>
-                    </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(project.status).bg} ${getStatusColor(project.status).text}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${getStatusColor(project.status).dot}`}></span>
-                      {getStatusLabel(project.status)}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-gray-900">단계별 진행 현황</h3>
+          <SectionStatus meta={phaseSection?.meta} />
         </div>
+        {phases.length === 0 ? (
+          <p className="text-sm text-gray-500 text-center py-8">단계 데이터가 없습니다</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">단계명</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">트랙</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">작업</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">진척률</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">상태</th>
+                </tr>
+              </thead>
+              <tbody>
+                {phases.map((phase) => (
+                  <tr key={phase.phaseId} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-3 px-4 font-medium text-gray-900">{phase.phaseName}</td>
+                    <td className="py-3 px-4">
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${getTrackColor(phase.trackType)}`}>{phase.trackType}</span>
+                    </td>
+                    <td className="py-3 px-4 text-gray-600">{phase.completedTasks}/{phase.totalTasks}</td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-20 bg-gray-200 rounded-full h-2">
+                          <div className={`h-2 rounded-full ${
+                            phase.derivedStatus === 'normal' ? 'bg-green-500' :
+                            phase.derivedStatus === 'warning' ? 'bg-yellow-500' : 'bg-red-500'
+                          }`} style={{ width: `${phase.derivedProgress}%` }}></div>
+                        </div>
+                        <span className="text-gray-700">{phase.derivedProgress}%</span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(phase.derivedStatus).bg} ${getStatusColor(phase.derivedStatus).text}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${getStatusColor(phase.derivedStatus).dot}`}></span>
+                        {getStatusLabel(phase.derivedStatus)}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      {/* 파트 리더별 현황 */}
+      {/* Part Leader Stats (DB-backed, replaces mock partLeaderData) */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h3 className="font-semibold text-gray-900 mb-4">파트 리더별 현황</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {partLeaderData.map((leader, idx) => (
-            <div key={idx} className={`border rounded-lg p-4 ${getStatusColor(leader.status).border}`}>
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-                  <User className="text-gray-600" size={20} />
-                </div>
-                <div>
-                  <p className="font-medium text-gray-900">{leader.name}</p>
-                  <p className="text-xs text-gray-500">{leader.role}</p>
-                </div>
-                <span className={`ml-auto px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(leader.status).bg} ${getStatusColor(leader.status).text}`}>
-                  {getStatusLabel(leader.status)}
-                </span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="bg-green-50 rounded p-2">
-                  <p className="text-lg font-semibold text-green-700">{leader.completed}</p>
-                  <p className="text-xs text-green-600">완료</p>
-                </div>
-                <div className="bg-blue-50 rounded p-2">
-                  <p className="text-lg font-semibold text-blue-700">{leader.inProgress}</p>
-                  <p className="text-xs text-blue-600">진행중</p>
-                </div>
-                <div className="bg-red-50 rounded p-2">
-                  <p className="text-lg font-semibold text-red-700">{leader.blocked}</p>
-                  <p className="text-xs text-red-600">블로커</p>
-                </div>
-              </div>
-            </div>
-          ))}
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-gray-900">파트 리더별 현황</h3>
+          <SectionStatus meta={partSection?.meta} />
         </div>
+        {parts.length === 0 ? (
+          <p className="text-sm text-gray-500 text-center py-8">파트 데이터가 없습니다</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {parts.map((part) => (
+              <div key={part.partId} className={`border rounded-lg p-4 ${getStatusColor(part.status).border}`}>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                    <User className="text-gray-600" size={20} />
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">{part.leaderName}</p>
+                    <p className="text-xs text-gray-500">{part.partName}</p>
+                  </div>
+                  <span className={`ml-auto px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(part.status).bg} ${getStatusColor(part.status).text}`}>
+                    {getStatusLabel(part.status)}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="bg-green-50 rounded p-2">
+                    <p className="text-lg font-semibold text-green-700">{part.completedTasks}</p>
+                    <p className="text-xs text-green-600">완료</p>
+                  </div>
+                  <div className="bg-blue-50 rounded p-2">
+                    <p className="text-lg font-semibold text-blue-700">{part.inProgressTasks}</p>
+                    <p className="text-xs text-blue-600">진행중</p>
+                  </div>
+                  <div className="bg-red-50 rounded p-2">
+                    <p className="text-lg font-semibold text-red-700">{part.blockedTasks}</p>
+                    <p className="text-xs text-red-600">블로커</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Phase Progress - Waterfall View */}
+        {/* Phase Progress Chart (DB-backed) */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h3 className="font-semibold text-gray-900 mb-4">단계별 진행 현황 (Waterfall View)</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={phaseData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="phase" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="planned" fill="#93c5fd" name="계획" />
-              <Bar dataKey="actual" fill="#3b82f6" name="실적" />
-            </BarChart>
-          </ResponsiveContainer>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-gray-900">단계별 진행 현황 (Waterfall View)</h3>
+            <SectionStatus meta={phaseSection?.meta} />
+          </div>
+          {phaseChartData.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-12">차트 데이터가 없습니다</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={phaseChartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="phase" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="planned" fill="#93c5fd" name="계획" />
+                <Bar dataKey="actual" fill="#3b82f6" name="실적" />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
 
-        {/* Sprint Velocity */}
+        {/* Sprint Velocity Chart (DB-backed) */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h3 className="font-semibold text-gray-900 mb-4">스프린트 속도 (Sprint Velocity)</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={sprintVelocity}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="sprint" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="planned" fill="#d1d5db" name="계획 Story Points" />
-              <Bar dataKey="velocity" fill="#8b5cf6" name="실제 Velocity" />
-            </BarChart>
-          </ResponsiveContainer>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-gray-900">스프린트 속도 (Sprint Velocity)</h3>
+            <SectionStatus meta={velocitySection?.meta} />
+          </div>
+          {velocityChartData.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-12">스프린트 데이터가 없습니다</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={velocityChartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="sprint" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="planned" fill="#d1d5db" name="계획 Story Points" />
+                <Bar dataKey="velocity" fill="#8b5cf6" name="실제 Velocity" />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Burndown Chart */}
+        {/* Burndown Chart (DB-backed) */}
         <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-gray-900">소멸 차트 (Current Sprint Burndown)</h3>
-            <span className="text-sm text-gray-500">Sprint 5 (Day 10 of 14)</span>
+            <div className="flex items-center gap-2">
+              {burndown && <span className="text-sm text-gray-500">{burndown.sprintName}</span>}
+              <SectionStatus meta={burndownSection?.meta} />
+            </div>
           </div>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={burndownData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="day" />
-              <YAxis label={{ value: 'Story Points', angle: -90, position: 'insideLeft' }} />
-              <Tooltip />
-              <Legend />
-              <Line type="monotone" dataKey="ideal" stroke="#d1d5db" strokeWidth={2} name="이상적 소멸" strokeDasharray="5 5" />
-              <Line type="monotone" dataKey="remaining" stroke="#3b82f6" strokeWidth={2} name="실제 남은 작업" />
-            </LineChart>
-          </ResponsiveContainer>
-          <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-            <p className="text-sm text-blue-900">
-              <Clock className="inline-block mr-2" size={16} />
-              현재 진행률 93% - 스프린트 목표 달성 예상 확률: <span className="font-semibold">85%</span>
-            </p>
-          </div>
+          {burndownChartData.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-12">활성 스프린트가 없습니다</p>
+          ) : (
+            <>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={burndownChartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="day" />
+                  <YAxis label={{ value: 'Story Points', angle: -90, position: 'insideLeft' }} />
+                  <Tooltip />
+                  <Legend />
+                  <Line type="monotone" dataKey="ideal" stroke="#d1d5db" strokeWidth={2} name="이상적 소멸" strokeDasharray="5 5" />
+                  <Line type="monotone" dataKey="remaining" stroke="#3b82f6" strokeWidth={2} name="실제 남은 작업" />
+                </LineChart>
+              </ResponsiveContainer>
+              {burndown?.isApproximate && (
+                <div className="mt-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                  <p className="text-sm text-yellow-900">
+                    <AlertTriangle className="inline-block mr-2" size={16} />
+                    Approximate data: using task updated_at as proxy for status changes.
+                  </p>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
-        {/* AI Insights */}
+        {/* AI Insights (DB-backed, replaces hardcoded Korean text) */}
         <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-xl shadow-sm border border-purple-200 p-6">
-          <h3 className="font-semibold text-gray-900 mb-4">AI 인사이트</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-gray-900">AI 인사이트</h3>
+            <SectionStatus meta={insightSection?.meta} />
+          </div>
           <div className="space-y-4">
-            <div className="bg-white rounded-lg p-4 border border-purple-200">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="text-amber-500 mt-0.5" size={18} />
-                <div>
-                  <p className="text-sm font-medium text-gray-900">위험 감지</p>
-                  <p className="text-xs text-gray-600 mt-1">
-                    OCR 모델 정확도 목표 미달 가능성 75%. 
-                    특정 병원 진단서 양식 인식률 저하 문제.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg p-4 border border-green-200">
-              <div className="flex items-start gap-2">
-                <CheckCircle2 className="text-green-500 mt-0.5" size={18} />
-                <div>
-                  <p className="text-sm font-medium text-gray-900">주간 성과</p>
-                  <p className="text-xs text-gray-600 mt-1">
-                    데이터 전처리 완료율 95% 달성.
-                    모델 학습 인프라 최적화 완료.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg p-4 border border-blue-200">
-              <div className="flex items-start gap-2">
-                <TrendingUp className="text-blue-500 mt-0.5" size={18} />
-                <div>
-                  <p className="text-sm font-medium text-gray-900">권장 사항</p>
-                  <p className="text-xs text-gray-600 mt-1">
-                    다음 스프린트: 데이터 증강(Data Augmentation) 우선 진행 권장.
-                  </p>
-                </div>
-              </div>
-            </div>
+            {insights.length === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-8">인사이트가 없습니다</p>
+            ) : (
+              insights.map((insight: InsightDto, idx: number) => (
+                <InsightCard key={idx} insight={insight} />
+              ))
+            )}
           </div>
         </div>
       </div>

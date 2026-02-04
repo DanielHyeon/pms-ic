@@ -2,8 +2,7 @@ package com.insuretech.pms.project.controller;
 
 import com.insuretech.pms.common.dto.ApiResponse;
 import com.insuretech.pms.project.reactive.service.ReactiveDashboardService;
-import com.insuretech.pms.report.dto.DashboardStats;
-import com.insuretech.pms.report.dto.WeightedProgressDto;
+import com.insuretech.pms.report.dto.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -151,6 +150,71 @@ public class ReactiveDashboardController {
                 .map(progress -> ResponseEntity.ok(ApiResponse.success(progress)))
                 .doOnSuccess(resp -> log.debug("Weighted progress retrieved successfully for: {}", projectId))
                 .doOnError(e -> log.error("Failed to get weighted progress for: {}", projectId, e));
+    }
+
+    // ========== Section Endpoints (DashboardSection contract) ==========
+
+    @GetMapping("/projects/{projectId}/dashboard")
+    public Mono<ResponseEntity<ApiResponse<ProjectDashboardDto>>> getFullProjectDashboard(
+            @PathVariable String projectId) {
+        log.debug("Getting full dashboard for project: {}", projectId);
+        return dashboardService.getFullDashboard(projectId)
+                .map(dto -> ResponseEntity.ok(ApiResponse.success(dto)))
+                .doOnError(e -> log.error("Failed to get full dashboard for: {}", projectId, e));
+    }
+
+    @GetMapping("/projects/{projectId}/dashboard/phase-progress")
+    public Mono<ResponseEntity<ApiResponse<DashboardSection<PhaseProgressDto>>>> getPhaseProgress(
+            @PathVariable String projectId) {
+        log.debug("Getting phase progress for project: {}", projectId);
+        return dashboardService.getPhaseProgress(projectId)
+                .map(section -> ResponseEntity.ok(ApiResponse.success(section)))
+                .doOnError(e -> log.error("Failed to get phase progress for: {}", projectId, e));
+    }
+
+    @GetMapping("/projects/{projectId}/dashboard/part-stats")
+    public Mono<ResponseEntity<ApiResponse<DashboardSection<PartStatsDto>>>> getPartStats(
+            @PathVariable String projectId) {
+        log.debug("Getting part stats for project: {}", projectId);
+        return dashboardService.getPartStats(projectId)
+                .map(section -> ResponseEntity.ok(ApiResponse.success(section)))
+                .doOnError(e -> log.error("Failed to get part stats for: {}", projectId, e));
+    }
+
+    @GetMapping("/projects/{projectId}/dashboard/wbs-group-stats")
+    public Mono<ResponseEntity<ApiResponse<DashboardSection<WbsGroupStatsDto>>>> getWbsGroupStats(
+            @PathVariable String projectId) {
+        log.debug("Getting WBS group stats for project: {}", projectId);
+        return dashboardService.getWbsGroupStats(projectId)
+                .map(section -> ResponseEntity.ok(ApiResponse.success(section)))
+                .doOnError(e -> log.error("Failed to get WBS group stats for: {}", projectId, e));
+    }
+
+    @GetMapping("/projects/{projectId}/dashboard/sprint-velocity")
+    public Mono<ResponseEntity<ApiResponse<DashboardSection<SprintVelocityDto>>>> getSprintVelocity(
+            @PathVariable String projectId) {
+        log.debug("Getting sprint velocity for project: {}", projectId);
+        return dashboardService.getSprintVelocity(projectId)
+                .map(section -> ResponseEntity.ok(ApiResponse.success(section)))
+                .doOnError(e -> log.error("Failed to get sprint velocity for: {}", projectId, e));
+    }
+
+    @GetMapping("/projects/{projectId}/dashboard/burndown")
+    public Mono<ResponseEntity<ApiResponse<DashboardSection<BurndownDto>>>> getBurndown(
+            @PathVariable String projectId) {
+        log.debug("Getting burndown for project: {}", projectId);
+        return dashboardService.getActiveBurndown(projectId)
+                .map(section -> ResponseEntity.ok(ApiResponse.success(section)))
+                .doOnError(e -> log.error("Failed to get burndown for: {}", projectId, e));
+    }
+
+    @GetMapping("/projects/{projectId}/dashboard/insights")
+    public Mono<ResponseEntity<ApiResponse<DashboardSection<List<InsightDto>>>>> getInsights(
+            @PathVariable String projectId) {
+        log.debug("Getting insights for project: {}", projectId);
+        return dashboardService.getInsights(projectId)
+                .map(section -> ResponseEntity.ok(ApiResponse.success(section)))
+                .doOnError(e -> log.error("Failed to get insights for: {}", projectId, e));
     }
 
     // ========== Helper Methods ==========

@@ -467,7 +467,13 @@ CREATE TABLE IF NOT EXISTS task.tasks (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP,
     created_by VARCHAR(36),
-    updated_by VARCHAR(36)
+    updated_by VARCHAR(36),
+    part_id VARCHAR(50),
+    phase_id VARCHAR(36),
+    track_type VARCHAR(20) DEFAULT 'COMMON',
+    tags TEXT,
+    column_id VARCHAR(36),
+    requirement_id VARCHAR(36)
 );
 
 CREATE TABLE IF NOT EXISTS task.kanban_columns (

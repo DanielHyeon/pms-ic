@@ -7,6 +7,7 @@ import {
 import { usePartDashboard, usePartMetrics, useParts } from '../../hooks/api/useParts';
 import { useProject } from '../../contexts/ProjectContext';
 import { Part, PART_STATUS_INFO } from '../../types/part';
+import { StatValue } from './dashboard/StatValue';
 
 interface PartDashboardProps {
   partId?: string;
@@ -274,22 +275,30 @@ export default function PartDashboard({ partId: initialPartId, onBack }: PartDas
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-gray-50 rounded-lg p-4 text-center">
             <p className="text-sm text-gray-500">Velocity</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">{metrics.velocity.toFixed(1)}</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">
+              <StatValue value={metrics.velocity} format={(v) => v.toFixed(1)} naReason="No sprint data available" />
+            </p>
             <p className="text-xs text-gray-500">SP/Sprint</p>
           </div>
           <div className="bg-gray-50 rounded-lg p-4 text-center">
             <p className="text-sm text-gray-500">WIP Count</p>
-            <p className="text-2xl font-bold text-blue-700 mt-1">{metrics.wipCount}</p>
+            <p className="text-2xl font-bold text-blue-700 mt-1">
+              <StatValue value={metrics.wipCount} naReason="No WIP data" />
+            </p>
             <p className="text-xs text-gray-500">Active items</p>
           </div>
           <div className="bg-gray-50 rounded-lg p-4 text-center">
             <p className="text-sm text-gray-500">Avg Cycle Time</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">{metrics.avgCycleTime.toFixed(1)}</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">
+              <StatValue value={metrics.avgCycleTime} format={(v) => v.toFixed(1)} naReason="No cycle time data" />
+            </p>
             <p className="text-xs text-gray-500">Days</p>
           </div>
           <div className="bg-gray-50 rounded-lg p-4 text-center">
             <p className="text-sm text-gray-500">Avg Lead Time</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">{metrics.avgLeadTime.toFixed(1)}</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">
+              <StatValue value={metrics.avgLeadTime} format={(v) => v.toFixed(1)} naReason="No lead time data" />
+            </p>
             <p className="text-xs text-gray-500">Days</p>
           </div>
         </div>

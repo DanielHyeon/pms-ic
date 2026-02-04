@@ -34,8 +34,10 @@ public class DashboardStats {
     private Long openIssues;
     private Long highPriorityIssues;
 
-    // Budget Statistics
+    // Budget Statistics - budgetTotal is real from project.projects.budget
     private java.math.BigDecimal budgetTotal;
+    // Nullable: Budget spent tracking not yet implemented. Returns null instead of 0.
     private java.math.BigDecimal budgetSpent;
+    // Nullable: Budget execution rate not yet implemented. Returns null instead of 0.
     private Integer budgetExecutionRate;
 }

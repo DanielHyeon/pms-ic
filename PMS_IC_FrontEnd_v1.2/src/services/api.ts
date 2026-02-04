@@ -9,6 +9,17 @@ import {
   getMockPartById,
   getMockPartMembers,
 } from '../mocks/dashboard.mock';
+import type {
+  DashboardStats,
+  DashboardSection,
+  ProjectDashboardDto,
+  PhaseProgressDto,
+  PartStatsDto,
+  WbsGroupStatsDto,
+  SprintVelocityDto,
+  BurndownDto,
+  InsightDto,
+} from '../types/dashboard';
 
 // Base URL without version prefix - version is added per-endpoint
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8083/api';
@@ -242,8 +253,8 @@ export class ApiService {
 
   // ========== Project-specific Dashboard API ==========
 
-  async getProjectDashboardStats(projectId: string) {
-    return this.fetchWithFallback(`${V2}/projects/${projectId}/dashboard/stats`, {}, {
+  async getProjectDashboardStats(projectId: string): Promise<DashboardStats> {
+    return this.fetchWithFallback<DashboardStats>(`${V2}/projects/${projectId}/dashboard/stats`, {}, {
       isPortfolioView: false,
       projectId,
       projectName: null,
@@ -258,9 +269,9 @@ export class ApiService {
       totalIssues: 0,
       openIssues: 0,
       highPriorityIssues: 0,
-      budgetTotal: 0,
-      budgetSpent: 0,
-      budgetExecutionRate: 0,
+      budgetTotal: null,
+      budgetSpent: null,
+      budgetExecutionRate: null,
     });
   }
 
@@ -289,6 +300,44 @@ export class ApiService {
       totalTasks: 0,
       completedTasks: 0,
     });
+  }
+
+  // ========== Kanban Board API ==========
+
+  async getKanbanBoard(projectId: string) {
+    return this.fetchWithFallback<{ projectId: string; columns: { id: string; name: string; orderNum: number; wipLimit: number | null; color: string | null; tasks: { id: string; [key: string]: unknown }[] }[] } | null>(
+      `${V2}/projects/${projectId}/kanban`, {}, null
+    );
+  }
+
+  // ========== Section-based Dashboard API (DashboardSection contract) ==========
+
+  async getFullProjectDashboard(projectId: string) {
+    return this.fetchWithFallback<ProjectDashboardDto | null>(`${V2}/projects/${projectId}/dashboard`, {}, null);
+  }
+
+  async getPhaseProgress(projectId: string) {
+    return this.fetchWithFallback<DashboardSection<PhaseProgressDto> | null>(`${V2}/projects/${projectId}/dashboard/phase-progress`, {}, null);
+  }
+
+  async getPartStats(projectId: string) {
+    return this.fetchWithFallback<DashboardSection<PartStatsDto> | null>(`${V2}/projects/${projectId}/dashboard/part-stats`, {}, null);
+  }
+
+  async getWbsGroupStats(projectId: string) {
+    return this.fetchWithFallback<DashboardSection<WbsGroupStatsDto> | null>(`${V2}/projects/${projectId}/dashboard/wbs-group-stats`, {}, null);
+  }
+
+  async getSprintVelocity(projectId: string) {
+    return this.fetchWithFallback<DashboardSection<SprintVelocityDto> | null>(`${V2}/projects/${projectId}/dashboard/sprint-velocity`, {}, null);
+  }
+
+  async getBurndown(projectId: string) {
+    return this.fetchWithFallback<DashboardSection<BurndownDto> | null>(`${V2}/projects/${projectId}/dashboard/burndown`, {}, null);
+  }
+
+  async getInsights(projectId: string) {
+    return this.fetchWithFallback<DashboardSection<InsightDto[]> | null>(`${V2}/projects/${projectId}/dashboard/insights`, {}, null);
   }
 
   // ========== Legacy Dashboard API (backward compatibility) ==========

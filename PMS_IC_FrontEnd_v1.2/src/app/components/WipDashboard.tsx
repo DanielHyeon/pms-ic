@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   AlertCircle,
   TrendingUp,
@@ -15,36 +15,30 @@ import {
 import { webSocketService, WipUpdateEvent } from '../../services/websocket';
 import { toastService } from '../../services/toast';
 import { apiService } from '../../services/api';
+import { DataSourceBadge } from './dashboard/DataSourceBadge';
+
+interface KanbanColumn {
+  id: string;
+  name: string;
+  orderNum: number;
+  wipLimit: number | null;
+  color: string | null;
+  tasks: { id: string; [key: string]: unknown }[];
+}
+
+interface KanbanBoard {
+  projectId: string;
+  columns: KanbanColumn[];
+}
 
 interface ColumnWipStatus {
   columnId: string;
   columnName: string;
   currentWip: number;
-  wipLimitSoft?: number;
-  wipLimitHard?: number;
+  wipLimit: number | null;
   isBottleneck: boolean;
   health: 'RED' | 'YELLOW' | 'GREEN';
-  softLimitPercentage?: number;
-  hardLimitPercentage?: number;
-}
-
-interface SprintWipStatus {
-  sprintId: string;
-  sprintName: string;
-  currentWip: number;
-  conwipLimit?: number;
-  wipValidationEnabled: boolean;
-  conwipPercentage?: number;
-  health: string;
-}
-
-interface PersonalWipStatus {
-  assigneeId: string;
-  assigneeName: string;
-  currentWip: number;
-  maxPersonalWip: number;
-  percentage: number;
-  recentTasks: string[];
+  limitPercentage: number | null;
 }
 
 interface WipDashboardProps {
@@ -52,11 +46,38 @@ interface WipDashboardProps {
   onRefresh?: () => void;
 }
 
+function deriveColumnWipStatus(col: KanbanColumn): ColumnWipStatus {
+  const currentWip = col.tasks.length;
+  const wipLimit = col.wipLimit;
+  let health: 'RED' | 'YELLOW' | 'GREEN' = 'GREEN';
+  let limitPercentage: number | null = null;
+  let isBottleneck = false;
+
+  if (wipLimit && wipLimit > 0) {
+    limitPercentage = Math.round((currentWip / wipLimit) * 100);
+    if (currentWip > wipLimit) {
+      health = 'RED';
+      isBottleneck = true;
+    } else if (currentWip >= wipLimit * 0.8) {
+      health = 'YELLOW';
+    }
+  }
+
+  return {
+    columnId: col.id,
+    columnName: col.name,
+    currentWip,
+    wipLimit,
+    isBottleneck,
+    health,
+    limitPercentage,
+  };
+}
+
 const WipDashboard: React.FC<WipDashboardProps> = ({ projectId, onRefresh }) => {
   const [columns, setColumns] = useState<ColumnWipStatus[]>([]);
-  const [sprints, setSprints] = useState<SprintWipStatus[]>([]);
-  const [personalWips, setPersonalWips] = useState<PersonalWipStatus[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dataLoaded, setDataLoaded] = useState(false);
   const [expandedColumn, setExpandedColumn] = useState<string | null>(null);
   const [filterHealth, setFilterHealth] = useState<'ALL' | 'RED' | 'YELLOW' | 'GREEN'>('ALL');
   const [filterBottleneck, setFilterBottleneck] = useState(false);
@@ -66,18 +87,35 @@ const WipDashboard: React.FC<WipDashboardProps> = ({ projectId, onRefresh }) => 
   const [sortBy, setSortBy] = useState<'name' | 'wip' | 'health'>('name');
   const [wsConnected, setWsConnected] = useState(false);
 
+  const loadWipData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const board = await apiService.getKanbanBoard(projectId);
+      if (board && board.columns) {
+        setColumns((board.columns as KanbanColumn[]).map(deriveColumnWipStatus));
+        setDataLoaded(true);
+      } else {
+        setColumns([]);
+        setDataLoaded(false);
+      }
+    } catch (error) {
+      console.error('Failed to load WIP data:', error);
+      setColumns([]);
+      setDataLoaded(false);
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId]);
+
   useEffect(() => {
     loadWipData();
 
-    // Connect WebSocket for real-time updates
     webSocketService.connect(projectId);
 
-    // Subscribe to WebSocket status
     const unsubscribeStatus = webSocketService.subscribeStatus((status) => {
       setWsConnected(status === 'connected');
     });
 
-    // Subscribe to WIP updates
     const unsubscribeMessage = webSocketService.subscribe((event: WipUpdateEvent) => {
       handleWipUpdate(event);
     });
@@ -87,7 +125,7 @@ const WipDashboard: React.FC<WipDashboardProps> = ({ projectId, onRefresh }) => 
       unsubscribeMessage();
       webSocketService.disconnect();
     };
-  }, [projectId]);
+  }, [projectId, loadWipData]);
 
   const handleWipUpdate = (event: WipUpdateEvent) => {
     switch (event.type) {
@@ -97,7 +135,7 @@ const WipDashboard: React.FC<WipDashboardProps> = ({ projectId, onRefresh }) => 
         } else if (event.data.violationType === 'HARD_LIMIT') {
           toastService.wipViolation(event.data.columnName || 'Unknown', 'hard');
         }
-        loadWipData(); // Refresh data
+        loadWipData();
         break;
       case 'BOTTLENECK_DETECTED':
         toastService.bottleneckDetected(event.data.columnName || 'Unknown');
@@ -110,190 +148,54 @@ const WipDashboard: React.FC<WipDashboardProps> = ({ projectId, onRefresh }) => 
     }
   };
 
-  const loadWipData = async () => {
-    setLoading(true);
-    try {
-      // Mock data - replace with actual API calls
-      const mockColumns: ColumnWipStatus[] = [
-        {
-          columnId: '1',
-          columnName: 'To Do',
-          currentWip: 8,
-          wipLimitSoft: 10,
-          wipLimitHard: 15,
-          isBottleneck: false,
-          health: 'GREEN',
-          softLimitPercentage: 80,
-          hardLimitPercentage: 53,
-        },
-        {
-          columnId: '2',
-          columnName: 'In Progress',
-          currentWip: 12,
-          wipLimitSoft: 8,
-          wipLimitHard: 12,
-          isBottleneck: true,
-          health: 'YELLOW',
-          softLimitPercentage: 150,
-          hardLimitPercentage: 100,
-        },
-        {
-          columnId: '3',
-          columnName: 'Review',
-          currentWip: 13,
-          wipLimitSoft: 5,
-          wipLimitHard: 10,
-          isBottleneck: false,
-          health: 'RED',
-          softLimitPercentage: 260,
-          hardLimitPercentage: 130,
-        },
-        {
-          columnId: '4',
-          columnName: 'Done',
-          currentWip: 45,
-          wipLimitSoft: undefined,
-          wipLimitHard: undefined,
-          isBottleneck: false,
-          health: 'GREEN',
-        },
-      ];
-
-      const mockSprints: SprintWipStatus[] = [
-        {
-          sprintId: '1',
-          sprintName: 'Sprint 25',
-          currentWip: 22,
-          conwipLimit: 25,
-          wipValidationEnabled: true,
-          conwipPercentage: 88,
-          health: 'YELLOW',
-        },
-        {
-          sprintId: '2',
-          sprintName: 'Sprint 26',
-          currentWip: 15,
-          conwipLimit: 30,
-          wipValidationEnabled: true,
-          conwipPercentage: 50,
-          health: 'GREEN',
-        },
-      ];
-
-      const mockPersonalWips: PersonalWipStatus[] = [
-        {
-          assigneeId: '1',
-          assigneeName: 'Alice Chen',
-          currentWip: 4,
-          maxPersonalWip: 5,
-          percentage: 80,
-          recentTasks: ['TASK-101', 'TASK-102', 'TASK-103', 'TASK-104'],
-        },
-        {
-          assigneeId: '2',
-          assigneeName: 'Bob Smith',
-          currentWip: 6,
-          maxPersonalWip: 5,
-          percentage: 120,
-          recentTasks: ['TASK-201', 'TASK-202', 'TASK-203', 'TASK-204', 'TASK-205', 'TASK-206'],
-        },
-        {
-          assigneeId: '3',
-          assigneeName: 'Carol Williams',
-          currentWip: 3,
-          maxPersonalWip: 5,
-          percentage: 60,
-          recentTasks: ['TASK-301', 'TASK-302', 'TASK-303'],
-        },
-      ];
-
-      setColumns(mockColumns);
-      setSprints(mockSprints);
-      setPersonalWips(mockPersonalWips);
-    } catch (error) {
-      console.error('Failed to load WIP data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const getHealthColor = (health: string) => {
     switch (health) {
-      case 'RED':
-        return 'from-red-500 to-red-600';
-      case 'YELLOW':
-        return 'from-amber-500 to-amber-600';
-      case 'GREEN':
-        return 'from-emerald-500 to-emerald-600';
-      default:
-        return 'from-gray-500 to-gray-600';
+      case 'RED': return 'from-red-500 to-red-600';
+      case 'YELLOW': return 'from-amber-500 to-amber-600';
+      case 'GREEN': return 'from-emerald-500 to-emerald-600';
+      default: return 'from-gray-500 to-gray-600';
     }
   };
 
   const getHealthBg = (health: string) => {
     switch (health) {
-      case 'RED':
-        return 'bg-red-50 border-red-200';
-      case 'YELLOW':
-        return 'bg-amber-50 border-amber-200';
-      case 'GREEN':
-        return 'bg-emerald-50 border-emerald-200';
-      default:
-        return 'bg-gray-50 border-gray-200';
+      case 'RED': return 'bg-red-50 border-red-200';
+      case 'YELLOW': return 'bg-amber-50 border-amber-200';
+      case 'GREEN': return 'bg-emerald-50 border-emerald-200';
+      default: return 'bg-gray-50 border-gray-200';
     }
   };
 
   const getHealthTextColor = (health: string) => {
     switch (health) {
-      case 'RED':
-        return 'text-red-700';
-      case 'YELLOW':
-        return 'text-amber-700';
-      case 'GREEN':
-        return 'text-emerald-700';
-      default:
-        return 'text-gray-700';
+      case 'RED': return 'text-red-700';
+      case 'YELLOW': return 'text-amber-700';
+      case 'GREEN': return 'text-emerald-700';
+      default: return 'text-gray-700';
     }
   };
 
   const isColumnViolated = (col: ColumnWipStatus): boolean => {
-    if (col.wipLimitHard && col.currentWip > col.wipLimitHard) return true;
-    if (col.wipLimitSoft && col.currentWip > col.wipLimitSoft) return true;
-    return false;
+    return col.wipLimit != null && col.currentWip > col.wipLimit;
   };
 
   let filteredColumns = columns.filter(col => {
-    // Filter by health status
-    if (filterHealth !== 'ALL' && col.health !== filterHealth) {
-      return false;
-    }
-    // Filter by bottleneck
-    if (filterBottleneck && !col.isBottleneck) {
-      return false;
-    }
-    // Filter by violation
-    if (filterViolated && !isColumnViolated(col)) {
-      return false;
-    }
-    // Filter by search term
-    if (searchTerm && !col.columnName.toLowerCase().includes(searchTerm.toLowerCase())) {
-      return false;
-    }
+    if (filterHealth !== 'ALL' && col.health !== filterHealth) return false;
+    if (filterBottleneck && !col.isBottleneck) return false;
+    if (filterViolated && !isColumnViolated(col)) return false;
+    if (searchTerm && !col.columnName.toLowerCase().includes(searchTerm.toLowerCase())) return false;
     return true;
   });
 
-  // Sort columns
   filteredColumns = filteredColumns.sort((a, b) => {
     switch (sortBy) {
-      case 'name':
-        return a.columnName.localeCompare(b.columnName);
-      case 'wip':
-        return b.currentWip - a.currentWip;
-      case 'health':
+      case 'name': return a.columnName.localeCompare(b.columnName);
+      case 'wip': return b.currentWip - a.currentWip;
+      case 'health': {
         const healthOrder: Record<string, number> = { RED: 0, YELLOW: 1, GREEN: 2 };
         return healthOrder[a.health] - healthOrder[b.health];
-      default:
-        return 0;
+      }
+      default: return 0;
     }
   });
 
@@ -328,6 +230,7 @@ const WipDashboard: React.FC<WipDashboardProps> = ({ projectId, onRefresh }) => 
           </>
         )}
       </div>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -362,7 +265,6 @@ const WipDashboard: React.FC<WipDashboardProps> = ({ projectId, onRefresh }) => 
       {showFilters && (
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* Search */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Search by Column</label>
               <input
@@ -374,14 +276,13 @@ const WipDashboard: React.FC<WipDashboardProps> = ({ projectId, onRefresh }) => 
               />
             </div>
 
-            {/* Health Status */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="filterHealth">Status</label>
               <select
                 id="filterHealth"
                 aria-label="Filter by health status"
                 value={filterHealth}
-                onChange={(e) => setFilterHealth(e.target.value as any)}
+                onChange={(e) => setFilterHealth(e.target.value as 'ALL' | 'RED' | 'YELLOW' | 'GREEN')}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="ALL">All Statuses</option>
@@ -391,14 +292,13 @@ const WipDashboard: React.FC<WipDashboardProps> = ({ projectId, onRefresh }) => 
               </select>
             </div>
 
-            {/* Sort */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="sortBy">Sort By</label>
               <select
                 id="sortBy"
                 aria-label="Sort columns by"
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
+                onChange={(e) => setSortBy(e.target.value as 'name' | 'wip' | 'health')}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="name">Column Name</option>
@@ -407,7 +307,6 @@ const WipDashboard: React.FC<WipDashboardProps> = ({ projectId, onRefresh }) => 
               </select>
             </div>
 
-            {/* Toggle Filters */}
             <div className="flex flex-col gap-2">
               <label className="block text-sm font-medium text-gray-700">Quick Filters</label>
               <div className="flex gap-2">
@@ -421,7 +320,7 @@ const WipDashboard: React.FC<WipDashboardProps> = ({ projectId, onRefresh }) => 
                   }`}
                   title="Show only bottleneck columns"
                 >
-                  🔴 Bottlenecks
+                  Bottlenecks
                 </button>
                 <button
                   type="button"
@@ -433,61 +332,36 @@ const WipDashboard: React.FC<WipDashboardProps> = ({ projectId, onRefresh }) => 
                   }`}
                   title="Show only WIP limit violations"
                 >
-                  ⚠️ Violated
+                  Violated
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Active Filters Display */}
           {(filterBottleneck || filterViolated || filterHealth !== 'ALL' || searchTerm) && (
             <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-200">
               {searchTerm && (
                 <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs">
-                  🔍 {searchTerm}
-                  <button
-                    type="button"
-                    onClick={() => setSearchTerm('')}
-                    className="hover:text-blue-900 font-bold"
-                  >
-                    ×
-                  </button>
+                  Search: {searchTerm}
+                  <button type="button" onClick={() => setSearchTerm('')} className="hover:text-blue-900 font-bold">x</button>
                 </span>
               )}
               {filterHealth !== 'ALL' && (
                 <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs">
                   Status: {filterHealth}
-                  <button
-                    type="button"
-                    onClick={() => setFilterHealth('ALL')}
-                    className="hover:text-blue-900 font-bold"
-                  >
-                    ×
-                  </button>
+                  <button type="button" onClick={() => setFilterHealth('ALL')} className="hover:text-blue-900 font-bold">x</button>
                 </span>
               )}
               {filterBottleneck && (
                 <span className="inline-flex items-center gap-1 bg-orange-100 text-orange-700 px-2 py-1 rounded text-xs">
                   Bottlenecks Only
-                  <button
-                    type="button"
-                    onClick={() => setFilterBottleneck(false)}
-                    className="hover:text-orange-900 font-bold"
-                  >
-                    ×
-                  </button>
+                  <button type="button" onClick={() => setFilterBottleneck(false)} className="hover:text-orange-900 font-bold">x</button>
                 </span>
               )}
               {filterViolated && (
                 <span className="inline-flex items-center gap-1 bg-red-100 text-red-700 px-2 py-1 rounded text-xs">
                   Violations Only
-                  <button
-                    type="button"
-                    onClick={() => setFilterViolated(false)}
-                    className="hover:text-red-900 font-bold"
-                  >
-                    ×
-                  </button>
+                  <button type="button" onClick={() => setFilterViolated(false)} className="hover:text-red-900 font-bold">x</button>
                 </span>
               )}
             </div>
@@ -503,7 +377,7 @@ const WipDashboard: React.FC<WipDashboardProps> = ({ projectId, onRefresh }) => 
             {redColumns > 0 && <AlertCircle className="w-4 h-4 text-red-500" />}
           </div>
           <p className="text-3xl font-bold text-red-600">{redColumns}</p>
-          <p className="text-xs text-gray-500 mt-1">Columns at hard limit</p>
+          <p className="text-xs text-gray-500 mt-1">Columns over WIP limit</p>
         </div>
 
         <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm hover:shadow-md transition-shadow">
@@ -512,7 +386,7 @@ const WipDashboard: React.FC<WipDashboardProps> = ({ projectId, onRefresh }) => 
             {yellowColumns > 0 && <Zap className="w-4 h-4 text-amber-500" />}
           </div>
           <p className="text-3xl font-bold text-amber-600">{yellowColumns}</p>
-          <p className="text-xs text-gray-500 mt-1">Columns at soft limit</p>
+          <p className="text-xs text-gray-500 mt-1">Columns approaching limit</p>
         </div>
 
         <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm hover:shadow-md transition-shadow">
@@ -534,21 +408,20 @@ const WipDashboard: React.FC<WipDashboardProps> = ({ projectId, onRefresh }) => 
         </div>
       </div>
 
-      {/* Column WIP Status */}
+      {/* Column WIP Status (DB-backed from kanban board) */}
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
         <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-blue-600" />
               Column WIP Status
+              {!dataLoaded && <DataSourceBadge tier="NOT_CONNECTED" />}
             </h3>
             <div className="flex gap-2">
               <button
                 onClick={() => setFilterHealth('ALL')}
                 className={`px-3 py-1 rounded text-sm transition-colors ${
-                  filterHealth === 'ALL'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                  filterHealth === 'ALL' ? 'bg-blue-600 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
                 }`}
               >
                 All
@@ -556,9 +429,7 @@ const WipDashboard: React.FC<WipDashboardProps> = ({ projectId, onRefresh }) => 
               <button
                 onClick={() => setFilterHealth('GREEN')}
                 className={`px-3 py-1 rounded text-sm transition-colors ${
-                  filterHealth === 'GREEN'
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                  filterHealth === 'GREEN' ? 'bg-emerald-600 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
                 }`}
               >
                 Good
@@ -566,9 +437,7 @@ const WipDashboard: React.FC<WipDashboardProps> = ({ projectId, onRefresh }) => 
               <button
                 onClick={() => setFilterHealth('YELLOW')}
                 className={`px-3 py-1 rounded text-sm transition-colors ${
-                  filterHealth === 'YELLOW'
-                    ? 'bg-amber-600 text-white'
-                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                  filterHealth === 'YELLOW' ? 'bg-amber-600 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
                 }`}
               >
                 Warning
@@ -576,9 +445,7 @@ const WipDashboard: React.FC<WipDashboardProps> = ({ projectId, onRefresh }) => 
               <button
                 onClick={() => setFilterHealth('RED')}
                 className={`px-3 py-1 rounded text-sm transition-colors ${
-                  filterHealth === 'RED'
-                    ? 'bg-red-600 text-white'
-                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                  filterHealth === 'RED' ? 'bg-red-600 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
                 }`}
               >
                 Critical
@@ -588,204 +455,127 @@ const WipDashboard: React.FC<WipDashboardProps> = ({ projectId, onRefresh }) => 
         </div>
 
         <div className="divide-y divide-gray-200">
-          {filteredColumns.map((column) => (
-            <div key={column.columnId} className={`border-l-4 ${getHealthBg(column.health)}`}>
-              <button
-                onClick={() => setExpandedColumn(expandedColumn === column.columnId ? null : column.columnId)}
-                className="w-full p-4 hover:bg-white/50 transition-colors text-left"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-3 h-3 rounded-full bg-gradient-to-r ${getHealthColor(column.health)}`} />
-                    <div>
-                      <h4 className="font-semibold text-gray-900">{column.columnName}</h4>
-                      <p className={`text-sm ${getHealthTextColor(column.health)}`}>
-                        {column.health === 'RED' && 'Hard limit exceeded'}
-                        {column.health === 'YELLOW' && 'Soft limit exceeded'}
-                        {column.health === 'GREEN' && 'Normal'}
-                        {column.isBottleneck && ' • Bottleneck detected'}
-                      </p>
+          {filteredColumns.length === 0 ? (
+            <div className="p-8 text-center text-gray-500 text-sm">
+              {columns.length === 0 ? 'No kanban columns found. Set up a kanban board first.' : 'No columns match the current filters.'}
+            </div>
+          ) : (
+            filteredColumns.map((column) => (
+              <div key={column.columnId} className={`border-l-4 ${getHealthBg(column.health)}`}>
+                <button
+                  type="button"
+                  onClick={() => setExpandedColumn(expandedColumn === column.columnId ? null : column.columnId)}
+                  className="w-full p-4 hover:bg-white/50 transition-colors text-left"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-3 h-3 rounded-full bg-gradient-to-r ${getHealthColor(column.health)}`} />
+                      <div>
+                        <h4 className="font-semibold text-gray-900">{column.columnName}</h4>
+                        <p className={`text-sm ${getHealthTextColor(column.health)}`}>
+                          {column.health === 'RED' && 'WIP limit exceeded'}
+                          {column.health === 'YELLOW' && 'Approaching WIP limit'}
+                          {column.health === 'GREEN' && 'Normal'}
+                          {column.isBottleneck && ' - Bottleneck detected'}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <p className="text-2xl font-bold text-gray-900">{column.currentWip}</p>
-                      {column.wipLimitHard && (
-                        <p className="text-xs text-gray-500">/ {column.wipLimitHard} hard</p>
-                      )}
-                    </div>
-                    <ChevronDown
-                      className={`w-5 h-5 text-gray-400 transition-transform ${
-                        expandedColumn === column.columnId ? 'rotate-180' : ''
-                      }`}
-                    />
-                  </div>
-                </div>
-
-                {/* Hard Limit Progress Bar */}
-                {column.wipLimitHard && (
-                  <div className="mb-2">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium text-gray-600">Hard Limit</span>
-                      <span className="text-xs text-gray-500">{column.hardLimitPercentage}%</span>
-                    </div>
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full bg-gradient-to-r ${getHealthColor(column.health)} transition-all`}
-                        style={{ width: `${Math.min(column.hardLimitPercentage || 0, 100)}%` }}
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p className="text-2xl font-bold text-gray-900">{column.currentWip}</p>
+                        {column.wipLimit && (
+                          <p className="text-xs text-gray-500">/ {column.wipLimit} limit</p>
+                        )}
+                      </div>
+                      <ChevronDown
+                        className={`w-5 h-5 text-gray-400 transition-transform ${
+                          expandedColumn === column.columnId ? 'rotate-180' : ''
+                        }`}
                       />
                     </div>
                   </div>
-                )}
 
-                {/* Soft Limit Progress Bar */}
-                {column.wipLimitSoft && (
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium text-gray-600">Soft Limit</span>
-                      <span className="text-xs text-gray-500">{column.softLimitPercentage}%</span>
-                    </div>
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full ${
-                          column.softLimitPercentage! > 100
-                            ? 'bg-amber-500'
-                            : 'bg-emerald-500'
-                        } transition-all`}
-                        style={{ width: `${Math.min(column.softLimitPercentage || 0, 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </button>
-
-              {/* Expanded Details */}
-              {expandedColumn === column.columnId && (
-                <div className="px-4 pb-4 bg-white/50">
-                  <div className="grid grid-cols-3 gap-4 text-sm">
+                  {column.wipLimit && column.limitPercentage != null && (
                     <div>
-                      <p className="text-gray-600 font-medium mb-1">Current WIP</p>
-                      <p className="text-2xl font-bold text-gray-900">{column.currentWip}</p>
-                    </div>
-                    {column.wipLimitSoft && (
-                      <div>
-                        <p className="text-gray-600 font-medium mb-1">Soft Limit</p>
-                        <p className="text-2xl font-bold text-amber-600">{column.wipLimitSoft}</p>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-medium text-gray-600">WIP Limit</span>
+                        <span className="text-xs text-gray-500">{column.limitPercentage}%</span>
                       </div>
-                    )}
-                    {column.wipLimitHard && (
-                      <div>
-                        <p className="text-gray-600 font-medium mb-1">Hard Limit</p>
-                        <p className="text-2xl font-bold text-red-600">{column.wipLimitHard}</p>
+                      <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full bg-gradient-to-r ${getHealthColor(column.health)} transition-all`}
+                          style={{ width: `${Math.min(column.limitPercentage, 100)}%` }}
+                        />
                       </div>
-                    )}
-                  </div>
-                  {column.isBottleneck && (
-                    <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded">
-                      <p className="text-sm text-orange-700 font-medium flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4" />
-                        This is a bottleneck column. Prioritize completing tasks here.
-                      </p>
                     </div>
                   )}
-                </div>
-              )}
-            </div>
-          ))}
+                </button>
+
+                {expandedColumn === column.columnId && (
+                  <div className="px-4 pb-4 bg-white/50">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="text-gray-600 font-medium mb-1">Current WIP</p>
+                        <p className="text-2xl font-bold text-gray-900">{column.currentWip}</p>
+                      </div>
+                      {column.wipLimit && (
+                        <div>
+                          <p className="text-gray-600 font-medium mb-1">WIP Limit</p>
+                          <p className="text-2xl font-bold text-amber-600">{column.wipLimit}</p>
+                        </div>
+                      )}
+                    </div>
+                    {column.isBottleneck && (
+                      <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded">
+                        <p className="text-sm text-orange-700 font-medium flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4" />
+                          This is a bottleneck column. Prioritize completing tasks here.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))
+          )}
         </div>
       </div>
 
-      {/* Sprint CONWIP Status */}
+      {/* Sprint CONWIP & Personal WIP - Concept features (no backend API yet) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
           <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
             <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
               <Target className="w-5 h-5 text-blue-600" />
               Sprint CONWIP
+              <DataSourceBadge tier="CONCEPT" />
             </h3>
           </div>
-
-          <div className="divide-y divide-gray-200">
-            {sprints.map((sprint) => (
-              <div key={sprint.sprintId} className={`p-4 ${getHealthBg(sprint.health)}`}>
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <h4 className="font-semibold text-gray-900">{sprint.sprintName}</h4>
-                    <p className={`text-sm ${getHealthTextColor(sprint.health)}`}>
-                      {sprint.health === 'RED' && 'At limit'}
-                      {sprint.health === 'YELLOW' && 'Approaching limit'}
-                      {sprint.health === 'GREEN' && 'Good capacity'}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-2xl font-bold text-gray-900">{sprint.currentWip}</p>
-                    {sprint.conwipLimit && (
-                      <p className="text-xs text-gray-500">/ {sprint.conwipLimit}</p>
-                    )}
-                  </div>
-                </div>
-
-                {sprint.conwipLimit && (
-                  <>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium text-gray-600">CONWIP Utilization</span>
-                      <span className="text-xs font-semibold text-gray-900">{sprint.conwipPercentage}%</span>
-                    </div>
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full bg-gradient-to-r ${getHealthColor(sprint.health)} transition-all`}
-                        style={{ width: `${Math.min(sprint.conwipPercentage || 0, 100)}%` }}
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
-            ))}
+          <div className="p-8 text-center text-gray-500">
+            <Target className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <p className="text-sm font-medium text-gray-600">Sprint CONWIP tracking</p>
+            <p className="text-xs text-gray-400 mt-1">
+              This feature requires a dedicated backend API for sprint-level WIP limits.
+              Currently under development.
+            </p>
           </div>
         </div>
 
-        {/* Personal WIP Status */}
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
           <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
             <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
               <Users className="w-5 h-5 text-blue-600" />
               Personal WIP
+              <DataSourceBadge tier="CONCEPT" />
             </h3>
           </div>
-
-          <div className="divide-y divide-gray-200">
-            {personalWips.map((assignee) => {
-              const health = assignee.percentage > 100 ? 'RED' : assignee.percentage > 80 ? 'YELLOW' : 'GREEN';
-              return (
-                <div key={assignee.assigneeId} className={`p-4 ${getHealthBg(health)}`}>
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <h4 className="font-semibold text-gray-900">{assignee.assigneeName}</h4>
-                      <p className={`text-sm ${getHealthTextColor(health)}`}>
-                        {health === 'RED' && 'Overloaded'}
-                        {health === 'YELLOW' && 'High load'}
-                        {health === 'GREEN' && 'Balanced'}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold text-gray-900">{assignee.currentWip}</p>
-                      <p className="text-xs text-gray-500">/ {assignee.maxPersonalWip}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-medium text-gray-600">Workload</span>
-                    <span className="text-xs font-semibold text-gray-900">{assignee.percentage}%</span>
-                  </div>
-                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full bg-gradient-to-r ${getHealthColor(health)} transition-all`}
-                      style={{ width: `${Math.min(assignee.percentage, 100)}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
+          <div className="p-8 text-center text-gray-500">
+            <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <p className="text-sm font-medium text-gray-600">Personal WIP monitoring</p>
+            <p className="text-xs text-gray-400 mt-1">
+              This feature requires a dedicated backend API for per-assignee WIP tracking.
+              Currently under development.
+            </p>
           </div>
         </div>
       </div>
