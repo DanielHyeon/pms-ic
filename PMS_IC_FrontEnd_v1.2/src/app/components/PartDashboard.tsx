@@ -1,25 +1,34 @@
 import { useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import {
   Target, AlertTriangle, CheckCircle2, Clock, TrendingUp,
-  Users, Layers, FileText, ArrowLeft, RefreshCw
+  Users, Layers, FileText, ArrowLeft, RefreshCw, Lock
 } from 'lucide-react';
 import { usePartDashboard, usePartMetrics, useParts } from '../../hooks/api/useParts';
 import { useProject } from '../../contexts/ProjectContext';
 import { Part, PART_STATUS_INFO } from '../../types/part';
+import { UserRole } from '../App';
+import { isReadOnly as checkReadOnly } from '../../utils/rolePermissions';
 import { StatValue } from './dashboard/StatValue';
 
 interface PartDashboardProps {
   partId?: string;
+  userRole?: UserRole;
   onBack?: () => void;
 }
 
-export default function PartDashboard({ partId: initialPartId, onBack }: PartDashboardProps) {
+export default function PartDashboard({ partId: initialPartId, userRole = 'auditor', onBack }: PartDashboardProps) {
+  const { partId: urlPartId } = useParams<{ partId: string }>();
+  const navigate = useNavigate();
   const { currentProject } = useProject();
   const projectId = currentProject?.id || '';
 
+  const readOnly = checkReadOnly(userRole) || userRole === 'sponsor';
+  const showPeopleSection = ['admin', 'pmo_head', 'pm'].includes(userRole);
+
   const { data: parts = [], isLoading: partsLoading } = useParts(projectId);
-  const [selectedPartId, setSelectedPartId] = useState<string>(initialPartId || '');
+  const [selectedPartId, setSelectedPartId] = useState<string>(urlPartId || initialPartId || '');
 
   const activePartId = selectedPartId || parts[0]?.id || '';
 
@@ -71,12 +80,23 @@ export default function PartDashboard({ partId: initialPartId, onBack }: PartDas
 
   return (
     <div className="p-6 space-y-6">
+      {/* Read-only Banner */}
+      {readOnly && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-center gap-3">
+          <Lock className="text-amber-600" size={20} />
+          <div>
+            <p className="text-sm font-medium text-amber-900">View-only mode</p>
+            <p className="text-xs text-amber-700">This dashboard is read-only for your role.</p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          {onBack && (
+          {(onBack || urlPartId) && (
             <button
-              onClick={onBack}
+              onClick={onBack || (() => navigate(-1))}
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
             >
               <ArrowLeft size={20} className="text-gray-600" />
@@ -305,7 +325,7 @@ export default function PartDashboard({ partId: initialPartId, onBack }: PartDas
       )}
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className={`grid grid-cols-1 ${showPeopleSection ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-6`}>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
@@ -332,18 +352,20 @@ export default function PartDashboard({ partId: initialPartId, onBack }: PartDas
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
-              <Users className="text-amber-600" size={20} />
+        {showPeopleSection && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+                <Users className="text-amber-600" size={20} />
+              </div>
+              <h3 className="font-semibold text-gray-900">Open Issues</h3>
             </div>
-            <h3 className="font-semibold text-gray-900">Open Issues</h3>
+            <p className="text-3xl font-bold text-gray-900">{dashboard?.openIssueCount || 0}</p>
+            <p className="text-sm text-red-600 mt-1">
+              {dashboard?.highPriorityIssueCount || 0} high priority
+            </p>
           </div>
-          <p className="text-3xl font-bold text-gray-900">{dashboard?.openIssueCount || 0}</p>
-          <p className="text-sm text-red-600 mt-1">
-            {dashboard?.highPriorityIssueCount || 0} high priority
-          </p>
-        </div>
+        )}
       </div>
     </div>
   );

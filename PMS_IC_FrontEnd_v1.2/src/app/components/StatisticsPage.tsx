@@ -11,8 +11,10 @@ import {
   Gauge,
   LayoutGrid,
   Minus,
+  Lock,
 } from 'lucide-react';
 import { UserRole } from '../App';
+import { isReadOnly as checkReadOnly, canExportStatistics } from '../../utils/rolePermissions';
 import { useProject } from '../../contexts/ProjectContext';
 import {
   useProjectDashboardStats,
@@ -51,6 +53,8 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 export default function StatisticsPage({ userRole }: StatisticsPageProps) {
   const { currentProject } = useProject();
   const projectId = currentProject?.id || null;
+  const readOnly = checkReadOnly(userRole);
+  const canExport = canExportStatistics(userRole);
 
   const [activeTab, setActiveTab] = useState<StatisticsTab>('overview');
 
@@ -118,6 +122,17 @@ export default function StatisticsPage({ userRole }: StatisticsPageProps) {
 
   return (
     <div className="flex-1 p-6 space-y-6">
+      {/* Read-only Banner */}
+      {readOnly && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-center gap-3">
+          <Lock className="text-amber-600" size={20} />
+          <div>
+            <p className="text-sm font-medium text-amber-900">View-only mode</p>
+            <p className="text-xs text-amber-700">This dashboard is read-only for your role.</p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

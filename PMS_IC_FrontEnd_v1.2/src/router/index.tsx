@@ -39,6 +39,7 @@ const AnnouncementsPage = lazy(() => import('../app/components/AnnouncementsPage
 const AiAssistant = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.AiAssistantPage })));
 const ReportManagement = lazy(() => import('../app/components/ReportManagement'));
 const PmoConsolePage = lazy(() => import('../app/components/PmoConsolePage'));
+const PartDashboard = lazy(() => import('../app/components/PartDashboard'));
 
 // Wrapper component to inject userRole from store
 function withUserRole<P extends { userRole: UserRole }>(
@@ -79,6 +80,7 @@ const UserManagementPageWithRole = withUserRole(UserManagementPage);
 const AuditLogsPageWithRole = withUserRole(AuditLogsPage);
 const AnnouncementsPageWithRole = withUserRole(AnnouncementsPage);
 const PmoConsolePageWithRole = withUserRole(PmoConsolePage);
+const PartDashboardWithRole = withUserRole(PartDashboard);
 
 function Loading() {
   return (
@@ -137,6 +139,16 @@ export const router = createBrowserRouter([
           <SuspenseWrapper>
             <PartManagementWithRole />
           </SuspenseWrapper>
+        ),
+      },
+      {
+        path: 'parts/:partId/dashboard',
+        element: (
+          <ProtectedRoute requiredRoles={['admin', 'pmo_head', 'pm', 'sponsor', 'business_analyst', 'developer', 'qa']}>
+            <SuspenseWrapper>
+              <PartDashboardWithRole />
+            </SuspenseWrapper>
+          </ProtectedRoute>
         ),
       },
       {
@@ -274,9 +286,11 @@ export const router = createBrowserRouter([
       {
         path: 'pmo-console',
         element: (
-          <SuspenseWrapper>
-            <PmoConsolePageWithRole />
-          </SuspenseWrapper>
+          <ProtectedRoute requiredRoles={['pmo_head', 'pm', 'admin', 'sponsor']}>
+            <SuspenseWrapper>
+              <PmoConsolePageWithRole />
+            </SuspenseWrapper>
+          </ProtectedRoute>
         ),
       },
       {
@@ -298,9 +312,11 @@ export const router = createBrowserRouter([
       {
         path: 'statistics',
         element: (
-          <SuspenseWrapper>
-            <StatisticsPageWithRole />
-          </SuspenseWrapper>
+          <ProtectedRoute requiredRoles={['sponsor', 'pmo_head', 'pm', 'auditor', 'business_analyst', 'admin']}>
+            <SuspenseWrapper>
+              <StatisticsPageWithRole />
+            </SuspenseWrapper>
+          </ProtectedRoute>
         ),
       },
 

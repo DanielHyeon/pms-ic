@@ -319,6 +319,7 @@ export const menuAccessByRole: Record<UserRole, string[]> = {
     'phases',
     'reports',
     'statistics',
+    'pmo-console',
     'roles',
     'education',
     'settings',
@@ -413,6 +414,7 @@ export const menuAccessByRole: Record<UserRole, string[]> = {
     'education',
     'lineage',
     'reports',
+    'statistics',
     'settings',
   ],
   auditor: [

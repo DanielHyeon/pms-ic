@@ -6,8 +6,10 @@ import {
   Calendar,
   AlertCircle,
   RefreshCw,
+  Lock,
 } from 'lucide-react';
 import { UserRole } from '../App';
+import { canManagePmoConsole, isReadOnly as checkReadOnly, canViewPortfolio } from '../../utils/rolePermissions';
 import {
   RequirementsSummaryWidget,
   TestingSummaryWidget,
@@ -62,6 +64,9 @@ function StatCard({ icon: Icon, label, value, subLabel, color }: StatCardProps) 
 }
 
 export default function PmoConsolePage({ userRole, projectId = 'proj-001' }: PmoConsolePageProps) {
+  const canManage = canManagePmoConsole(userRole);
+  const readOnly = checkReadOnly(userRole) || userRole === 'sponsor';
+
   // Fetch summary data for KPI cards
   const { data: requirements = [] } = useRequirements(projectId);
   const { data: issues = [] } = useIssues(projectId);
@@ -85,6 +90,21 @@ export default function PmoConsolePage({ userRole, projectId = 'proj-001' }: Pmo
 
   return (
     <div className="flex-1 p-6 space-y-6">
+      {/* Read-only Banner */}
+      {readOnly && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-center gap-3">
+          <Lock className="text-amber-600" size={20} />
+          <div>
+            <p className="text-sm font-medium text-amber-900">View-only mode</p>
+            <p className="text-xs text-amber-700">
+              {userRole === 'sponsor'
+                ? 'Sponsor view — health, risk, and trend overview only.'
+                : 'This dashboard is read-only for your role.'}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

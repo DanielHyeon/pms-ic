@@ -30,6 +30,13 @@ const PRIORITIZE_ROLES: UserRole[] = ['pm', 'pmo_head'];
 // Portfolio view roles
 const PORTFOLIO_VIEW_ROLES: UserRole[] = ['pmo_head', 'admin'];
 
+// Dashboard-specific capabilities
+const VIEW_PMO_CONSOLE_ROLES: UserRole[] = ['pmo_head', 'pm', 'admin', 'sponsor'];
+const MANAGE_PMO_CONSOLE_ROLES: UserRole[] = ['pmo_head', 'admin'];
+const VIEW_STATISTICS_ROLES: UserRole[] = ['sponsor', 'pmo_head', 'pm', 'auditor', 'business_analyst', 'admin'];
+const EXPORT_STATISTICS_ROLES: UserRole[] = ['admin', 'pmo_head', 'auditor'];
+const VIEW_PART_DASHBOARD_ROLES: UserRole[] = ['admin', 'pmo_head', 'pm', 'sponsor', 'business_analyst', 'developer', 'qa'];
+
 export const canEdit = (role: UserRole): boolean =>
   !READ_ONLY_ROLES.includes(role);
 
@@ -57,6 +64,22 @@ export const isReadOnly = (role: UserRole): boolean =>
 export const canViewPortfolio = (role: UserRole): boolean =>
   PORTFOLIO_VIEW_ROLES.includes(role);
 
+// Dashboard-specific capability checks
+export const canViewPmoConsole = (role: UserRole): boolean =>
+  VIEW_PMO_CONSOLE_ROLES.includes(role);
+
+export const canManagePmoConsole = (role: UserRole): boolean =>
+  MANAGE_PMO_CONSOLE_ROLES.includes(role);
+
+export const canViewStatistics = (role: UserRole): boolean =>
+  VIEW_STATISTICS_ROLES.includes(role);
+
+export const canExportStatistics = (role: UserRole): boolean =>
+  EXPORT_STATISTICS_ROLES.includes(role);
+
+export const canViewPartDashboard = (role: UserRole): boolean =>
+  VIEW_PART_DASHBOARD_ROLES.includes(role);
+
 /**
  * Check multiple permissions at once
  */
@@ -70,6 +93,11 @@ export interface RolePermissions {
   canPrioritize: boolean;
   isReadOnly: boolean;
   canViewPortfolio: boolean;
+  canViewPmoConsole: boolean;
+  canManagePmoConsole: boolean;
+  canViewStatistics: boolean;
+  canExportStatistics: boolean;
+  canViewPartDashboard: boolean;
 }
 
 export const getRolePermissions = (role: UserRole): RolePermissions => ({
@@ -82,4 +110,9 @@ export const getRolePermissions = (role: UserRole): RolePermissions => ({
   canPrioritize: canPrioritize(role),
   isReadOnly: isReadOnly(role),
   canViewPortfolio: canViewPortfolio(role),
+  canViewPmoConsole: canViewPmoConsole(role),
+  canManagePmoConsole: canManagePmoConsole(role),
+  canViewStatistics: canViewStatistics(role),
+  canExportStatistics: canExportStatistics(role),
+  canViewPartDashboard: canViewPartDashboard(role),
 });

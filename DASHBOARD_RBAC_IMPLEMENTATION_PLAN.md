@@ -396,8 +396,8 @@ Ensure production build succeeds.
 | admin | Full | Full + manage | Full + export | Full | All features |
 | pmo_head | Full + portfolio | Full + manage | Full + export | Full | All features |
 | pm | Standard | View-only (no org controls) | Full | Scoped to project parts | No portfolio, no org manage |
-| sponsor | Standard + budget | 403 (or view-only if opted) | View + export | 403 (or view-only if opted) | Read-only where accessible |
-| developer | Standard | 403 | 403 | Execution-focused | No quality detail, no people |
+| sponsor | Standard + budget | View-only (health/risk/trend) | View + export | View-only (no people detail) | Read-only, no mutation |
+| developer | Standard | 403 | 403 | Execution-focused | No people section |
 | qa | Standard | 403 | 403 | Quality-focused | No people section |
 | business_analyst | Standard (read-only) | 403 | View (read-only) | View (read-only) | Read-only banner everywhere |
 | auditor | Standard (read-only) | 403 | View (read-only) | 403 | Strictest read-only |
@@ -445,7 +445,7 @@ Extend to part-level scoping:
 | File | Change Type | Phase |
 |------|------------|-------|
 | `src/utils/rolePermissions.ts` | **Modify** — Add 5 new capabilities | Phase 1 |
-| `src/config/menuConfig.ts` | **Modify** — Add `statistics` to BA | Phase 2 |
+| `src/config/menuConfig.ts` | **Modify** — Add `statistics` to BA, `pmo-console` to sponsor | Phase 2 |
 | `src/router/index.tsx` | **Modify** — Add PartDashboard route + ProtectedRoute wrappers | Phase 3, 4 |
 | `src/router/ProtectedRoute.tsx` | **Modify** — 403 UI instead of silent redirect | Phase 4 |
 | `src/app/components/PartDashboard.tsx` | **Modify** — URL param support + role-based sections | Phase 3, 5 |
@@ -463,8 +463,8 @@ Extend to part-level scoping:
 | ID | Decision | Rationale |
 |----|----------|-----------|
 | D1 | BA gets `/statistics` access | BA analyzes phase/task data for requirements scoping |
-| D2 | Sponsor `/pmo-console` = pending confirmation | View-only mode needed first; default to 403 |
-| D3 | Sponsor `/parts/:id/dashboard` = pending confirmation | Same as D2 |
+| D2 | Sponsor gets `/pmo-console` (view-only) **CONFIRMED** | canManagePmoConsole=false, no assignment/status-change UI, health/risk/trend focus |
+| D3 | Sponsor gets `/parts/:id/dashboard` (view-only) **CONFIRMED** | No people detail, no export, drill-down read-only, scope limited to allowed parts |
 | D4 | Auditor excluded from PartDashboard | Auditor role focuses on audit-logs/reports, not operational part metrics |
 | D5 | 403 page instead of silent redirect | Better UX + audit trail vs. confusing redirect |
 | D6 | `developer`/`qa` get PartDashboard | They need part-level execution/quality visibility for their work |

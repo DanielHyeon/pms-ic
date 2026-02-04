@@ -2,6 +2,7 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, R
 import { TrendingUp, AlertTriangle, CheckCircle2, Clock, Target, DollarSign, Lock, Cpu, Cog, Layers, User, FolderKanban, ChevronRight, Star } from 'lucide-react';
 import { UserRole } from '../App';
 import { getStatusColor, getStatusLabel, getTrackColor, getActivityColor } from '../../utils/status';
+import { canViewBudget as checkCanViewBudget, isReadOnly as checkReadOnly, canViewPortfolio } from '../../utils/rolePermissions';
 import { useProject } from '../../contexts/ProjectContext';
 import { useProjectsWithDetails } from '../../hooks/api/useProjects';
 import {
@@ -284,7 +285,7 @@ function InsightCard({ insight }: { insight: InsightDto }) {
 export default function Dashboard({ userRole }: { userRole: UserRole }) {
   const { currentProject, selectProject } = useProject();
 
-  const showPortfolioView = ['pmo_head', 'admin'].includes(userRole) && !currentProject;
+  const showPortfolioView = canViewPortfolio(userRole) && !currentProject;
 
   const projectId = currentProject?.id || null;
 
@@ -304,8 +305,8 @@ export default function Dashboard({ userRole }: { userRole: UserRole }) {
     return <PortfolioView userRole={userRole} onSelectProject={selectProject} />;
   }
 
-  const canViewBudget = ['sponsor', 'pmo_head', 'pm'].includes(userRole);
-  const isReadOnly = ['auditor', 'business_analyst'].includes(userRole);
+  const canViewBudgetFlag = checkCanViewBudget(userRole);
+  const isReadOnly = checkReadOnly(userRole);
 
   const stats: Partial<DashboardStats> = dashboardStats || {};
   const progress: Partial<WeightedProgressDto> = weightedProgress || {};
@@ -411,7 +412,7 @@ export default function Dashboard({ userRole }: { userRole: UserRole }) {
           </div>
         </div>
 
-        {canViewBudget ? (
+        {canViewBudgetFlag ? (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between">
               <div>
