@@ -1,21 +1,21 @@
 package com.insuretech.pms.project.controller;
 
 import com.insuretech.pms.common.dto.ApiResponse;
+import com.insuretech.pms.project.reactive.service.ReactiveDashboardService;
 import com.insuretech.pms.report.dto.DashboardStats;
 import com.insuretech.pms.report.dto.WeightedProgressDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
-import java.math.BigDecimal;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Reactive REST Controller for dashboard statistics.
- * Provides portfolio-wide and project-specific dashboard data.
+ * Provides portfolio-wide and project-specific dashboard data from real database.
  */
 @Slf4j
 @RestController
@@ -23,65 +23,64 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ReactiveDashboardController {
 
+    private final ReactiveDashboardService dashboardService;
+    private final DatabaseClient databaseClient;
+
     // ========== Portfolio Dashboard (aggregated across all projects) ==========
 
     @GetMapping("/dashboard/stats")
     public Mono<ResponseEntity<ApiResponse<DashboardStats>>> getPortfolioDashboardStats() {
-        log.debug("Getting portfolio dashboard stats");
-
-        DashboardStats stats = DashboardStats.builder()
-                .isPortfolioView(true)
-                .projectId(null)
-                .projectName(null)
-                .totalProjects(5L)
-                .activeProjects(3L)
-                .totalTasks(230L)
-                .completedTasks(142L)
-                .avgProgress(62)
-                .projectsByStatus(Map.of(
-                        "PLANNING", 1L,
-                        "IN_PROGRESS", 3L,
-                        "ON_HOLD", 0L,
-                        "COMPLETED", 1L,
-                        "CANCELLED", 0L
-                ))
-                .build();
-
-        return Mono.just(ResponseEntity.ok(ApiResponse.success(stats)));
+        log.debug("Getting portfolio dashboard stats from database");
+        return dashboardService.getPortfolioStats()
+                .map(stats -> ResponseEntity.ok(ApiResponse.success(stats)))
+                .doOnSuccess(resp -> log.debug("Portfolio stats retrieved successfully"))
+                .doOnError(e -> log.error("Failed to get portfolio stats", e));
     }
 
     @GetMapping("/dashboard/activities")
     public Mono<ResponseEntity<ApiResponse<List<ActivityDto>>>> getPortfolioActivities() {
-        log.debug("Getting portfolio activities");
+        log.debug("Getting portfolio activities from database");
 
-        List<ActivityDto> activities = List.of(
-                ActivityDto.builder()
-                        .user("박민수")
-                        .action("OCR 모델 v2.1 성능 테스트 완료")
-                        .time("5분 전")
-                        .type("success")
-                        .projectId("proj-001")
-                        .projectName("AI 보험심사 처리 시스템")
-                        .build(),
-                ActivityDto.builder()
-                        .user("이영희")
-                        .action("데이터 비식별화 문서 승인 요청")
-                        .time("1시간 전")
-                        .type("info")
-                        .projectId("proj-001")
-                        .projectName("AI 보험심사 처리 시스템")
-                        .build(),
-                ActivityDto.builder()
-                        .user("AI 어시스턴트")
-                        .action("일정 지연 위험 감지 알림 발송")
-                        .time("2시간 전")
-                        .type("warning")
-                        .projectId("proj-002")
-                        .projectName("모바일 보험 플랫폼")
-                        .build()
-        );
+        String query = """
+            SELECT
+                u.name as user_name,
+                'Updated task: ' || wt.name as action,
+                wt.updated_at as activity_time,
+                CASE
+                    WHEN wt.status = 'COMPLETED' THEN 'success'
+                    WHEN wt.status = 'IN_PROGRESS' THEN 'info'
+                    ELSE 'warning'
+                END as activity_type,
+                p.id as project_id,
+                p.name as project_name
+            FROM project.wbs_tasks wt
+            JOIN project.phases ph ON wt.phase_id = ph.id
+            JOIN project.projects p ON ph.project_id = p.id
+            LEFT JOIN auth.users u ON wt.updated_by = u.id
+            WHERE wt.updated_at IS NOT NULL
+            ORDER BY wt.updated_at DESC
+            LIMIT 10
+            """;
 
-        return Mono.just(ResponseEntity.ok(ApiResponse.success(activities)));
+        return databaseClient.sql(query)
+                .fetch()
+                .all()
+                .map(row -> ActivityDto.builder()
+                        .user(row.get("user_name") != null ? (String) row.get("user_name") : "System")
+                        .action((String) row.get("action"))
+                        .time(formatRelativeTime(row.get("activity_time")))
+                        .type((String) row.get("activity_type"))
+                        .projectId((String) row.get("project_id"))
+                        .projectName((String) row.get("project_name"))
+                        .build())
+                .collectList()
+                .flatMap(activities -> {
+                    if (activities.isEmpty()) {
+                        return Mono.just(getDefaultActivities());
+                    }
+                    return Mono.just(activities);
+                })
+                .map(activities -> ResponseEntity.ok(ApiResponse.success(activities)));
     }
 
     // ========== Project-specific Dashboard ==========
@@ -90,24 +89,10 @@ public class ReactiveDashboardController {
     public Mono<ResponseEntity<ApiResponse<DashboardStats>>> getProjectDashboardStats(
             @PathVariable String projectId) {
         log.debug("Getting dashboard stats for project: {}", projectId);
-
-        String projectName = projectId.equals("proj-001")
-                ? "AI 보험심사 처리 시스템"
-                : "모바일 보험 플랫폼";
-
-        DashboardStats stats = DashboardStats.builder()
-                .isPortfolioView(false)
-                .projectId(projectId)
-                .projectName(projectName)
-                .totalProjects(1L)
-                .activeProjects(1L)
-                .totalTasks(50L)
-                .completedTasks(32L)
-                .avgProgress(64)
-                .projectsByStatus(Map.of("IN_PROGRESS", 1L))
-                .build();
-
-        return Mono.just(ResponseEntity.ok(ApiResponse.success(stats)));
+        return dashboardService.getProjectStats(projectId)
+                .map(stats -> ResponseEntity.ok(ApiResponse.success(stats)))
+                .doOnSuccess(resp -> log.debug("Project stats retrieved successfully for: {}", projectId))
+                .doOnError(e -> log.error("Failed to get project stats for: {}", projectId, e));
     }
 
     @GetMapping("/projects/{projectId}/dashboard/activities")
@@ -115,56 +100,101 @@ public class ReactiveDashboardController {
             @PathVariable String projectId) {
         log.debug("Getting activities for project: {}", projectId);
 
-        String projectName = projectId.equals("proj-001")
-                ? "AI 보험심사 처리 시스템"
-                : "모바일 보험 플랫폼";
+        String query = """
+            SELECT
+                u.name as user_name,
+                'Updated task: ' || wt.name as action,
+                wt.updated_at as activity_time,
+                CASE
+                    WHEN wt.status = 'COMPLETED' THEN 'success'
+                    WHEN wt.status = 'IN_PROGRESS' THEN 'info'
+                    ELSE 'warning'
+                END as activity_type,
+                p.id as project_id,
+                p.name as project_name
+            FROM project.wbs_tasks wt
+            JOIN project.phases ph ON wt.phase_id = ph.id
+            JOIN project.projects p ON ph.project_id = p.id
+            LEFT JOIN auth.users u ON wt.updated_by = u.id
+            WHERE p.id = :projectId AND wt.updated_at IS NOT NULL
+            ORDER BY wt.updated_at DESC
+            LIMIT 10
+            """;
 
-        List<ActivityDto> activities = List.of(
-                ActivityDto.builder()
-                        .user("박민수")
-                        .action("OCR 모델 v2.1 성능 테스트 완료")
-                        .time("5분 전")
-                        .type("success")
-                        .projectId(projectId)
-                        .projectName(projectName)
-                        .build(),
-                ActivityDto.builder()
-                        .user("이영희")
-                        .action("데이터 비식별화 문서 승인 요청")
-                        .time("1시간 전")
-                        .type("info")
-                        .projectId(projectId)
-                        .projectName(projectName)
-                        .build()
-        );
-
-        return Mono.just(ResponseEntity.ok(ApiResponse.success(activities)));
+        return databaseClient.sql(query)
+                .bind("projectId", projectId)
+                .fetch()
+                .all()
+                .map(row -> ActivityDto.builder()
+                        .user(row.get("user_name") != null ? (String) row.get("user_name") : "System")
+                        .action((String) row.get("action"))
+                        .time(formatRelativeTime(row.get("activity_time")))
+                        .type((String) row.get("activity_type"))
+                        .projectId((String) row.get("project_id"))
+                        .projectName((String) row.get("project_name"))
+                        .build())
+                .collectList()
+                .flatMap(activities -> {
+                    if (activities.isEmpty()) {
+                        return Mono.just(getDefaultActivitiesForProject(projectId));
+                    }
+                    return Mono.just(activities);
+                })
+                .map(activities -> ResponseEntity.ok(ApiResponse.success(activities)));
     }
 
     @GetMapping("/projects/{projectId}/dashboard/weighted-progress")
     public Mono<ResponseEntity<ApiResponse<WeightedProgressDto>>> getWeightedProgress(
             @PathVariable String projectId) {
         log.debug("Getting weighted progress for project: {}", projectId);
+        return dashboardService.getWeightedProgress(projectId)
+                .map(progress -> ResponseEntity.ok(ApiResponse.success(progress)))
+                .doOnSuccess(resp -> log.debug("Weighted progress retrieved successfully for: {}", projectId))
+                .doOnError(e -> log.error("Failed to get weighted progress for: {}", projectId, e));
+    }
 
-        WeightedProgressDto progress = WeightedProgressDto.builder()
-                .aiProgress(45.5)
-                .siProgress(60.0)
-                .commonProgress(30.0)
-                .weightedProgress(49.85)
-                .aiWeight(new BigDecimal("0.70"))
-                .siWeight(new BigDecimal("0.30"))
-                .commonWeight(new BigDecimal("0.00"))
-                .aiTotalTasks(22L)
-                .aiCompletedTasks(10L)
-                .siTotalTasks(15L)
-                .siCompletedTasks(9L)
-                .commonTotalTasks(10L)
-                .commonCompletedTasks(3L)
-                .totalTasks(47L)
-                .completedTasks(22L)
-                .build();
+    // ========== Helper Methods ==========
 
-        return Mono.just(ResponseEntity.ok(ApiResponse.success(progress)));
+    private String formatRelativeTime(Object timestamp) {
+        if (timestamp == null) return "Unknown";
+        try {
+            java.time.LocalDateTime time = (java.time.LocalDateTime) timestamp;
+            java.time.LocalDateTime now = java.time.LocalDateTime.now();
+            long minutes = java.time.Duration.between(time, now).toMinutes();
+
+            if (minutes < 1) return "Just now";
+            if (minutes < 60) return minutes + "분 전";
+            if (minutes < 1440) return (minutes / 60) + "시간 전";
+            return (minutes / 1440) + "일 전";
+        } catch (Exception e) {
+            return "Unknown";
+        }
+    }
+
+    private List<ActivityDto> getDefaultActivities() {
+        return List.of(
+                ActivityDto.builder()
+                        .user("System")
+                        .action("No recent activities")
+                        .time("N/A")
+                        .type("info")
+                        .projectId(null)
+                        .projectName(null)
+                        .build()
+        );
+    }
+
+    private List<ActivityDto> getDefaultActivitiesForProject(String projectId) {
+        return List.of(
+                ActivityDto.builder()
+                        .user("System")
+                        .action("No recent activities in this project")
+                        .time("N/A")
+                        .type("info")
+                        .projectId(projectId)
+                        .projectName(null)
+                        .build()
+        );
     }
 
     // ========== Activity DTO ==========

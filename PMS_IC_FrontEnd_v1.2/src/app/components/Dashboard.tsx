@@ -1,11 +1,11 @@
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { TrendingUp, AlertTriangle, CheckCircle2, Clock, Target, DollarSign, Lock, Cpu, Cog, Layers, User, FolderKanban, ChevronRight, Star } from 'lucide-react';
 import { UserRole } from '../App';
-import { trackProgressData, subProjectData, partLeaderData, phaseData, sprintVelocity, burndownData } from '../../mocks';
+import { subProjectData, partLeaderData, phaseData, sprintVelocity, burndownData } from '../../mocks';
 import { getStatusColor, getStatusLabel, getTrackColor, getActivityColor } from '../../utils/status';
 import { useProject } from '../../contexts/ProjectContext';
 import { useProjectsWithDetails } from '../../hooks/api/useProjects';
-import { usePortfolioActivities, useProjectActivities } from '../../hooks/api/useDashboard';
+import { usePortfolioActivities, useProjectActivities, useProjectDashboardStats, useWeightedProgress } from '../../hooks/api/useDashboard';
 
 // 포트폴리오 뷰 (전체 프로젝트 현황)
 function PortfolioView({ userRole, onSelectProject }: { userRole: UserRole; onSelectProject: (projectId: string) => void }) {
@@ -252,15 +252,66 @@ export default function Dashboard({ userRole }: { userRole: UserRole }) {
   // PMO, Admin이고 프로젝트 미선택 시 포트폴리오 뷰
   const showPortfolioView = ['pmo_head', 'admin'].includes(userRole) && !currentProject;
 
-  // Fetch project activities when a project is selected
+  // Fetch project dashboard stats and activities when a project is selected
   const { data: projectActivities = [] } = useProjectActivities(currentProject?.id || null);
+  const { data: dashboardStats, isLoading: isLoadingStats } = useProjectDashboardStats(currentProject?.id || null);
+  const { data: weightedProgress, isLoading: isLoadingProgress } = useWeightedProgress(currentProject?.id || null);
 
   if (showPortfolioView) {
     return <PortfolioView userRole={userRole} onSelectProject={selectProject} />;
   }
+
   // 역할별 접근 권한
   const canViewBudget = ['sponsor', 'pmo_head', 'pm'].includes(userRole);
   const isReadOnly = ['auditor', 'business_analyst'].includes(userRole);
+
+  // Extract stats from API response (with fallbacks)
+  const stats = dashboardStats || {};
+  const progress = weightedProgress || {};
+
+  // KPI values from real data
+  const avgProgress = stats.avgProgress ?? 0;
+  const totalTasks = stats.totalTasks ?? 0;
+  const completedTasks = stats.completedTasks ?? 0;
+  const openIssues = stats.openIssues ?? 0;
+  const highPriorityIssues = stats.highPriorityIssues ?? 0;
+  const budgetTotal = stats.budgetTotal ?? 0;
+  const budgetSpent = stats.budgetSpent ?? 0;
+  const budgetExecutionRate = stats.budgetExecutionRate ?? 0;
+
+  // Track progress data from real API
+  const trackProgressData = {
+    ai: {
+      progress: Math.round(progress.aiProgress ?? 0),
+      status: (progress.aiProgress ?? 0) >= 50 ? 'normal' : (progress.aiProgress ?? 0) >= 30 ? 'warning' : 'danger',
+      tasks: progress.aiTotalTasks ?? 0,
+      completed: progress.aiCompletedTasks ?? 0,
+    },
+    si: {
+      progress: Math.round(progress.siProgress ?? 0),
+      status: (progress.siProgress ?? 0) >= 50 ? 'normal' : (progress.siProgress ?? 0) >= 30 ? 'warning' : 'danger',
+      tasks: progress.siTotalTasks ?? 0,
+      completed: progress.siCompletedTasks ?? 0,
+    },
+    common: {
+      progress: Math.round(progress.commonProgress ?? 0),
+      status: (progress.commonProgress ?? 0) >= 50 ? 'normal' : (progress.commonProgress ?? 0) >= 30 ? 'warning' : 'danger',
+      tasks: progress.commonTotalTasks ?? 0,
+      completed: progress.commonCompletedTasks ?? 0,
+    },
+  };
+
+  // Loading state
+  if (isLoadingStats || isLoadingProgress) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">대시보드 데이터를 불러오는 중...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -281,10 +332,10 @@ export default function Dashboard({ userRole }: { userRole: UserRole }) {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500">전체 진행률</p>
-              <p className="text-3xl font-semibold text-gray-900 mt-2">62%</p>
-              <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+              <p className="text-3xl font-semibold text-gray-900 mt-2">{avgProgress}%</p>
+              <p className={`text-xs mt-1 flex items-center gap-1 ${avgProgress >= 50 ? 'text-green-600' : avgProgress >= 30 ? 'text-amber-600' : 'text-red-600'}`}>
                 <TrendingUp size={14} />
-                <span>On Track</span>
+                <span>{avgProgress >= 50 ? 'On Track' : avgProgress >= 30 ? '주의 필요' : '지연'}</span>
               </p>
             </div>
             <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center">
@@ -298,8 +349,10 @@ export default function Dashboard({ userRole }: { userRole: UserRole }) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500">예산 집행률</p>
-                <p className="text-3xl font-semibold text-gray-900 mt-2">58%</p>
-                <p className="text-xs text-gray-600 mt-1">₩580M / ₩1,000M</p>
+                <p className="text-3xl font-semibold text-gray-900 mt-2">{budgetExecutionRate}%</p>
+                <p className="text-xs text-gray-600 mt-1">
+                  ₩{(Number(budgetSpent) / 100000000).toFixed(0)}억 / ₩{(Number(budgetTotal) / 100000000).toFixed(0)}억
+                </p>
               </div>
               <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center">
                 <DollarSign className="text-green-600" size={28} />
@@ -321,10 +374,10 @@ export default function Dashboard({ userRole }: { userRole: UserRole }) {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500">활성 이슈</p>
-              <p className="text-3xl font-semibold text-gray-900 mt-2">7</p>
+              <p className="text-3xl font-semibold text-gray-900 mt-2">{openIssues}</p>
               <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
                 <AlertTriangle size={14} />
-                <span>3 High Priority</span>
+                <span>{highPriorityIssues} High Priority</span>
               </p>
             </div>
             <div className="w-14 h-14 bg-amber-100 rounded-full flex items-center justify-center">
@@ -337,8 +390,8 @@ export default function Dashboard({ userRole }: { userRole: UserRole }) {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500">완료 작업</p>
-              <p className="text-3xl font-semibold text-gray-900 mt-2">142</p>
-              <p className="text-xs text-gray-600 mt-1">총 230개 중</p>
+              <p className="text-3xl font-semibold text-gray-900 mt-2">{completedTasks}</p>
+              <p className="text-xs text-gray-600 mt-1">총 {totalTasks}개 중</p>
             </div>
             <div className="w-14 h-14 bg-purple-100 rounded-full flex items-center justify-center">
               <CheckCircle2 className="text-purple-600" size={28} />

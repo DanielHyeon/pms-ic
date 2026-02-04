@@ -40,12 +40,12 @@ interface BacklogManagementProps {
 }
 
 export default function BacklogManagement({ userRole, projectId = 'proj-001' }: BacklogManagementProps) {
-  const { data: stories = [], isLoading: isLoadingStories } = useStories();
+  const { data: stories = [], isLoading: isLoadingStories } = useStories(projectId);
   const { data: activeSprint } = useActiveSprint(projectId);
   const { data: parts = [] } = useParts(projectId);
-  const createStoryMutation = useCreateStory();
-  const updateStoryMutation = useUpdateStory();
-  const updatePriorityMutation = useUpdateStoryPriority();
+  const createStoryMutation = useCreateStory(projectId);
+  const updateStoryMutation = useUpdateStory(projectId);
+  const updatePriorityMutation = useUpdateStoryPriority(projectId);
   const assignToSprintMutation = useAssignToSprint();
   const createEpicMutation = useCreateEpic();
   const updateEpicMutation = useUpdateEpic();

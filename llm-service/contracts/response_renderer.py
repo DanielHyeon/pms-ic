@@ -226,6 +226,16 @@ def render_sprint_progress(contract: ResponseContract) -> str:
                     status_display = _translate_status(status)
                     lines.append(f"  - {status_display}: {cnt}")
             lines.append("")
+
+            # Story list with details
+            lines.append("**스토리 목록**:")
+            for story in stories:
+                title = story.get("title", "Unknown")
+                points = story.get("story_points") or story.get("storyPoints", 0)
+                status = story.get("status", "UNKNOWN")
+                status_display = _translate_status(status)
+                lines.append(f"  - {title} ({points}pt, {status_display})")
+            lines.append("")
     else:
         # P1: Show degradation message from warnings
         for warning in contract.warnings:

@@ -17,12 +17,25 @@ public class DashboardStats {
     private String projectId;
     private String projectName;
 
-    // Statistics
+    // Project Statistics
     private Long totalProjects;
     private Long activeProjects;
+    private Map<String, Long> projectsByStatus;
+
+    // Task Statistics
     private Long totalTasks;
     private Long completedTasks;
+    private Long inProgressTasks;
     private Integer avgProgress;
-    private Map<String, Long> projectsByStatus;
     private Map<String, Long> tasksByStatus;
+
+    // Issue Statistics
+    private Long totalIssues;
+    private Long openIssues;
+    private Long highPriorityIssues;
+
+    // Budget Statistics
+    private java.math.BigDecimal budgetTotal;
+    private java.math.BigDecimal budgetSpent;
+    private Integer budgetExecutionRate;
 }

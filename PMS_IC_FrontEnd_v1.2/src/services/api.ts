@@ -215,18 +215,20 @@ export class ApiService {
       isPortfolioView: true,
       projectId: null,
       projectName: null,
-      totalProjects: 5,
-      activeProjects: 3,
-      totalTasks: 230,
-      completedTasks: 142,
-      avgProgress: 62,
-      projectsByStatus: {
-        'PLANNING': 1,
-        'IN_PROGRESS': 3,
-        'ON_HOLD': 0,
-        'COMPLETED': 1,
-        'CANCELLED': 0,
-      },
+      totalProjects: 0,
+      activeProjects: 0,
+      totalTasks: 0,
+      completedTasks: 0,
+      inProgressTasks: 0,
+      avgProgress: 0,
+      projectsByStatus: {},
+      tasksByStatus: {},
+      totalIssues: 0,
+      openIssues: 0,
+      highPriorityIssues: 0,
+      budgetTotal: 0,
+      budgetSpent: 0,
+      budgetExecutionRate: 0,
     });
   }
 
@@ -244,15 +246,21 @@ export class ApiService {
     return this.fetchWithFallback(`${V2}/projects/${projectId}/dashboard/stats`, {}, {
       isPortfolioView: false,
       projectId,
-      projectName: 'AI 보험심사 처리 시스템',
+      projectName: null,
       totalProjects: 1,
       activeProjects: 1,
-      totalTasks: 50,
-      completedTasks: 32,
-      avgProgress: 64,
-      projectsByStatus: {
-        'IN_PROGRESS': 1,
-      },
+      totalTasks: 0,
+      completedTasks: 0,
+      inProgressTasks: 0,
+      avgProgress: 0,
+      projectsByStatus: {},
+      tasksByStatus: {},
+      totalIssues: 0,
+      openIssues: 0,
+      highPriorityIssues: 0,
+      budgetTotal: 0,
+      budgetSpent: 0,
+      budgetExecutionRate: 0,
     });
   }
 
@@ -265,21 +273,21 @@ export class ApiService {
 
   async getWeightedProgress(projectId: string) {
     return this.fetchWithFallback(`${V2}/projects/${projectId}/dashboard/weighted-progress`, {}, {
-      aiProgress: 45.5,
-      siProgress: 60.0,
-      commonProgress: 30.0,
-      weightedProgress: 49.85,
+      aiProgress: 0,
+      siProgress: 0,
+      commonProgress: 0,
+      weightedProgress: 0,
       aiWeight: 0.70,
       siWeight: 0.30,
       commonWeight: 0.00,
-      aiTotalTasks: 22,
-      aiCompletedTasks: 10,
-      siTotalTasks: 15,
-      siCompletedTasks: 9,
-      commonTotalTasks: 10,
-      commonCompletedTasks: 3,
-      totalTasks: 47,
-      completedTasks: 22,
+      aiTotalTasks: 0,
+      aiCompletedTasks: 0,
+      siTotalTasks: 0,
+      siCompletedTasks: 0,
+      commonTotalTasks: 0,
+      commonCompletedTasks: 0,
+      totalTasks: 0,
+      completedTasks: 0,
     });
   }
 
@@ -660,9 +668,10 @@ export class ApiService {
     }, { message: 'Task deleted' });
   }
 
-  async getStories(filters?: { status?: string; epic?: string }) {
+  async getStories(projectId: string, filters?: { status?: string; epic?: string }) {
     const params = new URLSearchParams(filters as any);
-    return this.fetchWithFallback(`/stories?${params}`, {}, []);
+    const response = await this.fetchWithFallback(`/projects/${projectId}/user-stories?${params}`, {}, { data: [] });
+    return response?.data || response || [];
   }
 
   async getEpics(projectId: string) {

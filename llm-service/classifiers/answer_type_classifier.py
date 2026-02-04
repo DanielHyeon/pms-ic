@@ -116,7 +116,7 @@ INTENT_PATTERNS = {
     AnswerType.SPRINT_PROGRESS: {
         # COMBINATION RULE: sprint context + progress context
         "keywords": ["스프린트", "sprint"],
-        "requires_any": ["진행", "상황", "진척", "번다운", "velocity", "속도", "현황", "진행률", "progress", "going", "status", "how"],
+        "requires_any": ["진행", "상황", "진척", "번다운", "velocity", "속도", "현황", "진행률", "progress", "going", "status", "how", "백로그", "항목", "스토리"],
         "priority": 1,
     },
     AnswerType.BACKLOG_LIST: {
@@ -205,6 +205,9 @@ STATUS_LIST_PATTERNS = [
     (r"(뭐|무엇|어떤).*(남았|해야|진행중)", "what_remains"),
 
     # Backlog queries - need actual item list
+    # Sprint backlog should match before product backlog
+    (r"(이번|현재|활성|금주).*(스프린트).*(백로그|항목|스토리|뭐|있어|보여)", "sprint_progress"),
+    (r"(스프린트).*(백로그|항목).*(뭐|있어|보여|알려)?", "sprint_progress"),
     (r"(제품\s*)?백로그.*(목록|리스트|뭐|있어|알려|보여)?", "backlog_list"),
     (r"(남은|현재).*(제품\s*)?백로그", "remaining_backlog"),
     (r"백로그\s*(항목|아이템)", "backlog_items"),

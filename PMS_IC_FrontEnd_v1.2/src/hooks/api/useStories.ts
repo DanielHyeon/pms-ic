@@ -4,91 +4,121 @@ import { UserStory, StoryStatus } from '../../utils/storyTypes';
 
 export type { UserStory };
 
+// Mock data matching actual database records (task.user_stories)
 const initialStories: UserStory[] = [
   {
-    id: 1,
-    title: '사용자로서 영수증 이미지를 업로드하면 자동으로 항목이 추출되기를 원한다',
-    description: '영수증 OCR 기능 구현',
+    id: 'story-001-01',
+    title: 'OCR 문서 업로드',
+    description: '보험심사 담당자로서, 스캔한 문서를 업로드하여 시스템이 자동으로 텍스트를 추출할 수 있게 하고 싶습니다',
     priority: 1,
     storyPoints: 8,
-    status: 'IN_SPRINT',
-    assignee: '이영희',
-    epic: 'OCR 엔진',
+    status: 'COMPLETED',
+    sprintId: 'sprint-001-01',
+    epic: '문서 처리',
     acceptanceCriteria: [
-      '영수증 이미지 업로드 시 95% 이상 정확도로 텍스트 추출',
-      '병원명, 진료일, 금액 등 핵심 항목 자동 인식',
-      '인식 결과를 사용자가 수정할 수 있는 UI 제공',
+      '다양한 이미지 포맷(JPG, PNG, PDF) 지원',
+      '업로드 후 자동 텍스트 추출',
+      '추출 결과 미리보기 제공',
     ],
   },
   {
-    id: 2,
-    title: '심사자로서 AI의 판단 근거를 명확히 확인하여 신뢰성을 검증하고 싶다',
-    description: 'AI 설명 가능성(XAI) 기능 구현',
+    id: 'story-001-02',
+    title: '사기 탐지 대시보드',
+    description: '사기 분석가로서, 사기 위험 점수를 확인하여 조사 우선순위를 정할 수 있게 하고 싶습니다',
     priority: 2,
     storyPoints: 13,
-    status: 'READY',
-    epic: 'AI 모델',
+    status: 'IN_PROGRESS',
+    sprintId: 'sprint-001-03',
+    epic: '사기 탐지',
     acceptanceCriteria: [
-      'AI 판단의 주요 근거(약관 조항, 유사 판례 등) 제공',
-      '신뢰도 점수 표시 (0-100%)',
-      '판단 근거를 시각적으로 하이라이트',
+      '실시간 사기 위험 점수 표시',
+      '위험 등급별 필터링',
+      '조사 우선순위 자동 추천',
     ],
   },
   {
-    id: 3,
-    title: '관리자로서 모델의 성능 지표를 실시간으로 모니터링하고 싶다',
-    description: '모델 성능 대시보드 구축',
+    id: 'story-001-03',
+    title: '보험청구 API 연동',
+    description: '개발자로서, RESTful API를 통해 외부 시스템이 보험청구 관리 시스템과 연동할 수 있게 하고 싶습니다',
     priority: 3,
-    storyPoints: 5,
-    status: 'DONE',
-    assignee: '박민수',
-    epic: '인프라',
+    storyPoints: 8,
+    status: 'SELECTED',
+    sprintId: 'sprint-001-03',
+    epic: 'API 플랫폼',
     acceptanceCriteria: [
-      '정확도, 재현율, F1-Score 등 핵심 지표 시각화',
-      '일별/주별 성능 추이 그래프',
-      '이상 징후 감지 시 알림 기능',
+      'RESTful API 명세 문서 제공',
+      'OAuth2 인증 지원',
+      'API 요청/응답 로깅',
     ],
   },
   {
-    id: 4,
-    title: '개발자로서 학습 데이터를 쉽게 라벨링하고 관리하고 싶다',
-    description: '데이터 라벨링 도구 개발',
+    id: 'story-001-04',
+    title: '데이터 암호화 구현',
+    description: '보안 담당자로서, 모든 개인정보가 암호화되어 규정을 준수할 수 있게 하고 싶습니다',
     priority: 4,
+    storyPoints: 5,
+    status: 'BACKLOG',
+    epic: '보안',
+    acceptanceCriteria: [
+      'AES-256 암호화 적용',
+      '전송 중 및 저장 시 암호화',
+      '암호화 키 관리 체계 구축',
+    ],
+  },
+  {
+    id: 'story-001-05',
+    title: 'AI 모델 훈련 환경 구축',
+    description: 'AI 엔지니어로서, GPU 클러스터에서 모델을 훈련할 수 있는 환경이 필요합니다',
+    priority: 5,
     storyPoints: 8,
     status: 'READY',
-    epic: '데이터 관리',
+    epic: 'AI 인프라',
     acceptanceCriteria: [
-      '이미지 및 텍스트 데이터 라벨링 UI',
-      '라벨링 품질 검증 기능',
-      '팀 간 라벨링 작업 분배 및 진행률 추적',
+      'GPU 클러스터 설정 완료',
+      '훈련 파이프라인 자동화',
+      '모델 버전 관리 시스템',
     ],
   },
   {
-    id: 5,
-    title: '사용자로서 진단서를 업로드하면 자동으로 질병명과 진료 내용이 분류되기를 원한다',
-    description: '진단서 자동 분류 기능',
-    priority: 5,
+    id: 'story-001-06',
+    title: 'OCR 정확도 검증',
+    description: 'QA 담당자로서, OCR 정확도가 99% 이상인지 검증할 수 있어야 합니다',
+    priority: 6,
+    storyPoints: 5,
+    status: 'READY',
+    epic: '품질 관리',
+    acceptanceCriteria: [
+      '정확도 측정 자동화 테스트',
+      '테스트 데이터셋 구축',
+      '정확도 리포트 자동 생성',
+    ],
+  },
+  {
+    id: 'story-001-07',
+    title: '레거시 시스템 연동 어댑터',
+    description: '개발자로서, 기존 보험증권 시스템과 데이터를 주고받을 수 있어야 합니다',
+    priority: 7,
     storyPoints: 13,
     status: 'READY',
-    epic: 'OCR 엔진',
+    epic: '시스템 연동',
     acceptanceCriteria: [
-      '진단서 이미지에서 질병명 자동 추출',
-      '진료 내용을 보험 약관 항목으로 자동 매핑',
-      '98% 이상의 분류 정확도',
+      '레거시 API 어댑터 구현',
+      '데이터 변환 로직 구현',
+      '에러 처리 및 재시도 로직',
     ],
   },
   {
-    id: 6,
-    title: '심사자로서 과거 유사 케이스를 빠르게 검색하여 참고하고 싶다',
-    description: '유사 케이스 검색 엔진',
-    priority: 6,
+    id: 'story-001-08',
+    title: '배포 자동화 파이프라인',
+    description: 'DevOps 엔지니어로서, CI/CD 파이프라인을 통해 자동 배포할 수 있어야 합니다',
+    priority: 8,
     storyPoints: 8,
     status: 'READY',
-    epic: 'AI 모델',
+    epic: 'DevOps',
     acceptanceCriteria: [
-      '의미 기반 검색(Semantic Search) 기능',
-      '검색 결과에 유사도 점수 표시',
-      '검색 결과를 심사 화면에 바로 참조',
+      'GitHub Actions CI/CD 파이프라인',
+      '자동 테스트 및 빌드',
+      '스테이징/프로덕션 배포 자동화',
     ],
   },
 ];
@@ -96,35 +126,59 @@ const initialStories: UserStory[] = [
 export const storyKeys = {
   all: ['stories'] as const,
   lists: () => [...storyKeys.all, 'list'] as const,
-  list: (filters?: object) => [...storyKeys.lists(), filters] as const,
+  list: (projectId?: string, filters?: object) => [...storyKeys.lists(), { projectId, ...filters }] as const,
   details: () => [...storyKeys.all, 'detail'] as const,
-  detail: (id: number) => [...storyKeys.details(), id] as const,
+  detail: (id: number | string) => [...storyKeys.details(), id] as const,
 };
 
-export function useStories() {
+export function useStories(projectId?: string) {
   return useQuery<UserStory[]>({
-    queryKey: storyKeys.lists(),
+    queryKey: storyKeys.list(projectId),
     queryFn: async () => {
+      if (!projectId) {
+        return initialStories;
+      }
       try {
-        // Check localStorage first
-        const savedStories = localStorage.getItem('backlog_stories');
+        // Check localStorage first for this project
+        const storageKey = `backlog_stories_${projectId}`;
+        const savedStories = localStorage.getItem(storageKey);
         if (savedStories) {
-          return JSON.parse(savedStories);
+          const parsed = JSON.parse(savedStories);
+          if (parsed && parsed.length > 0) {
+            return parsed;
+          }
         }
-        const data = await apiService.getStories();
+        // Call the correct API endpoint
+        const data = await apiService.getStories(projectId);
         if (data && data.length > 0) {
-          return data;
+          // Transform API response to match frontend UserStory type
+          return data.map((story: any) => ({
+            id: story.id,
+            title: story.title,
+            description: story.description,
+            priority: story.priorityOrder || story.priority,
+            storyPoints: story.storyPoints,
+            status: story.status,
+            assignee: story.assigneeId,
+            epic: story.epic,
+            featureId: story.featureId,
+            sprintId: story.sprintId,
+            acceptanceCriteria: story.acceptanceCriteriaList || [],
+          }));
         }
         return initialStories;
-      } catch {
+      } catch (error) {
+        console.error('Failed to fetch stories:', error);
         return initialStories;
       }
     },
+    enabled: true,
   });
 }
 
-export function useCreateStory() {
+export function useCreateStory(projectId?: string) {
   const queryClient = useQueryClient();
+  const storageKey = projectId ? `backlog_stories_${projectId}` : 'backlog_stories';
 
   return useMutation({
     mutationFn: (data: {
@@ -134,44 +188,46 @@ export function useCreateStory() {
       acceptanceCriteria: string[];
     }) => apiService.createStory(data),
     onSuccess: (newStory) => {
-      queryClient.setQueryData<UserStory[]>(storyKeys.lists(), (old = []) => {
+      queryClient.setQueryData<UserStory[]>(storyKeys.list(projectId), (old = []) => {
         const updated = [...old, newStory];
-        localStorage.setItem('backlog_stories', JSON.stringify(updated));
+        localStorage.setItem(storageKey, JSON.stringify(updated));
         return updated;
       });
     },
   });
 }
 
-export function useUpdateStory() {
+export function useUpdateStory(projectId?: string) {
   const queryClient = useQueryClient();
+  const storageKey = projectId ? `backlog_stories_${projectId}` : 'backlog_stories';
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<UserStory> }) =>
+    mutationFn: ({ id, data }: { id: number | string; data: Partial<UserStory> }) =>
       apiService.updateStory(id, data),
     onSuccess: (_, { id, data }) => {
-      queryClient.setQueryData<UserStory[]>(storyKeys.lists(), (old = []) => {
+      queryClient.setQueryData<UserStory[]>(storyKeys.list(projectId), (old = []) => {
         const updated = old.map((s) => (s.id === id ? { ...s, ...data } : s));
-        localStorage.setItem('backlog_stories', JSON.stringify(updated));
+        localStorage.setItem(storageKey, JSON.stringify(updated));
         return updated;
       });
     },
   });
 }
 
-export function useUpdateStoryPriority() {
+export function useUpdateStoryPriority(projectId?: string) {
   const queryClient = useQueryClient();
+  const storageKey = projectId ? `backlog_stories_${projectId}` : 'backlog_stories';
 
   return useMutation({
-    mutationFn: ({ id, direction }: { id: number; direction: 'up' | 'down' }) =>
+    mutationFn: ({ id, direction }: { id: number | string; direction: 'up' | 'down' }) =>
       apiService.updateStoryPriority(id, direction),
     onSuccess: (updatedStories, { id, direction }) => {
       if (updatedStories && updatedStories.length > 0) {
-        queryClient.setQueryData<UserStory[]>(storyKeys.lists(), updatedStories);
-        localStorage.setItem('backlog_stories', JSON.stringify(updatedStories));
+        queryClient.setQueryData<UserStory[]>(storyKeys.list(projectId), updatedStories);
+        localStorage.setItem(storageKey, JSON.stringify(updatedStories));
       } else {
         // Fallback to local update
-        queryClient.setQueryData<UserStory[]>(storyKeys.lists(), (old = []) => {
+        queryClient.setQueryData<UserStory[]>(storyKeys.list(projectId), (old = []) => {
           const idx = old.findIndex((s) => s.id === id);
           if (idx === -1) return old;
 
@@ -187,7 +243,7 @@ export function useUpdateStoryPriority() {
             newStories[idx + 1].priority = temp;
             [newStories[idx], newStories[idx + 1]] = [newStories[idx + 1], newStories[idx]];
           }
-          localStorage.setItem('backlog_stories', JSON.stringify(newStories));
+          localStorage.setItem(storageKey, JSON.stringify(newStories));
           return newStories;
         });
       }
@@ -195,15 +251,16 @@ export function useUpdateStoryPriority() {
   });
 }
 
-export function useDeleteStory() {
+export function useDeleteStory(projectId?: string) {
   const queryClient = useQueryClient();
+  const storageKey = projectId ? `backlog_stories_${projectId}` : 'backlog_stories';
 
   return useMutation({
     mutationFn: (id: string) => apiService.deleteStory(id),
     onSuccess: (_, id) => {
-      queryClient.setQueryData<UserStory[]>(storyKeys.lists(), (old = []) => {
+      queryClient.setQueryData<UserStory[]>(storyKeys.list(projectId), (old = []) => {
         const updated = old.filter((s) => String(s.id) !== id);
-        localStorage.setItem('backlog_stories', JSON.stringify(updated));
+        localStorage.setItem(storageKey, JSON.stringify(updated));
         return updated;
       });
     },
