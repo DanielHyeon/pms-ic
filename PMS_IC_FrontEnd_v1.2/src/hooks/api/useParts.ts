@@ -83,9 +83,10 @@ export function useParts(projectId?: string) {
     queryFn: async () => {
       try {
         const data = await apiService.getParts(projectId!);
-        return data;
+        // Return actual data (even if empty) when projectId is provided
+        return Array.isArray(data) ? data : [];
       } catch {
-        return mockParts.map(p => ({ ...p, projectId: projectId! }));
+        return []; // Return empty array on error when projectId is provided
       }
     },
     enabled: !!projectId,
@@ -97,9 +98,10 @@ export function usePartMembers(partId: string) {
     queryKey: partKeys.members(partId),
     queryFn: async () => {
       try {
-        return await apiService.getPartMembers(partId);
+        const data = await apiService.getPartMembers(partId);
+        return Array.isArray(data) ? data : [];
       } catch {
-        return mockPartMembers[partId] || [];
+        return []; // Return empty array on error
       }
     },
     enabled: !!partId,

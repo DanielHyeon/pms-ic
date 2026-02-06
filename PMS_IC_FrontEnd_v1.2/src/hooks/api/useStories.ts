@@ -135,6 +135,7 @@ export function useStories(projectId?: string) {
   return useQuery<UserStory[]>({
     queryKey: storyKeys.list(projectId),
     queryFn: async () => {
+      // Only return mock data when no project is selected (for demo/preview)
       if (!projectId) {
         return initialStories;
       }
@@ -150,7 +151,8 @@ export function useStories(projectId?: string) {
         }
         // Call the correct API endpoint
         const data = await apiService.getStories(projectId);
-        if (data && data.length > 0) {
+        // Return actual data (even if empty) when projectId is provided
+        if (data && Array.isArray(data)) {
           // Transform API response to match frontend UserStory type
           return data.map((story: any) => ({
             id: story.id,
@@ -166,10 +168,10 @@ export function useStories(projectId?: string) {
             acceptanceCriteria: story.acceptanceCriteriaList || [],
           }));
         }
-        return initialStories;
+        return []; // Return empty array if no data for this project
       } catch (error) {
         console.error('Failed to fetch stories:', error);
-        return initialStories;
+        return []; // Return empty array on error when projectId is provided
       }
     },
     enabled: true,

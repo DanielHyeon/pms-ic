@@ -33,13 +33,17 @@ import {
 } from '../../utils/storyTypes';
 import { SprintPanel, EpicTreeView, EpicFormModal, FeatureFormModal, WbsConnectionPanel } from './backlog';
 import { UserStory as BacklogStory, Epic, EpicFormData, Feature, FeatureFormData } from '../../types/backlog';
+import { useProject } from '../../contexts/ProjectContext';
 
 interface BacklogManagementProps {
   userRole: UserRole;
-  projectId?: string;
 }
 
-export default function BacklogManagement({ userRole, projectId = 'proj-001' }: BacklogManagementProps) {
+export default function BacklogManagement({ userRole }: BacklogManagementProps) {
+  // Get current project from context
+  const { currentProject } = useProject();
+  const projectId = currentProject?.id;
+
   const { data: stories = [], isLoading: isLoadingStories } = useStories(projectId);
   const { data: activeSprint } = useActiveSprint(projectId);
   const { data: parts = [] } = useParts(projectId);

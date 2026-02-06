@@ -578,3 +578,145 @@ SELECT
 FROM sprint_info si
 CROSS JOIN total_scope ts
 """
+
+
+# =============================================================================
+# COMPLETED_TASKS Queries
+# =============================================================================
+
+# Get completed tasks for a project
+COMPLETED_TASKS_QUERY = """
+SELECT
+    t.id,
+    t.title,
+    t.status,
+    t.priority,
+    t.due_date,
+    t.updated_at,
+    us.story_points,
+    us.title as story_title
+FROM task.tasks t
+LEFT JOIN task.user_stories us ON t.user_story_id = us.id AND us.project_id = %(project_id)s
+WHERE t.project_id = %(project_id)s
+  AND t.status = 'DONE'
+ORDER BY
+    t.updated_at DESC,
+    CASE t.priority
+        WHEN 'CRITICAL' THEN 1
+        WHEN 'HIGH' THEN 2
+        WHEN 'MEDIUM' THEN 3
+        WHEN 'LOW' THEN 4
+        ELSE 5
+    END
+LIMIT %(limit)s
+"""
+
+# Fallback: Without completed_at column (older schema)
+COMPLETED_TASKS_FALLBACK_QUERY = """
+SELECT
+    t.id,
+    t.title,
+    t.status,
+    t.priority,
+    t.due_date,
+    us.title as story_title
+FROM task.tasks t
+LEFT JOIN task.user_stories us ON t.user_story_id = us.id AND us.project_id = %(project_id)s
+WHERE t.project_id = %(project_id)s
+  AND t.status = 'DONE'
+ORDER BY t.updated_at DESC
+LIMIT %(limit)s
+"""
+
+# Judgment data: Completed task counts
+COMPLETED_TASKS_COUNTS_QUERY = """
+SELECT
+    COUNT(*) as all_tasks_count,
+    COUNT(CASE WHEN status = 'DONE' THEN 1 END) as completed_count,
+    COUNT(CASE WHEN status NOT IN ('DONE', 'CANCELLED') THEN 1 END) as active_count
+FROM task.tasks
+WHERE project_id = %(project_id)s
+"""
+
+
+# =============================================================================
+# TASKS_BY_STATUS Queries
+# =============================================================================
+
+# Get tasks filtered by status (REVIEW, IN_PROGRESS, etc.)
+TASKS_BY_STATUS_QUERY = """
+SELECT
+    t.id,
+    t.title,
+    t.status,
+    t.priority,
+    t.due_date,
+    us.story_points,
+    us.title as story_title
+FROM task.tasks t
+LEFT JOIN task.user_stories us ON t.user_story_id = us.id AND us.project_id = %(project_id)s
+WHERE t.project_id = %(project_id)s
+  AND t.status = %(status)s
+ORDER BY
+    CASE t.priority
+        WHEN 'CRITICAL' THEN 1
+        WHEN 'HIGH' THEN 2
+        WHEN 'MEDIUM' THEN 3
+        WHEN 'LOW' THEN 4
+        ELSE 5
+    END,
+    t.updated_at DESC
+LIMIT %(limit)s
+"""
+
+# Get tasks in review/testing status
+TASKS_IN_REVIEW_QUERY = """
+SELECT
+    t.id,
+    t.title,
+    t.status,
+    t.priority,
+    t.due_date,
+    us.story_points,
+    us.title as story_title
+FROM task.tasks t
+LEFT JOIN task.user_stories us ON t.user_story_id = us.id AND us.project_id = %(project_id)s
+WHERE t.project_id = %(project_id)s
+  AND t.status IN ('REVIEW', 'IN_REVIEW', 'TESTING', 'QA')
+ORDER BY
+    CASE t.priority
+        WHEN 'CRITICAL' THEN 1
+        WHEN 'HIGH' THEN 2
+        WHEN 'MEDIUM' THEN 3
+        WHEN 'LOW' THEN 4
+        ELSE 5
+    END,
+    t.updated_at DESC
+LIMIT %(limit)s
+"""
+
+# Get tasks in progress status
+TASKS_IN_PROGRESS_QUERY = """
+SELECT
+    t.id,
+    t.title,
+    t.status,
+    t.priority,
+    t.due_date,
+    us.story_points,
+    us.title as story_title
+FROM task.tasks t
+LEFT JOIN task.user_stories us ON t.user_story_id = us.id AND us.project_id = %(project_id)s
+WHERE t.project_id = %(project_id)s
+  AND t.status IN ('IN_PROGRESS', 'DOING', 'WIP')
+ORDER BY
+    CASE t.priority
+        WHEN 'CRITICAL' THEN 1
+        WHEN 'HIGH' THEN 2
+        WHEN 'MEDIUM' THEN 3
+        WHEN 'LOW' THEN 4
+        ELSE 5
+    END,
+    t.updated_at DESC
+LIMIT %(limit)s
+"""

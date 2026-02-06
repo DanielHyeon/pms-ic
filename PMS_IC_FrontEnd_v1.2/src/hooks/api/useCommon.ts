@@ -133,12 +133,13 @@ export function useMeetings(projectId?: string) {
     queryFn: async () => {
       try {
         const data = await apiService.getMeetings(projectId!);
-        if (Array.isArray(data) && data.length > 0) {
+        // Return actual data (even if empty) when projectId is provided
+        if (Array.isArray(data)) {
           return data;
         }
-        return initialMeetings;
+        return []; // Return empty array if no data for this project
       } catch {
-        return initialMeetings;
+        return []; // Return empty array on error when projectId is provided
       }
     },
     enabled: !!projectId,
@@ -196,12 +197,13 @@ export function useIssues(projectId?: string) {
     queryFn: async () => {
       try {
         const data = await apiService.getIssues(projectId!);
-        if (Array.isArray(data) && data.length > 0) {
+        // Return actual data (even if empty) when projectId is provided
+        if (Array.isArray(data)) {
           return data;
         }
-        return initialIssues;
+        return []; // Return empty array if no data for this project
       } catch {
-        return initialIssues;
+        return []; // Return empty array on error when projectId is provided
       }
     },
     enabled: !!projectId,

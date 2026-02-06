@@ -13,13 +13,16 @@ import IssueManagement from './common/IssueManagement';
 import { useIssues, useCreateIssue } from '../../hooks/api/useCommon';
 import { getRolePermissions } from '../../utils/rolePermissions';
 import { UserRole } from '../App';
+import { useProject } from '../../contexts/ProjectContext';
 
 interface IssuesPageProps {
   userRole: UserRole;
-  projectId?: string;
 }
 
-export default function IssuesPage({ userRole, projectId = 'proj-001' }: IssuesPageProps) {
+export default function IssuesPage({ userRole }: IssuesPageProps) {
+  // Get current project from context
+  const { currentProject } = useProject();
+  const projectId = currentProject?.id;
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [showCreateModal, setShowCreateModal] = useState(false);

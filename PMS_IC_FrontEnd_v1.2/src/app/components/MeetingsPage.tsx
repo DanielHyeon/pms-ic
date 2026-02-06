@@ -13,13 +13,16 @@ import MeetingManagement from './common/MeetingManagement';
 import { useMeetings, useCreateMeeting } from '../../hooks/api/useCommon';
 import { getRolePermissions } from '../../utils/rolePermissions';
 import { UserRole } from '../App';
+import { useProject } from '../../contexts/ProjectContext';
 
 interface MeetingsPageProps {
   userRole: UserRole;
-  projectId?: string;
 }
 
-export default function MeetingsPage({ userRole, projectId = 'proj-001' }: MeetingsPageProps) {
+export default function MeetingsPage({ userRole }: MeetingsPageProps) {
+  // Get current project from context
+  const { currentProject } = useProject();
+  const projectId = currentProject?.id;
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [showCreateModal, setShowCreateModal] = useState(false);

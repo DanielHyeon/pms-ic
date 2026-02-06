@@ -13,13 +13,13 @@ import {
   Eye,
 } from 'lucide-react';
 import DeliverableManagement from './common/DeliverableManagement';
-import { useAllPhases, usePhaseDeliverables } from '../../hooks/api/usePhases';
+import { usePhases, useProjectDeliverables } from '../../hooks/api/usePhases';
 import { getRolePermissions } from '../../utils/rolePermissions';
 import { UserRole } from '../App';
+import { useProject } from '../../contexts/ProjectContext';
 
 interface DeliverablesPageProps {
   userRole: UserRole;
-  projectId?: string;
 }
 
 interface AggregatedDeliverable {
@@ -52,45 +52,41 @@ interface PhaseWithDeliverables {
   [key: string]: unknown;
 }
 
-export default function DeliverablesPage({ userRole, projectId = 'proj-001' }: DeliverablesPageProps) {
+export default function DeliverablesPage({ userRole }: DeliverablesPageProps) {
+  // Get current project from context
+  const { currentProject } = useProject();
+  const projectId = currentProject?.id;
+
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [filterPhase, setFilterPhase] = useState<string>('');
 
-  // API hooks
-  const { data: phasesData = [], isLoading: isPhasesLoading } = useAllPhases();
-  // Filter phases by projectId
-  const phases = (phasesData as PhaseWithDeliverables[]).filter(p => (p as any).projectId === projectId);
+  // API hooks - use project-specific phases and deliverables
+  const { data: phasesData = [], isLoading: isPhasesLoading } = usePhases(projectId);
+  const { data: deliverables = [], isLoading: isDeliverablesLoading } = useProjectDeliverables(projectId);
+  const phases = phasesData as PhaseWithDeliverables[];
 
   // Role permissions
   const permissions = getRolePermissions(userRole);
   const canEdit = permissions.canEdit;
 
-  // Aggregate deliverables from all phases
+  // Map deliverables to the expected format
   const aggregatedDeliverables = useMemo(() => {
-    const deliverables: AggregatedDeliverable[] = [];
+    if (!deliverables || !Array.isArray(deliverables)) return [];
 
-    phases.forEach((phase) => {
-      if (phase.deliverables && Array.isArray(phase.deliverables)) {
-        phase.deliverables.forEach((d) => {
-          deliverables.push({
-            id: d.id,
-            name: d.name,
-            description: d.description,
-            type: d.type,
-            status: (d.status as AggregatedDeliverable['status']) || 'PENDING',
-            version: d.version,
-            uploadedAt: d.uploadedAt,
-            approvedBy: d.approvedBy,
-            phaseId: phase.id,
-            phaseName: phase.name,
-          });
-        });
-      }
-    });
-
-    return deliverables;
-  }, [phases]);
+    return deliverables.map((d: any): AggregatedDeliverable => ({
+      id: d.id,
+      name: d.name,
+      description: d.description,
+      type: d.type,
+      status: (d.status as AggregatedDeliverable['status']) || 'PENDING',
+      version: d.version,
+      uploadedAt: d.uploadedAt || d.createdAt,
+      approvedBy: d.approvedBy || d.approver,
+      phaseId: d.phaseId,
+      phaseName: d.phaseName,
+    }));
+  }, [deliverables]);
 
   // Filter deliverables
   const filteredDeliverables = useMemo(() => {
@@ -138,7 +134,7 @@ export default function DeliverablesPage({ userRole, projectId = 'proj-001' }: D
     phaseName: d.phaseName,
   }));
 
-  if (isPhasesLoading) {
+  if (isPhasesLoading || isDeliverablesLoading) {
     return (
       <div className="flex-1 p-6 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">

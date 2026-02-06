@@ -23,10 +23,10 @@ import { ExcelImportExportButtons } from './common/ExcelImportExportButtons';
 import { getRolePermissions } from '../../utils/rolePermissions';
 import { PhaseWithWbs } from '../../types/wbs';
 import { UserRole } from '../App';
+import { useProject } from '../../contexts/ProjectContext';
 
 interface WbsManagementProps {
   userRole: UserRole;
-  projectId?: string;
 }
 
 type TabType = 'wbs' | 'integration';
@@ -47,7 +47,10 @@ interface ApiPhaseData {
   [key: string]: unknown;
 }
 
-export default function WbsManagement({ userRole, projectId = 'proj-001' }: WbsManagementProps) {
+export default function WbsManagement({ userRole }: WbsManagementProps) {
+  // Get current project from context
+  const { currentProject } = useProject();
+  const projectId = currentProject?.id;
   const [selectedPhaseId, setSelectedPhaseId] = useState<string>('');
   const [activeTab, setActiveTab] = useState<TabType>('wbs');
   const [viewMode, setViewMode] = useState<ViewMode>('phase');

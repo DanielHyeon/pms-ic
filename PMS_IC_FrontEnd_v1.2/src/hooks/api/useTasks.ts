@@ -3,6 +3,7 @@ import { apiService } from '../../services/api';
 
 export const taskKeys = {
   all: ['tasks'] as const,
+  kanban: (projectId?: string) => [...taskKeys.all, 'kanban', { projectId }] as const,
   columns: (projectId?: string) => [...taskKeys.all, 'columns', { projectId }] as const,
   details: () => [...taskKeys.all, 'detail'] as const,
   detail: (id: string) => [...taskKeys.details(), id] as const,
@@ -19,8 +20,8 @@ export function useCreateTask() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: Parameters<typeof apiService.createTask>[0]) =>
-      apiService.createTask(data),
+    mutationFn: ({ data, projectId }: { data: Record<string, unknown>; projectId?: string }) =>
+      apiService.createTask(data, projectId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: taskKeys.all });
     },
@@ -31,8 +32,8 @@ export function useUpdateTask() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof apiService.updateTask>[1] }) =>
-      apiService.updateTask(id, data),
+    mutationFn: ({ id, data, projectId }: { id: string; data: Record<string, unknown>; projectId?: string }) =>
+      apiService.updateTask(id, data, projectId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: taskKeys.all });
     },
@@ -43,7 +44,8 @@ export function useDeleteTask() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => apiService.deleteTask(id),
+    mutationFn: ({ id, projectId }: { id: string; projectId?: string }) =>
+      apiService.deleteTask(id, projectId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: taskKeys.all });
     },
@@ -54,8 +56,8 @@ export function useMoveTask() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ taskId, targetColumn }: { taskId: string; targetColumn: string }) =>
-      apiService.moveTask(taskId, targetColumn),
+    mutationFn: ({ taskId, targetColumn, projectId }: { taskId: string; targetColumn: string; projectId?: string }) =>
+      apiService.moveTask(taskId, targetColumn, projectId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: taskKeys.all });
     },
@@ -82,12 +84,12 @@ export interface KanbanColumn {
   tasks: KanbanTask[];
 }
 
-// Hook to fetch all tasks and organize into kanban columns
-export function useKanbanTasks() {
+// Hook to fetch tasks for a specific project and organize into kanban columns
+export function useKanbanTasks(projectId?: string) {
   return useQuery({
-    queryKey: [...taskKeys.all, 'kanban'],
+    queryKey: taskKeys.kanban(projectId),
     queryFn: async () => {
-      const response = await apiService.getTasks() as unknown;
+      const response = await apiService.getTasks(projectId) as unknown;
       // Handle both wrapped { data: [...] } and direct array responses
       const tasks = (response && typeof response === 'object' && 'data' in response
         ? (response as { data: unknown[] }).data
@@ -96,18 +98,28 @@ export function useKanbanTasks() {
       if (!Array.isArray(tasks)) return [];
 
       // Map API tasks to KanbanTask format
-      return tasks.map((task: Record<string, unknown>): KanbanTask => ({
-        id: String(task.id),
-        title: String(task.title || ''),
-        assignee: String(task.assigneeId || 'Unassigned'),
-        assigneeId: task.assigneeId as string | undefined,
-        priority: mapPriority(task.priority as string | undefined),
-        storyPoints: (task.storyPoints as number) || 3,
-        dueDate: String(task.dueDate || ''),
-        isFirefighting: task.priority === 'CRITICAL',
-        labels: (task.tags as string[]) || [],
-        status: String(task.status || 'TODO'),
-      }));
+      return tasks.map((task: Record<string, unknown>): KanbanTask => {
+        // Handle tags - can be string (comma-separated) or array
+        let labels: string[] = [];
+        if (typeof task.tags === 'string') {
+          labels = task.tags.split(',').map((t: string) => t.trim()).filter(Boolean);
+        } else if (Array.isArray(task.tags)) {
+          labels = task.tags as string[];
+        }
+
+        return {
+          id: String(task.id),
+          title: String(task.title || ''),
+          assignee: String(task.assigneeId || 'Unassigned'),
+          assigneeId: task.assigneeId as string | undefined,
+          priority: mapPriority(task.priority as string | undefined),
+          storyPoints: (task.storyPoints as number) || 3,
+          dueDate: String(task.dueDate || ''),
+          isFirefighting: task.priority === 'CRITICAL',
+          labels,
+          status: String(task.status || 'TODO'),
+        };
+      });
     },
   });
 }

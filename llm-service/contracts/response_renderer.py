@@ -39,7 +39,10 @@ def render(contract: ResponseContract) -> str:
         "sprint_progress": render_sprint_progress,
         "task_due_this_week": render_tasks_due_this_week,
         "risk_analysis": render_risk_analysis,
+        "completed_tasks": render_completed_tasks,
+        "tasks_by_status": render_tasks_by_status,
         "casual": render_casual,
+        "status_list": render_status_list,
     }
 
     renderer = renderers.get(intent, render_default)
@@ -399,6 +402,122 @@ def render_risk_analysis(contract: ResponseContract) -> str:
     return "\n".join(lines)
 
 
+def render_tasks_by_status(contract: ResponseContract) -> str:
+    """
+    Render tasks filtered by status (테스트 중인, 검토 중인, 진행 중인, etc.)
+    """
+    lines = []
+
+    data = contract.data
+    status_label = data.get("status_label", "상태별")
+
+    lines.append(f"🔍 **{status_label} 태스크** (기준: {contract.reference_time})")
+    if contract.scope:
+        lines.append(f"📍 {contract.scope}")
+    lines.append("")
+
+    if contract.has_error():
+        for warning in contract.warnings:
+            lines.append(f"⚠️ {warning}")
+        lines.append("")
+        _append_tips(lines, contract.tips)
+        lines.append(f"_데이터 출처: {contract.provenance}_")
+        return "\n".join(lines)
+
+    tasks = data.get("tasks", [])
+    count = data.get("count", 0)
+
+    if tasks:
+        lines.append(f"**조회 결과**: {count}개")
+        if data.get("was_limited"):
+            lines.append("_(최근 30개만 표시)_")
+        lines.append("")
+
+        # Task list
+        lines.append(f"**{status_label} 태스크 목록**:")
+        for task in tasks[:20]:
+            title = task.get("title", "제목없음")[:50]
+            priority = task.get("priority", "")
+            priority_marker = _get_priority_marker(priority)
+            story_title = task.get("story_title", "")
+            status = _translate_status(task.get("status", ""))
+
+            lines.append(f"  - {priority_marker} {title} ({status})")
+            if story_title:
+                lines.append(f"    └─ 스토리: {story_title[:30]}")
+
+        if len(tasks) > 20:
+            lines.append(f"  - ... 외 {len(tasks) - 20}개")
+        lines.append("")
+    else:
+        for warning in contract.warnings:
+            lines.append(f"ℹ️ {warning}")
+        lines.append("")
+
+    _append_tips(lines, contract.tips)
+    lines.append(f"_데이터 출처: {contract.provenance}_")
+    return "\n".join(lines)
+
+
+def render_completed_tasks(contract: ResponseContract) -> str:
+    """
+    Render completed tasks list.
+
+    Shows tasks with status = 'DONE' for the project.
+    """
+    lines = []
+
+    lines.append(f"✅ **완료된 태스크** (기준: {contract.reference_time})")
+    if contract.scope:
+        lines.append(f"📍 {contract.scope}")
+    lines.append("")
+
+    if contract.has_error():
+        for warning in contract.warnings:
+            lines.append(f"⚠️ {warning}")
+        lines.append("")
+        _append_tips(lines, contract.tips)
+        lines.append(f"_데이터 출처: {contract.provenance}_")
+        return "\n".join(lines)
+
+    data = contract.data
+    tasks = data.get("tasks", [])
+    count = data.get("count", 0)
+    all_tasks = data.get("all_tasks_count", 0)
+    completed_count = data.get("completed_count", 0)
+
+    if tasks:
+        # Summary
+        lines.append(f"**완료 현황**: {completed_count}개 완료 (전체 {all_tasks}개 중)")
+        if data.get("was_limited"):
+            lines.append("_(최근 30개만 표시)_")
+        lines.append("")
+
+        # Task list
+        lines.append("**완료된 태스크 목록**:")
+        for task in tasks[:20]:
+            title = task.get("title", "제목없음")[:50]
+            priority = task.get("priority", "")
+            priority_marker = _get_priority_marker(priority)
+            story_title = task.get("story_title", "")
+
+            lines.append(f"  - {priority_marker} {title}")
+            if story_title:
+                lines.append(f"    └─ 스토리: {story_title[:30]}")
+
+        if len(tasks) > 20:
+            lines.append(f"  - ... 외 {len(tasks) - 20}개")
+        lines.append("")
+    else:
+        for warning in contract.warnings:
+            lines.append(f"ℹ️ {warning}")
+        lines.append("")
+
+    _append_tips(lines, contract.tips)
+    lines.append(f"_데이터 출처: {contract.provenance}_")
+    return "\n".join(lines)
+
+
 def render_casual(contract: ResponseContract) -> str:
     """Render casual greeting"""
     return (
@@ -407,8 +526,85 @@ def render_casual(contract: ResponseContract) -> str:
     )
 
 
+def render_status_list(contract: ResponseContract) -> str:
+    """
+    Render status list queries (completed tasks, blocked items, etc.)
+
+    Handles generic STATUS_LIST intent with actual data display.
+    """
+    lines = []
+
+    lines.append(f"📋 **상태 조회 결과** (기준: {contract.reference_time})")
+    if contract.scope:
+        lines.append(f"📍 {contract.scope}")
+    lines.append("")
+
+    if contract.has_error():
+        for warning in contract.warnings:
+            lines.append(f"⚠️ {warning}")
+        lines.append("")
+        _append_tips(lines, contract.tips)
+        lines.append(f"_데이터 출처: {contract.provenance}_")
+        return "\n".join(lines)
+
+    data = contract.data
+    items = data.get("items") or data.get("tasks") or data.get("stories") or []
+    count = data.get("count", len(items) if items else 0)
+
+    if items and isinstance(items, list):
+        lines.append(f"**조회 결과**: {count}개")
+        lines.append("")
+
+        # Group by status if available
+        by_status = {}
+        for item in items:
+            if isinstance(item, dict):
+                status = item.get("status", "UNKNOWN")
+                if status not in by_status:
+                    by_status[status] = []
+                by_status[status].append(item)
+
+        if by_status:
+            status_emoji = {
+                "DONE": "✅", "COMPLETED": "✅", "완료": "✅",
+                "IN_PROGRESS": "🔄", "진행 중": "🔄",
+                "BLOCKED": "🚫", "차단됨": "🚫",
+                "TODO": "📝", "READY": "📝",
+            }
+            status_order = ["DONE", "COMPLETED", "IN_PROGRESS", "BLOCKED", "TODO", "READY"]
+
+            # Sort statuses
+            sorted_statuses = sorted(
+                by_status.keys(),
+                key=lambda s: status_order.index(s) if s in status_order else 99
+            )
+
+            for status in sorted_statuses:
+                status_items = by_status[status]
+                emoji = status_emoji.get(status, "📌")
+                status_display = _translate_status(status)
+                lines.append(f"{emoji} **{status_display}** ({len(status_items)}개)")
+                for item in status_items[:10]:
+                    title = item.get("title") or item.get("name") or item.get("id", "항목")
+                    points = item.get("story_points") or item.get("storyPoints")
+                    if points:
+                        lines.append(f"  - {title} ({points}pt)")
+                    else:
+                        lines.append(f"  - {title}")
+                if len(status_items) > 10:
+                    lines.append(f"  - ... 외 {len(status_items) - 10}개")
+                lines.append("")
+    else:
+        lines.append("조회된 항목이 없습니다.")
+        lines.append("")
+
+    _append_tips(lines, contract.tips)
+    lines.append(f"_데이터 출처: {contract.provenance}_")
+    return "\n".join(lines)
+
+
 def render_default(contract: ResponseContract) -> str:
-    """Default fallback - should rarely be used"""
+    """Default fallback - renders actual data from contract"""
     lines = []
     lines.append(f"📝 **응답** (기준: {contract.reference_time})")
     if contract.scope:
@@ -416,7 +612,38 @@ def render_default(contract: ResponseContract) -> str:
     lines.append("")
 
     if contract.has_data():
-        lines.append("데이터를 성공적으로 조회했습니다.")
+        data = contract.data
+        # Try to render items/tasks/stories if present
+        items = data.get("items") or data.get("tasks") or data.get("stories") or []
+        count = data.get("count", len(items) if items else 0)
+
+        if items and isinstance(items, list):
+            lines.append(f"**조회 결과**: {count}개")
+            lines.append("")
+            for item in items[:20]:  # Limit to 20 items
+                if isinstance(item, dict):
+                    title = item.get("title") or item.get("name") or item.get("id", "항목")
+                    status = item.get("status", "")
+                    status_display = _translate_status(status) if status else ""
+                    if status_display:
+                        lines.append(f"  - {title} ({status_display})")
+                    else:
+                        lines.append(f"  - {title}")
+                else:
+                    lines.append(f"  - {item}")
+            if len(items) > 20:
+                lines.append(f"  - ... 외 {len(items) - 20}개")
+            lines.append("")
+        elif data:
+            # Render raw data keys if no recognizable list structure
+            lines.append("**조회된 데이터**:")
+            for key, value in data.items():
+                if key not in ("was_limited", "error_code"):
+                    if isinstance(value, (list, dict)):
+                        lines.append(f"  - {key}: {len(value) if isinstance(value, list) else '(object)'}")
+                    else:
+                        lines.append(f"  - {key}: {value}")
+            lines.append("")
     else:
         lines.append("요청하신 정보를 찾을 수 없습니다.")
 

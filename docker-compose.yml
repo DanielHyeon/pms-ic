@@ -74,8 +74,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      # llm-service:
-      #   condition: service_healthy
+      llm-service:
+        condition: service_healthy
     networks:
       - pms-network
     volumes:
@@ -113,8 +113,6 @@ services:
   # ============================================
 
   llm-service:
-    profiles:
-      - llm  # Enable with: docker-compose --profile llm up
     build:
       context: ./llm-service
       dockerfile: ${LLM_DOCKERFILE:-Dockerfile.gpu}

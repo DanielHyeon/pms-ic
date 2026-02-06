@@ -34,6 +34,8 @@ from query.query_templates import (
     TASKS_DUE_THIS_WEEK_QUERY, TASKS_DUE_THIS_WEEK_FALLBACK_QUERY,
     TASKS_OVERDUE_QUERY, TASK_COUNTS_QUERY,
     RISKS_FROM_ISSUES_QUERY, RISKS_FALLBACK_QUERY, BLOCKERS_AS_RISKS_QUERY,
+    COMPLETED_TASKS_QUERY, COMPLETED_TASKS_FALLBACK_QUERY, COMPLETED_TASKS_COUNTS_QUERY,
+    TASKS_IN_REVIEW_QUERY, TASKS_IN_PROGRESS_QUERY,
     calculate_kst_week_boundaries, get_kst_reference_time,
 )
 from contracts.degradation_tips import (
@@ -551,6 +553,182 @@ def handle_risk_analysis(ctx: HandlerContext) -> ResponseContract:
 
 
 # =============================================================================
+# COMPLETED_TASKS Handler
+# =============================================================================
+
+def handle_completed_tasks(ctx: HandlerContext) -> ResponseContract:
+    """
+    Handle completed tasks list queries.
+
+    Returns list of tasks with status = 'DONE' for the project.
+    Output: title, status, priority, completed_at, story_title
+    """
+    logger.info(f"[COMPLETED_TASKS] project={ctx.project_id}")
+
+    tasks = []
+    task_counts = {}
+    db_failed = False
+
+    try:
+        # Get task counts for judgment data
+        counts_result = execute_query(
+            COMPLETED_TASKS_COUNTS_QUERY,
+            {"project_id": ctx.project_id},
+            limit=1,
+        )
+        if counts_result.success and counts_result.data:
+            task_counts = counts_result.data[0]
+
+        # Get completed tasks
+        result = execute_query_with_fallback(
+            sql=COMPLETED_TASKS_QUERY,
+            params={"project_id": ctx.project_id, "limit": 30},
+            fallback_sql=COMPLETED_TASKS_FALLBACK_QUERY,
+            limit=30,
+        )
+
+        if not result.success:
+            db_failed = True
+            logger.error(f"Completed tasks query failed: {result.error}")
+        else:
+            tasks = result.data
+
+    except Exception as e:
+        logger.exception(f"Unexpected error in handle_completed_tasks: {e}")
+        db_failed = True
+
+    # Prepare response
+    all_tasks_count = int(task_counts.get("all_tasks_count", 0) or 0)
+    completed_count = int(task_counts.get("completed_count", 0) or 0)
+
+    if db_failed:
+        plan = DB_FAILURE_TIPS.get("default")
+        warnings = [plan.message]
+        tips = plan.tips + plan.next_actions
+        error_code = ErrorCode.DB_QUERY_FAILED
+    elif not tasks:
+        if all_tasks_count == 0:
+            warnings = ["No tasks created in this project yet"]
+            tips = [
+                "Create tasks from user stories",
+                "Break down work into smaller tasks",
+            ]
+        else:
+            warnings = ["No completed tasks found"]
+            tips = [
+                "Complete tasks by changing their status to DONE",
+                "Check Kanban board for task progress",
+            ]
+        error_code = None
+    else:
+        warnings = []
+        tips = []
+        error_code = None
+
+    return ResponseContract(
+        intent="completed_tasks",
+        reference_time=get_kst_reference_time(),
+        scope=f"Project: {ctx.project_id}",
+        data={
+            "tasks": tasks,
+            "count": len(tasks),
+            "all_tasks_count": all_tasks_count,
+            "completed_count": completed_count,
+            "was_limited": getattr(result, 'was_limited', False) if not db_failed else False,
+        },
+        warnings=warnings,
+        tips=tips,
+        error_code=error_code,
+        provenance="Unavailable" if db_failed else "realtime",
+    )
+
+
+# =============================================================================
+# TASKS_BY_STATUS Handler
+# =============================================================================
+
+def handle_tasks_by_status(ctx: HandlerContext) -> ResponseContract:
+    """
+    Handle tasks filtered by status queries (테스트 중인, 검토 중인, 진행 중인, etc.)
+
+    Returns list of tasks filtered by status.
+    Output: title, status, priority, story_title
+    """
+    logger.info(f"[TASKS_BY_STATUS] project={ctx.project_id}, message={ctx.message}")
+
+    tasks = []
+    db_failed = False
+    status_filter = "REVIEW"  # Default to review/testing
+
+    # Detect status from message
+    message_lower = ctx.message.lower()
+    if any(kw in message_lower for kw in ["테스트", "검토", "리뷰", "review", "testing", "qa"]):
+        status_filter = "REVIEW"
+        query = TASKS_IN_REVIEW_QUERY
+    elif any(kw in message_lower for kw in ["진행", "작업 중", "doing", "wip", "in progress"]):
+        status_filter = "IN_PROGRESS"
+        query = TASKS_IN_PROGRESS_QUERY
+    else:
+        # Default to review
+        query = TASKS_IN_REVIEW_QUERY
+
+    try:
+        result = execute_query(
+            query,
+            {"project_id": ctx.project_id, "limit": 30},
+            limit=30,
+        )
+
+        if not result.success:
+            db_failed = True
+            logger.error(f"Tasks by status query failed: {result.error}")
+        else:
+            tasks = result.data
+
+    except Exception as e:
+        logger.exception(f"Unexpected error in handle_tasks_by_status: {e}")
+        db_failed = True
+
+    # Prepare response
+    if db_failed:
+        plan = DB_FAILURE_TIPS.get("default")
+        warnings = [plan.message]
+        tips = plan.tips + plan.next_actions
+        error_code = ErrorCode.DB_QUERY_FAILED
+    elif not tasks:
+        status_name = "테스트/검토" if status_filter == "REVIEW" else "진행"
+        warnings = [f"{status_name} 중인 태스크가 없습니다"]
+        tips = [
+            "Kanban 보드에서 태스크 상태를 확인하세요",
+            "스프린트에 태스크가 할당되어 있는지 확인하세요",
+        ]
+        error_code = None
+    else:
+        warnings = []
+        tips = []
+        error_code = None
+
+    status_label = "테스트/검토 중" if status_filter == "REVIEW" else "진행 중"
+
+    return ResponseContract(
+        intent="tasks_by_status",
+        reference_time=get_kst_reference_time(),
+        scope=f"Project: {ctx.project_id}",
+        data={
+            "tasks": tasks,
+            "count": len(tasks),
+            "status_filter": status_filter,
+            "status_label": status_label,
+            "was_limited": getattr(result, 'was_limited', False) if not db_failed else False,
+        },
+        warnings=warnings,
+        tips=tips,
+        error_code=error_code,
+        provenance="Unavailable" if db_failed else "realtime",
+    )
+
+
+# =============================================================================
 # CASUAL Handler
 # =============================================================================
 
@@ -597,6 +775,8 @@ INTENT_HANDLERS = {
     "sprint_progress": handle_sprint_progress,
     "task_due_this_week": handle_tasks_due_this_week,
     "risk_analysis": handle_risk_analysis,
+    "completed_tasks": handle_completed_tasks,
+    "tasks_by_status": handle_tasks_by_status,
     "casual": handle_casual,
     "unknown": handle_unknown,
     # STATUS_* intents are NOT in this registry

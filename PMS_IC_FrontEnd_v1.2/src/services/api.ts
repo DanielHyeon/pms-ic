@@ -501,6 +501,51 @@ export class ApiService {
     return this.fetchWithFallback(`/projects/${projectId}/parts/${partId}/stories`, {}, []);
   }
 
+  // ========== Sprint API ==========
+  async getSprints(projectId: string) {
+    const response = await this.fetchWithFallback(`/projects/${projectId}/sprints`, {}, { data: getMockSprints(projectId) });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async getSprint(sprintId: string) {
+    const response = await this.fetchWithFallback(`/sprints/${sprintId}`, {}, { data: getMockSprintById(sprintId) || null });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async createSprint(projectId: string, data: any) {
+    const response = await this.fetchWithFallback(`/projects/${projectId}/sprints`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }, { data: { ...data, id: `sprint-${Date.now()}`, projectId } });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async updateSprint(sprintId: string, data: any) {
+    const response = await this.fetchWithFallback(`/sprints/${sprintId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }, { data: { ...data, id: sprintId } });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async deleteSprint(sprintId: string) {
+    return this.fetchWithFallback(`/sprints/${sprintId}`, {
+      method: 'DELETE',
+    }, { success: true });
+  }
+
+  async startSprint(sprintId: string) {
+    return this.fetchWithFallback(`/sprints/${sprintId}/start`, {
+      method: 'POST',
+    }, { success: true });
+  }
+
+  async completeSprint(sprintId: string) {
+    return this.fetchWithFallback(`/sprints/${sprintId}/complete`, {
+      method: 'POST',
+    }, { success: true });
+  }
+
   // ========== Project Members API ==========
   async getProjectMembers(projectId: string) {
     const response = await this.fetchWithFallback(`/projects/${projectId}/members`, {}, []);
@@ -681,38 +726,68 @@ export class ApiService {
     return this.deleteKpi(phaseId, kpiId);
   }
 
-  async getTasks() {
-    return this.fetchWithFallback('/tasks', {}, []);
+  // Kanban Board API - uses v2 endpoint with projectId in path
+  async getKanbanBoard(projectId?: string) {
+    if (!projectId) return { columns: [] };
+    return this.fetchWithFallback(`${V2}/projects/${projectId}/kanban`, {}, { columns: [] });
+  }
+
+  async getTasks(projectId?: string) {
+    // Use new kanban endpoint that returns board with tasks organized by columns
+    if (!projectId) return [];
+    const board = await this.getKanbanBoard(projectId);
+    // Flatten all tasks from all columns
+    const allTasks = (board?.columns || []).flatMap((col: any) =>
+      (col.tasks || []).map((task: any) => ({ ...task, status: this.mapColumnToStatus(col.name) }))
+    );
+    return allTasks;
+  }
+
+  private mapColumnToStatus(columnName: string): string {
+    const statusMap: Record<string, string> = {
+      '백로그': 'BACKLOG',
+      '할 일': 'TODO',
+      '진행 중': 'IN_PROGRESS',
+      '검토': 'REVIEW',
+      '테스트 중': 'TESTING',
+      '완료': 'DONE',
+    };
+    return statusMap[columnName] || 'TODO';
   }
 
   async getTaskColumns(projectId?: string) {
-    const params = projectId ? `?projectId=${projectId}` : '';
-    return this.fetchWithFallback(`/tasks/columns${params}`, {}, []);
+    if (!projectId) return [];
+    const board = await this.getKanbanBoard(projectId);
+    return board?.columns || [];
   }
 
-  async createTask(task: any) {
-    return this.fetchWithFallback('/tasks', {
+  async createTask(task: any, projectId?: string) {
+    if (!projectId) return { ...task, id: Date.now() };
+    return this.fetchWithFallback(`${V2}/projects/${projectId}/kanban/tasks`, {
       method: 'POST',
       body: JSON.stringify(task),
     }, { ...task, id: Date.now() });
   }
 
-  async updateTask(taskId: string | number, data: any) {
-    return this.fetchWithFallback(`/tasks/${taskId}`, {
+  async updateTask(taskId: string | number, data: any, projectId?: string) {
+    if (!projectId) return data;
+    return this.fetchWithFallback(`${V2}/projects/${projectId}/kanban/tasks/${taskId}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     }, data);
   }
 
-  async moveTask(taskId: string | number, toColumn: string) {
-    return this.fetchWithFallback(`/tasks/${taskId}/move`, {
-      method: 'PUT',
-      body: JSON.stringify({ toColumn }),
+  async moveTask(taskId: string | number, toColumn: string, projectId?: string) {
+    if (!projectId) return { taskId, toColumn };
+    return this.fetchWithFallback(`${V2}/projects/${projectId}/kanban/tasks/${taskId}/move`, {
+      method: 'PATCH',
+      body: JSON.stringify({ targetColumnId: toColumn }),
     }, { taskId, toColumn });
   }
 
-  async deleteTask(taskId: string | number) {
-    return this.fetchWithFallback(`/tasks/${taskId}`, {
+  async deleteTask(taskId: string | number, projectId?: string) {
+    if (!projectId) return { message: 'Task deleted' };
+    return this.fetchWithFallback(`${V2}/projects/${projectId}/kanban/tasks/${taskId}`, {
       method: 'DELETE',
     }, { message: 'Task deleted' });
   }

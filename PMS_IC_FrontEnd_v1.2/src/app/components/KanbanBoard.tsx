@@ -6,6 +6,7 @@ import TaskFormModal from './TaskFormModal';
 import { useKanbanBoard, Task, Column as ColumnType } from '../../hooks/useKanbanBoard';
 import { useKanbanTasks, organizeTasksIntoColumns, useCreateTask, useUpdateTask, useDeleteTask } from '../../hooks/api/useTasks';
 import { getPriorityColor } from '../../utils/status';
+import { useProject } from '../../contexts/ProjectContext';
 
 interface TaskCardProps {
   task: Task;
@@ -246,8 +247,11 @@ export default function KanbanBoard({ userRole }: { userRole: UserRole }) {
   const canEdit = ['pm', 'developer', 'qa'].includes(userRole);
   const isReadOnly = ['auditor', 'sponsor'].includes(userRole);
 
-  // Fetch tasks from API
-  const { data: apiTasks = [], isLoading } = useKanbanTasks();
+  // Get current project from context
+  const { currentProject } = useProject();
+
+  // Fetch tasks from API filtered by current project
+  const { data: apiTasks = [], isLoading } = useKanbanTasks(currentProject?.id);
   const createTaskMutation = useCreateTask();
   const updateTaskMutation = useUpdateTask();
   const deleteTaskMutation = useDeleteTask();
@@ -255,10 +259,12 @@ export default function KanbanBoard({ userRole }: { userRole: UserRole }) {
   // Use local hook as fallback when API returns no data
   const { columns: localColumns, stats: localStats, moveTask, addTask, updateTask, deleteTask } = useKanbanBoard(initialColumns, canEdit);
 
-  // Organize API tasks into columns, fallback to local if no API data
+  // Organize API tasks into columns
+  // When project is selected, always use API data (even if empty)
+  // Only fallback to localColumns when no project is selected
   const columns = useMemo(() => {
-    if (apiTasks.length > 0) {
-      // Map API tasks to local Task format for compatibility
+    if (currentProject?.id) {
+      // Project selected - use API data (organize tasks by status)
       const mappedColumns = organizeTasksIntoColumns(apiTasks);
       return mappedColumns.map((col) => ({
         ...col,
@@ -274,8 +280,9 @@ export default function KanbanBoard({ userRole }: { userRole: UserRole }) {
         })),
       }));
     }
+    // No project selected - use local mock data for demo
     return localColumns;
-  }, [apiTasks, localColumns]);
+  }, [apiTasks, localColumns, currentProject?.id]);
 
   // Calculate stats from columns
   const stats = useMemo(() => {
@@ -296,12 +303,15 @@ export default function KanbanBoard({ userRole }: { userRole: UserRole }) {
   const handleAddTask = async (task: Task) => {
     try {
       await createTaskMutation.mutateAsync({
-        title: task.title,
-        assigneeId: task.assignee,
-        priority: task.priority.toUpperCase(),
-        dueDate: task.dueDate,
-        tags: task.labels,
-        status: 'TODO',
+        data: {
+          title: task.title,
+          assigneeId: task.assignee,
+          priority: task.priority.toUpperCase(),
+          dueDate: task.dueDate,
+          tags: task.labels,
+          status: 'TODO',
+        },
+        projectId: currentProject?.id,
       });
     } catch {
       // Fallback to local state
@@ -326,6 +336,7 @@ export default function KanbanBoard({ userRole }: { userRole: UserRole }) {
           dueDate: task.dueDate,
           tags: task.labels,
         },
+        projectId: currentProject?.id,
       });
     } catch {
       // Fallback to local state
@@ -338,7 +349,10 @@ export default function KanbanBoard({ userRole }: { userRole: UserRole }) {
   const handleDeleteTask = async () => {
     if (!editingTask || !confirm('이 작업을 삭제하시겠습니까?')) return;
     try {
-      await deleteTaskMutation.mutateAsync(String(editingTask.id));
+      await deleteTaskMutation.mutateAsync({
+        id: String(editingTask.id),
+        projectId: currentProject?.id,
+      });
     } catch {
       // Fallback to local state
       deleteTask(editingTask.id);

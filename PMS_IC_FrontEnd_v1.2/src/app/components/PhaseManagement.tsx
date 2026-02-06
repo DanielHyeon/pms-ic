@@ -47,13 +47,16 @@ import {
   type PhaseDetailTab,
   type SettingsTabType,
 } from './phases';
+import { useProject } from '../../contexts/ProjectContext';
 
 interface PhaseManagementProps {
   userRole: UserRole;
-  projectId?: string;
 }
 
-export default function PhaseManagement({ userRole, projectId = 'proj-001' }: PhaseManagementProps) {
+export default function PhaseManagement({ userRole }: PhaseManagementProps) {
+  // Get current project from context
+  const { currentProject } = useProject();
+  const projectId = currentProject?.id;
   // Core state - selectedPhase defaults to 3단계 (inProgress phase)
   const [selectedPhase, setSelectedPhase] = useState<Phase>(INITIAL_PHASES[2]);
   const [activeTab, setActiveTab] = useState<PhaseDetailTab>('deliverables');
@@ -102,10 +105,16 @@ export default function PhaseManagement({ userRole, projectId = 'proj-001' }: Ph
 
   // TanStack Query hooks
   const { data: allPhasesData } = useAllPhases();
-  // Filter phases by projectId and parentId (sub-phases under AI 모델 개발)
-  const phasesData = (allPhasesData as any[] | undefined)?.filter(
-    (p: any) => p.projectId === projectId && p.parentId === AI_MODEL_DEVELOPMENT_PHASE_ID
-  );
+  // Filter phases by projectId
+  // For proj-001: show sub-phases under AI 모델 개발
+  // For other projects: show top-level phases (no parentId)
+  const projectPhases = (allPhasesData as any[] | undefined)?.filter(
+    (p: any) => p.projectId === projectId
+  ) || [];
+  const hasNestedPhases = projectPhases.some((p: any) => p.parentId === AI_MODEL_DEVELOPMENT_PHASE_ID);
+  const phasesData = hasNestedPhases
+    ? projectPhases.filter((p: any) => p.parentId === AI_MODEL_DEVELOPMENT_PHASE_ID)
+    : projectPhases.filter((p: any) => !p.parentId);
   const isValidApiPhaseId = selectedPhase.id && selectedPhase.id.startsWith('phase-');
   const { data: deliverables } = usePhaseDeliverables(isValidApiPhaseId ? selectedPhase.id : '');
   const { data: kpis } = usePhaseKpis(isValidApiPhaseId ? selectedPhase.id : '');
@@ -140,7 +149,7 @@ export default function PhaseManagement({ userRole, projectId = 'proj-001' }: Ph
   const permissions = getRolePermissions(userRole);
   const { canEdit, canApprove, canUpload, canManageKpi, canManagePhases } = permissions;
 
-  // Sync phases with API data
+  // Sync phases with API data and handle project changes
   useEffect(() => {
     if (phasesData) {
       const phaseData = normalizeResponse<ApiPhase[]>(phasesData, []);
@@ -155,6 +164,16 @@ export default function PhaseManagement({ userRole, projectId = 'proj-001' }: Ph
             return;
           }
         }
+        // Check if current selected phase belongs to current project
+        const selectedBelongsToProject = phasesArray.some((p: ApiPhase) => p.id === selectedPhase.id);
+        if (!selectedBelongsToProject) {
+          // Project changed - select first available phase
+          const firstPhase = phasesArray[0];
+          if (firstPhase) {
+            setSelectedPhase(mapPhaseFromApi(firstPhase));
+          }
+          return;
+        }
         // Match by ID for the selected phase
         const apiPhase = phasesArray.find((p: ApiPhase) => p.id === selectedPhase.id);
         if (apiPhase) {
@@ -166,21 +185,17 @@ export default function PhaseManagement({ userRole, projectId = 'proj-001' }: Ph
         }
       }
     }
-  }, [phasesData, pendingSelectPhaseId]);
+  }, [phasesData, pendingSelectPhaseId, projectId]);
 
-  // Synced phases (merge API data with methodology phases)
+  // Synced phases - use API data when available, fallback to INITIAL_PHASES for proj-001
   const syncedPhases = (() => {
-    const methodologyPhases = [...INITIAL_PHASES];
-    if (!phasesData) return methodologyPhases;
-
-    const phaseData = normalizeResponse<ApiPhase[]>(phasesData, []);
+    // Normalize API response
+    const phaseData = phasesData ? normalizeResponse<ApiPhase[]>(phasesData, []) : [];
     const phasesArray: ApiPhase[] = Array.isArray(phaseData) ? phaseData : [];
-    if (!phasesArray.length) return methodologyPhases;
 
-    return methodologyPhases.map((methodologyPhase) => {
-      // Match by ID (phase-001-03-01, phase-001-03-02, etc.)
-      const apiPhase = phasesArray.find((p: ApiPhase) => p.id === methodologyPhase.id);
-      if (apiPhase) {
+    // If we have API phases, use them directly
+    if (phasesArray.length > 0) {
+      return phasesArray.map((apiPhase: ApiPhase) => {
         const mappedPhase = mapPhaseFromApi(apiPhase);
         const phaseDeliverables = Array.isArray(apiPhase.deliverables)
           ? apiPhase.deliverables.map(mapDeliverableFromApi)
@@ -188,19 +203,24 @@ export default function PhaseManagement({ userRole, projectId = 'proj-001' }: Ph
         const phaseKpis = Array.isArray(apiPhase.kpis)
           ? apiPhase.kpis.map(mapKpiFromApi)
           : [];
+
+        // Check if there's a matching INITIAL_PHASE for additional data
+        const initialPhase = INITIAL_PHASES.find((p) => p.id === apiPhase.id);
         return {
-          ...methodologyPhase,
-          status: mappedPhase.status || methodologyPhase.status,
-          progress: mappedPhase.progress ?? methodologyPhase.progress,
-          startDate: mappedPhase.startDate || methodologyPhase.startDate,
-          endDate: mappedPhase.endDate || methodologyPhase.endDate,
-          deliverables: phaseDeliverables.length > 0 ? phaseDeliverables : methodologyPhase.deliverables,
-          kpis: phaseKpis.length > 0 ? phaseKpis : methodologyPhase.kpis,
-          parentId: methodologyPhase.parentId,
+          ...mappedPhase,
+          deliverables: phaseDeliverables.length > 0 ? phaseDeliverables : (initialPhase?.deliverables || []),
+          kpis: phaseKpis.length > 0 ? phaseKpis : (initialPhase?.kpis || []),
         };
-      }
-      return methodologyPhase;
-    });
+      });
+    }
+
+    // Fallback to INITIAL_PHASES for proj-001 when no API data
+    if (projectId === 'proj-001') {
+      return [...INITIAL_PHASES];
+    }
+
+    // No data for other projects
+    return [];
   })();
 
   // Current phase with merged deliverables and KPIs

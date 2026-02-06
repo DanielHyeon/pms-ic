@@ -43,6 +43,8 @@ class AnswerType(Enum):
     TASK_DUE_THIS_WEEK = "task_due_this_week" # Tasks due this week
     SPRINT_PROGRESS = "sprint_progress"       # Sprint progress/burndown
     BACKLOG_LIST = "backlog_list"             # Product backlog items
+    COMPLETED_TASKS = "completed_tasks"       # Completed tasks list
+    TASKS_BY_STATUS = "tasks_by_status"       # Tasks filtered by specific status
 
     # Priority 2: General status (constrained)
     STATUS_METRIC = "status_metric"           # Numbers, percentages, counts
@@ -121,6 +123,18 @@ INTENT_PATTERNS = {
     },
     AnswerType.BACKLOG_LIST: {
         "keywords": ["백로그", "backlog", "제품 백로그"],
+        "priority": 1,
+    },
+    AnswerType.COMPLETED_TASKS: {
+        # Completed/done tasks queries
+        "keywords": ["완료된", "완료한", "끝난", "done", "completed", "완료 task", "완료 태스크"],
+        "requires_any": ["task", "태스크", "작업", "일", "목록", "리스트", "뭐", "보여", "알려", "list"],
+        "priority": 1,
+    },
+    AnswerType.TASKS_BY_STATUS: {
+        # Tasks filtered by status (테스트 중인, 검토 중인, 진행 중인, etc.)
+        "keywords": ["테스트 중", "검토 중", "리뷰 중", "진행 중", "대기 중", "in review", "in progress", "testing"],
+        "requires_any": ["task", "태스크", "작업", "뭐", "뭔가", "있", "보여", "알려"],
         "priority": 1,
     },
 
@@ -222,6 +236,13 @@ STATUS_LIST_PATTERNS = [
     (r"(막힌|멈춘|정체)\s*(거|것|게)\s*(있|뭐)", "blocked_informal"),
     (r"(완료|끝난|된)\s*(것|거|건)만\s*(보여|알려)", "completed_filter"),
     (r"(늦어지|지연되)\s*(는|고 있)", "delay_check"),
+    # Completed task queries (flexible patterns)
+    (r"(완료된|완료한|done|끝난|DONE|COMPLETED).*(task|태스크|작업|일).*(뭐|뭔|목록|리스트|있|보여|알려)?", "completed_tasks"),
+    (r"(task|태스크|작업).*(완료|끝|done|DONE|COMPLETED)", "tasks_completed"),
+    # Status-based task queries (테스트 중인, 검토 중인, 진행 중인, etc.)
+    (r"(테스트|검토|리뷰|review|testing)\s*중인?.*(task|태스크|작업).*(뭐|뭔|목록|있|보여|알려)?", "in_review_tasks"),
+    (r"(진행|작업)\s*중인?.*(task|태스크|작업).*(뭐|뭔|목록|있|보여|알려)?", "in_progress_tasks"),
+    (r"(task|태스크|작업).*(테스트|검토|리뷰|review)\s*중", "tasks_in_review"),
 ]
 
 # Status/Drilldown patterns - specific entity detail
@@ -732,6 +753,8 @@ class AnswerTypeClassifier:
             AnswerType.RISK_ANALYSIS,
             AnswerType.CASUAL,
             AnswerType.UNKNOWN,
+            AnswerType.COMPLETED_TASKS,
+            AnswerType.TASKS_BY_STATUS,
         }
 
     def should_use_rag(self, answer_type: AnswerType) -> bool:
