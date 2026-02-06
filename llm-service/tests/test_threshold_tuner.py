@@ -45,8 +45,9 @@ class TestKeywordGroups:
         assert KEYWORD_TO_GROUP["backlog"] == "domain_fixed"
         assert KEYWORD_TO_GROUP["태스크"] == "domain_fixed"
         assert KEYWORD_TO_GROUP["task"] == "domain_fixed"
-        assert KEYWORD_TO_GROUP["리스크"] == "domain_fixed"
-        assert KEYWORD_TO_GROUP["risk"] == "domain_fixed"
+        # "리스크"/"risk" moved to ambiguous (jamo_sim("리스크","리스트")=0.833 > 0.80)
+        assert KEYWORD_TO_GROUP["리스크"] == "ambiguous"
+        assert KEYWORD_TO_GROUP["risk"] == "ambiguous"
 
     def test_ambiguous_keywords(self):
         assert KEYWORD_TO_GROUP["테스트 중"] == "ambiguous"

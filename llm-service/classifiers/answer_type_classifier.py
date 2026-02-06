@@ -48,6 +48,7 @@ class AnswerType(Enum):
     BACKLOG_LIST = "backlog_list"             # Product backlog items
     COMPLETED_TASKS = "completed_tasks"       # Completed tasks list
     TASKS_BY_STATUS = "tasks_by_status"       # Tasks filtered by specific status
+    KANBAN_OVERVIEW = "kanban_overview"        # Kanban board summary
 
     # Priority 2: General status (constrained)
     STATUS_METRIC = "status_metric"           # Numbers, percentages, counts
@@ -121,7 +122,11 @@ INTENT_PATTERNS = {
     AnswerType.SPRINT_PROGRESS: {
         # COMBINATION RULE: sprint context + progress context
         "keywords": ["스프린트", "sprint"],
-        "requires_any": ["진행", "상황", "진척", "번다운", "velocity", "속도", "현황", "진행률", "progress", "going", "status", "how", "백로그", "항목", "스토리"],
+        "requires_any": [
+            "진행", "상황", "진척", "번다운", "velocity", "속도", "현황", "진행률",
+            "progress", "going", "status", "how", "백로그", "항목", "스토리",
+            "시작", "안한", "대기", "할 일", "태스크", "뭐", "뭐야",
+        ],
         "priority": 1,
     },
     AnswerType.BACKLOG_LIST: {
@@ -130,14 +135,35 @@ INTENT_PATTERNS = {
     },
     AnswerType.COMPLETED_TASKS: {
         # Completed/done tasks queries
-        "keywords": ["완료된", "완료한", "끝난", "done", "completed", "완료 task", "완료 태스크"],
-        "requires_any": ["task", "태스크", "작업", "일", "목록", "리스트", "뭐", "보여", "알려", "list"],
+        "keywords": ["완료된", "완료한", "끝난", "done", "completed", "완료 task", "완료 태스크", "완료 상태"],
+        "requires_any": [
+            "task", "태스크", "작업", "일", "목록", "리스트", "뭐", "보여", "알려", "list",
+            "것", "거", "건",  # Korean pro-forms for "thing/item"
+        ],
         "priority": 1,
     },
     AnswerType.TASKS_BY_STATUS: {
         # Tasks filtered by status (테스트 중인, 검토 중인, 진행 중인, etc.)
-        "keywords": ["테스트 중", "검토 중", "리뷰 중", "진행 중", "대기 중", "in review", "in progress", "testing"],
-        "requires_any": ["task", "태스크", "작업", "뭐", "뭔가", "있", "보여", "알려"],
+        "keywords": [
+            "테스트 중", "검토 중", "리뷰 중", "진행 중", "대기 중",
+            "코드 리뷰", "qa", "작업 중",
+            "in review", "in progress", "testing",
+            "review", "in_progress", "todo",
+        ],
+        "requires_any": [
+            "task", "태스크", "작업", "뭐", "뭔가", "있", "보여", "알려",
+            "목록", "리스트", "상태",
+            "것", "거", "건",  # Korean pro-forms for "thing/item"
+        ],
+        "priority": 1,
+    },
+    AnswerType.KANBAN_OVERVIEW: {
+        # Kanban board summary / overview
+        "keywords": ["칸반", "kanban", "보드", "board", "전체 현황", "컬럼별"],
+        "requires_any": [
+            "현황", "상태", "태스크", "보여", "알려", "몇", "요약",
+            "보여줘", "알려줘",
+        ],
         "priority": 1,
     },
 
@@ -423,6 +449,27 @@ class AnswerTypeClassifier:
             logger.info(f"Typo correction: '{original_query}' -> '{query}'")
 
         query_lower = query.lower()
+
+        # =================================================================
+        # PRE-CLASSIFICATION: Negation-aware backlog detection
+        # "스프린트에 안 들어간 스토리" = backlog, NOT sprint_progress
+        # Must run BEFORE priority loop to override "스프린트" keyword
+        # =================================================================
+        _negation_backlog_patterns = [
+            r"(안\s*들어간|못\s*들어간|안\s*배정|미배정|미할당|스프린트\s*(전|밖))",
+        ]
+        _negation_context_words = ["스토리", "항목", "뭐", "있", "보여", "알려", "어떤"]
+        if any(re.search(p, query_lower) for p in _negation_backlog_patterns):
+            if any(kw in query_lower for kw in _negation_context_words):
+                reasoning = "Negation pattern detected: items NOT in sprint = backlog"
+                if was_corrected:
+                    reasoning += f" (typo corrected: '{original_query}')"
+                return AnswerTypeResult(
+                    answer_type=AnswerType.BACKLOG_LIST,
+                    confidence=0.90,
+                    matched_patterns=["negation_backlog"],
+                    reasoning=reasoning,
+                )
 
         # =================================================================
         # PRIORITY-BASED CLASSIFICATION (P0 Implementation)
@@ -784,6 +831,7 @@ class AnswerTypeClassifier:
             AnswerType.UNKNOWN,
             AnswerType.COMPLETED_TASKS,
             AnswerType.TASKS_BY_STATUS,
+            AnswerType.KANBAN_OVERVIEW,
         }
 
     def should_use_rag(self, answer_type: AnswerType) -> bool:

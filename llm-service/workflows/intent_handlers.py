@@ -36,6 +36,10 @@ from query.query_templates import (
     RISKS_FROM_ISSUES_QUERY, RISKS_FALLBACK_QUERY, BLOCKERS_AS_RISKS_QUERY,
     COMPLETED_TASKS_QUERY, COMPLETED_TASKS_FALLBACK_QUERY, COMPLETED_TASKS_COUNTS_QUERY,
     TASKS_IN_REVIEW_QUERY, TASKS_IN_PROGRESS_QUERY,
+    TASKS_IN_CODE_REVIEW_QUERY, TASKS_IN_TESTING_QUERY, TASKS_BY_STATUS_QUERY,
+    KANBAN_OVERVIEW_QUERY, KANBAN_OVERVIEW_FALLBACK_QUERY,
+    BACKLOG_TASKS_QUERY,
+    SPRINT_TODO_TASKS_QUERY,
     calculate_kst_week_boundaries, get_kst_reference_time,
 )
 from contracts.degradation_tips import (
@@ -117,11 +121,12 @@ def handle_backlog_list(ctx: HandlerContext) -> ResponseContract:
     logger.info(f"[BACKLOG_LIST] project={ctx.project_id}")
 
     items = []
+    backlog_tasks = []
     summary = {}
     db_failed = False
 
     try:
-        # Primary query: Get backlog items
+        # Primary query: Get backlog user stories (sprint_id IS NULL)
         result = execute_query_with_fallback(
             sql=BACKLOG_LIST_QUERY,
             params={"project_id": ctx.project_id, "limit": 20},
@@ -143,6 +148,19 @@ def handle_backlog_list(ctx: HandlerContext) -> ResponseContract:
             )
             if summary_result.success and summary_result.data:
                 summary = summary_result.data[0]
+
+        # Phase 4A: Also get tasks from the Backlog kanban column
+        if not db_failed:
+            try:
+                tasks_result = execute_query(
+                    BACKLOG_TASKS_QUERY,
+                    {"project_id": ctx.project_id, "limit": 20},
+                    limit=20,
+                )
+                if tasks_result.success:
+                    backlog_tasks = tasks_result.data
+            except Exception:
+                pass  # Tasks are supplementary, don't fail on this
 
     except Exception as e:
         logger.exception(f"Unexpected error in handle_backlog_list: {e}")
@@ -172,7 +190,9 @@ def handle_backlog_list(ctx: HandlerContext) -> ResponseContract:
         scope=f"Project: {ctx.project_id}",
         data={
             "items": items,
+            "tasks": backlog_tasks,
             "count": len(items),
+            "task_count": len(backlog_tasks),
             "summary": summary,
             "was_limited": getattr(result, 'was_limited', False) if not db_failed else False,
         },
@@ -203,6 +223,7 @@ def handle_sprint_progress(ctx: HandlerContext) -> ResponseContract:
 
     sprint = None
     stories = []
+    todo_tasks = []
     metrics = {"total": 0, "done": 0, "in_progress": 0, "completion_rate": 0}
     db_failed = False
 
@@ -250,6 +271,18 @@ def handle_sprint_progress(ctx: HandlerContext) -> ResponseContract:
                         "done_points": int(raw_metrics.get("done_points", 0) or 0),
                     }
 
+                # Phase 4B: Detect "not started" sub-query and get TODO tasks
+                _not_started_kws = ["시작 안", "시작 안한", "대기", "아직", "안한", "todo", "할 일"]
+                msg_lower = ctx.message.lower()
+                if any(kw in msg_lower for kw in _not_started_kws):
+                    todo_result = execute_query(
+                        SPRINT_TODO_TASKS_QUERY,
+                        {"project_id": ctx.project_id, "sprint_id": sprint["id"], "limit": 30},
+                        limit=30,
+                    )
+                    if todo_result.success:
+                        todo_tasks = todo_result.data
+
     except Exception as e:
         logger.exception(f"Unexpected error in handle_sprint_progress: {e}")
         db_failed = True
@@ -294,6 +327,7 @@ def handle_sprint_progress(ctx: HandlerContext) -> ResponseContract:
             "sprint": sprint,
             "stories": stories,
             "metrics": metrics,
+            "todo_tasks": todo_tasks,
         },
         warnings=warnings,
         tips=tips,
@@ -659,24 +693,36 @@ def handle_tasks_by_status(ctx: HandlerContext) -> ResponseContract:
 
     tasks = []
     db_failed = False
-    status_filter = "REVIEW"  # Default to review/testing
+    status_filter = "REVIEW"  # Default
+    query_params = {"project_id": ctx.project_id, "limit": 30}
 
-    # Detect status from message (with typo tolerance)
+    # Detect status from message (with typo tolerance) - 4-way routing
     message_lower = apply_typo_corrections(ctx.message).lower()
-    if any(fuzzy_keyword_in_query(kw, message_lower) for kw in ["테스트", "검토", "리뷰", "review", "testing", "qa"]):
+    if any(fuzzy_keyword_in_query(kw, message_lower) for kw in ["테스트", "testing", "qa"]):
+        status_filter = "TESTING"
+        status_label = "테스트 중"
+        query = TASKS_IN_TESTING_QUERY
+    elif any(fuzzy_keyword_in_query(kw, message_lower) for kw in ["검토", "리뷰", "review", "코드 리뷰"]):
         status_filter = "REVIEW"
-        query = TASKS_IN_REVIEW_QUERY
+        status_label = "코드 리뷰 중"
+        query = TASKS_IN_CODE_REVIEW_QUERY
     elif any(fuzzy_keyword_in_query(kw, message_lower) for kw in ["진행", "작업 중", "doing", "wip", "in progress"]):
         status_filter = "IN_PROGRESS"
+        status_label = "진행 중"
         query = TASKS_IN_PROGRESS_QUERY
+    elif any(fuzzy_keyword_in_query(kw, message_lower) for kw in ["할 일", "대기", "todo", "시작 전"]):
+        status_filter = "TODO"
+        status_label = "할 일"
+        query = TASKS_BY_STATUS_QUERY
+        query_params = {"project_id": ctx.project_id, "status": "TODO", "limit": 30}
     else:
-        # Default to review
-        query = TASKS_IN_REVIEW_QUERY
+        status_label = "검토 중"
+        query = TASKS_IN_CODE_REVIEW_QUERY
 
     try:
         result = execute_query(
             query,
-            {"project_id": ctx.project_id, "limit": 30},
+            query_params,
             limit=30,
         )
 
@@ -697,8 +743,7 @@ def handle_tasks_by_status(ctx: HandlerContext) -> ResponseContract:
         tips = plan.tips + plan.next_actions
         error_code = ErrorCode.DB_QUERY_FAILED
     elif not tasks:
-        status_name = "테스트/검토" if status_filter == "REVIEW" else "진행"
-        warnings = [f"{status_name} 중인 태스크가 없습니다"]
+        warnings = [f"{status_label} 태스크가 없습니다"]
         tips = [
             "Kanban 보드에서 태스크 상태를 확인하세요",
             "스프린트에 태스크가 할당되어 있는지 확인하세요",
@@ -708,8 +753,6 @@ def handle_tasks_by_status(ctx: HandlerContext) -> ResponseContract:
         warnings = []
         tips = []
         error_code = None
-
-    status_label = "테스트/검토 중" if status_filter == "REVIEW" else "진행 중"
 
     return ResponseContract(
         intent="tasks_by_status",
@@ -721,6 +764,84 @@ def handle_tasks_by_status(ctx: HandlerContext) -> ResponseContract:
             "status_filter": status_filter,
             "status_label": status_label,
             "was_limited": getattr(result, 'was_limited', False) if not db_failed else False,
+        },
+        warnings=warnings,
+        tips=tips,
+        error_code=error_code,
+        provenance="Unavailable" if db_failed else "realtime",
+    )
+
+
+# =============================================================================
+# KANBAN_OVERVIEW Handler (Phase 2)
+# =============================================================================
+
+def handle_kanban_overview(ctx: HandlerContext) -> ResponseContract:
+    """
+    Handle kanban board overview queries.
+
+    Returns task counts per kanban column for the project.
+    Output: column_name, task_count, wip_limit, high_priority_count
+    """
+    logger.info(f"[KANBAN_OVERVIEW] project={ctx.project_id}")
+
+    columns = []
+    db_failed = False
+
+    try:
+        result = execute_query_with_fallback(
+            sql=KANBAN_OVERVIEW_QUERY,
+            params={"project_id": ctx.project_id},
+            fallback_sql=KANBAN_OVERVIEW_FALLBACK_QUERY,
+            limit=20,
+        )
+
+        if not result.success:
+            db_failed = True
+            logger.error(f"Kanban overview query failed: {result.error}")
+        else:
+            columns = result.data
+
+    except Exception as e:
+        logger.exception(f"Unexpected error in handle_kanban_overview: {e}")
+        db_failed = True
+
+    total_tasks = sum(int(c.get("task_count", 0) or 0) for c in columns)
+    wip_violations = [
+        c for c in columns
+        if c.get("wip_limit") and int(c.get("task_count", 0) or 0) > int(c.get("wip_limit", 0))
+    ]
+
+    if db_failed:
+        plan = DB_FAILURE_TIPS.get("default")
+        warnings = [plan.message]
+        tips = plan.tips + plan.next_actions
+        error_code = ErrorCode.DB_QUERY_FAILED
+    elif not columns:
+        plan = EMPTY_DATA_TIPS.get("kanban_overview")
+        warnings = [plan.message] if plan else ["Kanban board not configured"]
+        tips = (plan.tips + plan.next_actions) if plan else []
+        error_code = None
+    else:
+        warnings = []
+        tips = []
+        if wip_violations:
+            for v in wip_violations:
+                warnings.append(
+                    f"WIP limit exceeded: {v['column_name']} "
+                    f"({v['task_count']}/{v['wip_limit']})"
+                )
+            tips.append("Review and redistribute tasks to stay within WIP limits")
+        error_code = None
+
+    return ResponseContract(
+        intent="kanban_overview",
+        reference_time=get_kst_reference_time(),
+        scope=f"Project: {ctx.project_id}",
+        data={
+            "columns": columns,
+            "total_tasks": total_tasks,
+            "wip_violations": len(wip_violations),
         },
         warnings=warnings,
         tips=tips,
@@ -778,6 +899,7 @@ INTENT_HANDLERS = {
     "risk_analysis": handle_risk_analysis,
     "completed_tasks": handle_completed_tasks,
     "tasks_by_status": handle_tasks_by_status,
+    "kanban_overview": handle_kanban_overview,
     "casual": handle_casual,
     "unknown": handle_unknown,
     # STATUS_* intents are NOT in this registry

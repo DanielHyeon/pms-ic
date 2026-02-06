@@ -332,5 +332,133 @@ class TestIntentValues:
                 f"AnswerType.{answer_type.name} value must be snake_case: {answer_type.value}"
 
 
+# =============================================================================
+# Phase 1: Kanban Classification Fix Tests
+# =============================================================================
+
+class TestKanbanClassificationFixes:
+    """Regression tests for Kanban board classification fixes (Phase 1)"""
+
+    @pytest.fixture
+    def classifier(self):
+        return AnswerTypeClassifier()
+
+    def test_backlog_리스트_not_risk(self, classifier):
+        """'백로그 항목 리스트' should be BACKLOG_LIST, not RISK_ANALYSIS"""
+        result = classifier.classify("백로그 항목 리스트")
+        assert result.answer_type == AnswerType.BACKLOG_LIST, \
+            f"Expected BACKLOG_LIST, got {result.answer_type}"
+
+    def test_not_in_sprint_is_backlog(self, classifier):
+        """Negation: items NOT in sprint should be BACKLOG_LIST"""
+        cases = [
+            "아직 스프린트에 안들어간 스토리들 뭐 있어?",
+            "스프린트에 못 들어간 항목 보여줘",
+            "미배정 스토리 뭐 있어",
+        ]
+        for msg in cases:
+            result = classifier.classify(msg)
+            assert result.answer_type == AnswerType.BACKLOG_LIST, \
+                f"Expected BACKLOG_LIST for '{msg}', got {result.answer_type}"
+
+    def test_not_started_in_sprint(self, classifier):
+        """Tasks not started in sprint should be SPRINT_PROGRESS"""
+        result = classifier.classify("이번 스프린트에서 아직 시작 안한 태스크가 뭐야?")
+        assert result.answer_type == AnswerType.SPRINT_PROGRESS, \
+            f"Expected SPRINT_PROGRESS, got {result.answer_type}"
+
+    def test_작업중_tasks(self, classifier):
+        """'작업 중인 태스크 목록' should be TASKS_BY_STATUS"""
+        result = classifier.classify("지금 작업 중인 태스크 목록")
+        assert result.answer_type == AnswerType.TASKS_BY_STATUS, \
+            f"Expected TASKS_BY_STATUS, got {result.answer_type}"
+
+    def test_REVIEW_status_tasks(self, classifier):
+        """'REVIEW 상태인 태스크' should be TASKS_BY_STATUS"""
+        result = classifier.classify("REVIEW 상태인 태스크")
+        assert result.answer_type == AnswerType.TASKS_BY_STATUS, \
+            f"Expected TASKS_BY_STATUS, got {result.answer_type}"
+
+    def test_QA_tasks(self, classifier):
+        """'QA 중인 작업들' should be TASKS_BY_STATUS"""
+        result = classifier.classify("QA 중인 작업들 보여줘")
+        assert result.answer_type == AnswerType.TASKS_BY_STATUS, \
+            f"Expected TASKS_BY_STATUS, got {result.answer_type}"
+
+    def test_코드리뷰_tasks(self, classifier):
+        """'코드 리뷰 중인 태스크' should be TASKS_BY_STATUS"""
+        result = classifier.classify("코드 리뷰 중인 태스크 뭐 있어?")
+        assert result.answer_type == AnswerType.TASKS_BY_STATUS, \
+            f"Expected TASKS_BY_STATUS, got {result.answer_type}"
+
+    def test_코드리뷰_것은(self, classifier):
+        """REGRESSION: '코드 리뷰 중인 것은' should be TASKS_BY_STATUS, not UNKNOWN"""
+        cases = [
+            "코드 리뷰 중인 것은",        # "것" (thing/item)
+            "코드 리뷰 중인 거 있어?",    # "거" (colloquial for 것)
+            "검토 중인 건 뭐야",          # "건" (counter for items)
+            "진행 중인 것 보여줘",         # "것" with "보여줘"
+            "테스트 중인 거",             # "거" alone
+        ]
+        for msg in cases:
+            result = classifier.classify(msg)
+            assert result.answer_type == AnswerType.TASKS_BY_STATUS, \
+                f"Expected TASKS_BY_STATUS for '{msg}', got {result.answer_type}"
+
+    def test_완료_상태인거(self, classifier):
+        """REGRESSION: '완료 상태인거' should be COMPLETED_TASKS, not UNKNOWN"""
+        cases = [
+            "완료 상태인거",              # "완료 상태" + "거"
+            "완료 상태인 것은",            # "완료 상태" + "것"
+            "완료된 거",                 # "완료된" + "거"
+            "완료한 건 뭐야",             # "완료한" + "건"
+        ]
+        for msg in cases:
+            result = classifier.classify(msg)
+            assert result.answer_type == AnswerType.COMPLETED_TASKS, \
+                f"Expected COMPLETED_TASKS for '{msg}', got {result.answer_type}"
+
+
+# =============================================================================
+# Phase 2: Kanban Overview Tests
+# =============================================================================
+
+class TestKanbanOverviewIntent:
+    """Kanban board overview intent tests (Phase 2)"""
+
+    @pytest.fixture
+    def classifier(self):
+        return AnswerTypeClassifier()
+
+    def test_kanban_overview_classification(self, classifier):
+        """Kanban board questions should be KANBAN_OVERVIEW"""
+        cases = [
+            "칸반 보드 현황 보여줘",
+            "전체 현황 알려줘",
+            "컬럼별 태스크 몇 개야",
+        ]
+        for msg in cases:
+            result = classifier.classify(msg)
+            assert result.answer_type == AnswerType.KANBAN_OVERVIEW, \
+                f"Expected KANBAN_OVERVIEW for '{msg}', got {result.answer_type}"
+
+    def test_kanban_handler_registered(self):
+        """kanban_overview handler should be registered"""
+        assert has_dedicated_handler("kanban_overview")
+        assert get_handler("kanban_overview") is not None
+
+    def test_kanban_header_rendering(self):
+        """Kanban overview should render with distinct header"""
+        contract = ResponseContract(
+            intent="kanban_overview",
+            reference_time="2026-02-06 14:30 KST",
+            scope="Project: Test",
+            data={"columns": [], "total_tasks": 0},
+        )
+        result = render(contract)
+        assert "📊 **칸반 보드 현황**" in result
+        assert "📊 **Project Status**" not in result
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

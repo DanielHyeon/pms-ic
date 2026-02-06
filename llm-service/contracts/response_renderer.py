@@ -41,6 +41,7 @@ def render(contract: ResponseContract) -> str:
         "risk_analysis": render_risk_analysis,
         "completed_tasks": render_completed_tasks,
         "tasks_by_status": render_tasks_by_status,
+        "kanban_overview": render_kanban_overview,
         "casual": render_casual,
         "status_list": render_status_list,
     }
@@ -126,6 +127,23 @@ def render_backlog_list(contract: ResponseContract) -> str:
         # P1: Show degradation message from warnings
         for warning in contract.warnings:
             lines.append(f"ℹ️ {warning}")
+        lines.append("")
+
+    # Phase 4A: Show kanban backlog tasks if available
+    backlog_tasks = contract.data.get("tasks", [])
+    task_count = contract.data.get("task_count", 0)
+    if backlog_tasks:
+        lines.append(f"📌 **백로그 칸반 태스크**: {task_count}개")
+        for task in backlog_tasks[:10]:
+            title = (task.get("title") or "제목없음")[:50]
+            priority = task.get("priority", "")
+            priority_marker = _get_priority_marker(priority)
+            story = task.get("story_title", "")
+            lines.append(f"  - {priority_marker} {title}")
+            if story:
+                lines.append(f"    └─ 스토리: {story[:25]}")
+        if len(backlog_tasks) > 10:
+            lines.append(f"  - ... 외 {len(backlog_tasks) - 10}개")
         lines.append("")
 
     _append_tips(lines, contract.tips)
@@ -238,6 +256,22 @@ def render_sprint_progress(contract: ResponseContract) -> str:
                 status = story.get("status", "UNKNOWN")
                 status_display = _translate_status(status)
                 lines.append(f"  - {title} ({points}pt, {status_display})")
+            lines.append("")
+
+        # Phase 4B: Show todo_tasks (not started in sprint) if available
+        todo_tasks = contract.data.get("todo_tasks", [])
+        if todo_tasks:
+            lines.append(f"📝 **아직 시작하지 않은 태스크**: {len(todo_tasks)}개")
+            for task in todo_tasks[:10]:
+                title = (task.get("title") or "제목없음")[:50]
+                priority = task.get("priority", "")
+                priority_marker = _get_priority_marker(priority)
+                story = task.get("story_title", "")
+                lines.append(f"  - {priority_marker} {title}")
+                if story:
+                    lines.append(f"    └─ 스토리: {story[:25]}")
+            if len(todo_tasks) > 10:
+                lines.append(f"  - ... 외 {len(todo_tasks) - 10}개")
             lines.append("")
     else:
         # P1: Show degradation message from warnings
@@ -452,6 +486,64 @@ def render_tasks_by_status(contract: ResponseContract) -> str:
     else:
         for warning in contract.warnings:
             lines.append(f"ℹ️ {warning}")
+        lines.append("")
+
+    _append_tips(lines, contract.tips)
+    lines.append(f"_데이터 출처: {contract.provenance}_")
+    return "\n".join(lines)
+
+
+def render_kanban_overview(contract: ResponseContract) -> str:
+    """Render kanban board overview with column counts (Phase 2)"""
+    lines = []
+
+    lines.append(f"📊 **칸반 보드 현황** (기준: {contract.reference_time})")
+    if contract.scope:
+        lines.append(f"📍 {contract.scope}")
+    lines.append("")
+
+    if contract.has_error():
+        for warning in contract.warnings:
+            lines.append(f"⚠️ {warning}")
+        lines.append("")
+        _append_tips(lines, contract.tips)
+        lines.append(f"_데이터 출처: {contract.provenance}_")
+        return "\n".join(lines)
+
+    data = contract.data
+    columns = data.get("columns", [])
+    total = data.get("total_tasks", 0)
+
+    if columns:
+        lines.append(f"**전체 태스크**: {total}개")
+        lines.append("")
+
+        column_emoji = {
+            "백로그": "📋", "할 일": "📝", "진행 중": "🔄",
+            "검토": "🔍", "완료": "✅",
+        }
+
+        for col in columns:
+            name = col.get("column_name", "Unknown")
+            count = int(col.get("task_count", 0) or 0)
+            wip_limit = col.get("wip_limit")
+            high_count = int(col.get("high_priority_count", 0) or 0)
+            emoji = column_emoji.get(name, "📌")
+
+            wip_info = f" (WIP: {count}/{wip_limit})" if wip_limit else ""
+            over = " ⚠️" if wip_limit and count > int(wip_limit) else ""
+            high_info = f" | 🔴 {high_count}" if high_count > 0 else ""
+
+            lines.append(f"{emoji} **{name}**: {count}개{wip_info}{over}{high_info}")
+
+        lines.append("")
+
+        for warning in contract.warnings:
+            lines.append(f"⚠️ {warning}")
+        if contract.warnings:
+            lines.append("")
+    else:
+        lines.append("칸반 보드가 설정되지 않았습니다.")
         lines.append("")
 
     _append_tips(lines, contract.tips)

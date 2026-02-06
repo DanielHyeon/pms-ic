@@ -746,8 +746,10 @@ class TwoTrackWorkflow:
         if intent == "casual":
             return "casual_response"
 
-        # 2. Dedicated handlers (backlog, sprint, task, risk)
-        if has_dedicated_handler(intent):
+        # 2. Dedicated handlers (backlog, sprint, task, risk, etc.)
+        # NOTE: "unknown" has a handler entry but must route to RAG,
+        # not be rendered directly (handle_unknown returns requires_rag flag)
+        if intent != "unknown" and has_dedicated_handler(intent):
             return "intent_handler"
 
         # 3. Status queries: use existing status engine

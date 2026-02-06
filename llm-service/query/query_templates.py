@@ -669,7 +669,7 @@ ORDER BY
 LIMIT %(limit)s
 """
 
-# Get tasks in review/testing status
+# Get tasks in review/testing status (legacy combined query)
 TASKS_IN_REVIEW_QUERY = """
 SELECT
     t.id,
@@ -683,6 +683,57 @@ FROM task.tasks t
 LEFT JOIN task.user_stories us ON t.user_story_id = us.id AND us.project_id = %(project_id)s
 WHERE t.project_id = %(project_id)s
   AND t.status IN ('REVIEW', 'IN_REVIEW', 'TESTING', 'QA')
+ORDER BY
+    CASE t.priority
+        WHEN 'CRITICAL' THEN 1
+        WHEN 'HIGH' THEN 2
+        WHEN 'MEDIUM' THEN 3
+        WHEN 'LOW' THEN 4
+        ELSE 5
+    END,
+    t.updated_at DESC
+LIMIT %(limit)s
+"""
+
+# Phase 3: Separate code review and testing queries
+TASKS_IN_CODE_REVIEW_QUERY = """
+SELECT
+    t.id,
+    t.title,
+    t.status,
+    t.priority,
+    t.due_date,
+    us.story_points,
+    us.title as story_title
+FROM task.tasks t
+LEFT JOIN task.user_stories us ON t.user_story_id = us.id AND us.project_id = %(project_id)s
+WHERE t.project_id = %(project_id)s
+  AND t.status IN ('REVIEW', 'IN_REVIEW')
+ORDER BY
+    CASE t.priority
+        WHEN 'CRITICAL' THEN 1
+        WHEN 'HIGH' THEN 2
+        WHEN 'MEDIUM' THEN 3
+        WHEN 'LOW' THEN 4
+        ELSE 5
+    END,
+    t.updated_at DESC
+LIMIT %(limit)s
+"""
+
+TASKS_IN_TESTING_QUERY = """
+SELECT
+    t.id,
+    t.title,
+    t.status,
+    t.priority,
+    t.due_date,
+    us.story_points,
+    us.title as story_title
+FROM task.tasks t
+LEFT JOIN task.user_stories us ON t.user_story_id = us.id AND us.project_id = %(project_id)s
+WHERE t.project_id = %(project_id)s
+  AND t.status IN ('TESTING', 'QA')
 ORDER BY
     CASE t.priority
         WHEN 'CRITICAL' THEN 1
@@ -718,5 +769,100 @@ ORDER BY
         ELSE 5
     END,
     t.updated_at DESC
+LIMIT %(limit)s
+"""
+
+
+# =============================================================================
+# KANBAN_OVERVIEW Queries (Phase 2)
+# =============================================================================
+
+# Kanban board summary: task counts per column
+KANBAN_OVERVIEW_QUERY = """
+SELECT
+    kc.name as column_name,
+    kc.order_num,
+    kc.color,
+    kc.wip_limit,
+    COUNT(t.id) as task_count,
+    COUNT(CASE WHEN t.priority IN ('CRITICAL', 'HIGH') THEN 1 END) as high_priority_count
+FROM task.kanban_columns kc
+LEFT JOIN task.tasks t ON t.column_id = kc.id
+WHERE kc.project_id = %(project_id)s
+GROUP BY kc.id, kc.name, kc.order_num, kc.color, kc.wip_limit
+ORDER BY kc.order_num
+"""
+
+# Fallback: without wip_limit/color columns
+KANBAN_OVERVIEW_FALLBACK_QUERY = """
+SELECT
+    kc.name as column_name,
+    kc.order_num,
+    COUNT(t.id) as task_count
+FROM task.kanban_columns kc
+LEFT JOIN task.tasks t ON t.column_id = kc.id
+WHERE kc.project_id = %(project_id)s
+GROUP BY kc.id, kc.name, kc.order_num
+ORDER BY kc.order_num
+"""
+
+
+# =============================================================================
+# BACKLOG_TASKS Query (Phase 4A)
+# =============================================================================
+
+# Tasks in the backlog kanban column (complements user_stories backlog)
+BACKLOG_TASKS_QUERY = """
+SELECT
+    t.id,
+    t.title,
+    t.status,
+    t.priority,
+    t.due_date,
+    us.title as story_title
+FROM task.tasks t
+JOIN task.kanban_columns kc ON t.column_id = kc.id
+LEFT JOIN task.user_stories us ON t.user_story_id = us.id AND us.project_id = %(project_id)s
+WHERE kc.project_id = %(project_id)s
+  AND kc.order_num = 1
+ORDER BY
+    CASE t.priority
+        WHEN 'CRITICAL' THEN 1
+        WHEN 'HIGH' THEN 2
+        WHEN 'MEDIUM' THEN 3
+        WHEN 'LOW' THEN 4
+        ELSE 5
+    END,
+    t.created_at DESC
+LIMIT %(limit)s
+"""
+
+
+# =============================================================================
+# SPRINT_TODO_TASKS Query (Phase 4B)
+# =============================================================================
+
+# Tasks in active sprint that haven't started (status = TODO)
+SPRINT_TODO_TASKS_QUERY = """
+SELECT
+    t.id,
+    t.title,
+    t.status,
+    t.priority,
+    t.due_date,
+    us.title as story_title
+FROM task.tasks t
+LEFT JOIN task.user_stories us ON t.user_story_id = us.id AND us.project_id = %(project_id)s
+WHERE t.project_id = %(project_id)s
+  AND t.sprint_id = %(sprint_id)s
+  AND t.status = 'TODO'
+ORDER BY
+    CASE t.priority
+        WHEN 'CRITICAL' THEN 1
+        WHEN 'HIGH' THEN 2
+        WHEN 'MEDIUM' THEN 3
+        WHEN 'LOW' THEN 4
+        ELSE 5
+    END
 LIMIT %(limit)s
 """

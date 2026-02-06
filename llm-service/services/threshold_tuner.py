@@ -43,11 +43,12 @@ KEYWORD_TO_GROUP: Dict[str, str] = {
     "제품 백로그": "domain_fixed",
     "태스크": "domain_fixed",
     "task": "domain_fixed",
-    "리스크": "domain_fixed",
-    "risk": "domain_fixed",
-    "위험": "domain_fixed",
-    "위험요소": "domain_fixed",
-    "리스크 분석": "domain_fixed",
+    # risk keywords moved to ambiguous: jamo_sim("리스크","리스트")=0.833 > 0.80
+    "리스크": "ambiguous",
+    "risk": "ambiguous",
+    "위험": "ambiguous",
+    "위험요소": "ambiguous",
+    "리스크 분석": "ambiguous",
     "완료된": "domain_fixed",
     "완료한": "domain_fixed",
     "끝난": "domain_fixed",
@@ -65,6 +66,22 @@ KEYWORD_TO_GROUP: Dict[str, str] = {
     "in review": "ambiguous",
     "in progress": "ambiguous",
     "testing": "ambiguous",
+
+    # tasks_by_status expanded keywords
+    "코드 리뷰": "ambiguous",
+    "qa": "domain_fixed",
+    "작업 중": "ambiguous",
+    "review": "domain_fixed",
+    "in_progress": "domain_fixed",
+    "todo": "domain_fixed",
+
+    # kanban overview keywords
+    "칸반": "domain_fixed",
+    "kanban": "domain_fixed",
+    "보드": "ambiguous",
+    "board": "domain_fixed",
+    "전체 현황": "domain_fixed",
+    "컬럼별": "domain_fixed",
 
     # time_context: temporal keywords -> standard threshold (0.82)
     "이번 주": "time_context",

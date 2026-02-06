@@ -144,6 +144,23 @@ EMPTY_DATA_TIPS = {
         related_menu="태스크 보드",
     ),
 
+    "kanban_overview": DegradationPlan(
+        reason=DegradationReason.EMPTY_DATA,
+        message="칸반 보드 정보가 없습니다.",
+        tips=[
+            "칸반 보드가 아직 설정되지 않았습니다",
+            "프로젝트 설정에서 칸반 보드를 활성화할 수 있습니다",
+            "칸반 컬럼은 태스크 워크플로우를 시각화합니다",
+        ],
+        next_actions=[
+            "프로젝트 설정에서 칸반 보드 활성화",
+            "기본 컬럼(백로그, 할 일, 진행 중, 검토, 완료) 생성",
+            "WIP 제한을 설정하여 병목 방지",
+            "태스크를 칸반 컬럼에 배치",
+        ],
+        related_menu="칸반 보드 설정",
+    ),
+
     "risk_analysis": DegradationPlan(
         reason=DegradationReason.NO_RISKS_EXPLICIT,
         message="등록된 활성 리스크가 없습니다.",
