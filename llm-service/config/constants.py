@@ -259,6 +259,54 @@ class ConfidenceScores:
 
 
 # =============================================================================
+# Query Normalization Configuration
+# =============================================================================
+
+@dataclass(frozen=True)
+class NormalizationConfig:
+    """Query normalization cache, rate limiting, and tuning configuration."""
+
+    # === Redis cache TTL ===
+    NORMALIZATION_CACHE_TTL_SECONDS: int = 3600      # 1h: normalization results
+    NEGATIVE_CACHE_TTL_SECONDS: int = 180            # 3min: confirmed UNKNOWN
+    CLASSIFICATION_CACHE_TTL_SECONDS: int = 600      # 10min: classification results
+
+    # === Cache key prefixes ===
+    NORM_CACHE_PREFIX: str = "norm:v1:"
+    NEG_CACHE_PREFIX: str = "neg:v1:"
+    CLASS_CACHE_PREFIX: str = "class:v1:"
+
+    # === Redis circuit breaker ===
+    CIRCUIT_BREAKER_FAILURE_THRESHOLD: int = 3       # failures before OPEN
+    CIRCUIT_BREAKER_WINDOW_SECONDS: int = 30         # failure detection window
+    CIRCUIT_BREAKER_RECOVERY_SECONDS: int = 30       # OPEN hold time
+
+    # === L3 LLM rate limiting ===
+    L3_MAX_CALLS_PER_MINUTE: int = 30                # cluster-wide limit
+    L3_RATE_LIMIT_KEY: str = "l3_ratelimit:v1"
+
+    # === Event sampling ===
+    EVENT_SAMPLE_RATE_NORMAL: float = 0.1            # normal: 10%
+    EVENT_SAMPLE_RATE_L3: float = 1.0                # L3/UNKNOWN: 100%
+
+    # === Feature flags ===
+    ENABLE_REDIS_CACHE: bool = True
+    ENABLE_NEGATIVE_CACHE: bool = True
+    ENABLE_EVENT_LOGGING: bool = True
+    ENABLE_CANDIDATE_COLLECTION: bool = False         # Phase 2
+    ENABLE_SHADOW_DICT: bool = False                  # Phase 2
+    ENABLE_THRESHOLD_TUNING: bool = False             # Phase 3
+
+    # === Memory fallback ===
+    MEMORY_CACHE_MAXSIZE: int = 256
+
+    # === Version tracking ===
+    NORMALIZER_VERSION: str = "v1.0"
+    TYPO_DICT_VERSION: str = "v1.0"
+    THRESHOLD_VERSION: str = "v1.0"
+
+
+# =============================================================================
 # Singleton Instances
 # =============================================================================
 
@@ -279,6 +327,9 @@ HYBRID_RAG = HybridRAGConfig()
 
 # Monitoring
 MONITORING = MonitoringConfig()
+
+# Query Normalization
+NORMALIZATION = NormalizationConfig()
 
 # Original (backward compatibility)
 RAG = RAGConfig()

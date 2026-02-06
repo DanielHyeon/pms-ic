@@ -4,6 +4,9 @@ debugpy>=1.8.0  # VS Code remote debugging
 llama-cpp-python>=0.3.5
 numpy<2.0.0
 
+# Cache
+redis>=5.0.0  # Shared normalization cache + rate limiting
+
 # Database Connectors
 psycopg2-binary>=2.9.9  # PostgreSQL connector
 

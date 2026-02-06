@@ -167,12 +167,18 @@ services:
       PADDLE_USE_GPU: ${PADDLE_USE_GPU:-true}
       PADDLE_LANG: ${PADDLE_LANG:-korean}
       PADDLE_USE_STRUCTURE: ${PADDLE_USE_STRUCTURE:-true}
+      # Redis for normalization cache (shared across instances)
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
       # PostgreSQL connection for Status Query Engine
       PG_HOST: ${PG_HOST:-postgres}
       PG_PORT: ${PG_PORT:-5432}
       PG_DATABASE: ${PG_DATABASE:-pms_db}
       PG_USER: ${PG_USER:-pms_user}
       PG_PASSWORD: ${PG_PASSWORD:-pms_password}
+    depends_on:
+      redis:
+        condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

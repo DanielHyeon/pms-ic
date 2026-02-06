@@ -18,6 +18,9 @@ from enum import Enum
 from dataclasses import dataclass, field
 from typing import List, Optional, Set, Tuple
 
+from utils.korean_normalizer import apply_typo_corrections, fuzzy_keyword_in_query
+from services.threshold_tuner import get_keyword_threshold
+
 logger = logging.getLogger(__name__)
 
 
@@ -411,11 +414,20 @@ class AnswerTypeClassifier:
             )
 
         query = query.strip()
+
+        # Layer 2: Apply typo dictionary corrections before classification
+        original_query = query
+        query = apply_typo_corrections(query)
+        was_corrected = query != original_query
+        if was_corrected:
+            logger.info(f"Typo correction: '{original_query}' -> '{query}'")
+
         query_lower = query.lower()
 
         # =================================================================
         # PRIORITY-BASED CLASSIFICATION (P0 Implementation)
         # Check by priority order (1, 2, 3)
+        # Layer 1: Uses fuzzy jamo matching for keyword tolerance
         # =================================================================
         for priority in [1, 2, 3]:
             for answer_type, config in INTENT_PATTERNS.items():
@@ -427,26 +439,43 @@ class AnswerTypeClassifier:
                 if max_len and len(query) > max_len:
                     continue
 
-                # Check primary keywords
+                # Check primary keywords (Layer 1: fuzzy jamo matching)
+                # Per-group thresholds (Phase 3): each keyword gets its
+                # group-appropriate threshold via get_keyword_threshold()
                 keywords = config.get("keywords", [])
-                matched = [kw for kw in keywords if kw in query_lower]
+                matched = [
+                    kw for kw in keywords
+                    if fuzzy_keyword_in_query(
+                        kw, query_lower,
+                        threshold=get_keyword_threshold(kw),
+                    )
+                ]
 
                 if not matched:
                     continue
 
-                # Check requires_any constraint (combination rule)
+                # Check requires_any constraint (Layer 1: fuzzy jamo matching)
                 requires_any = config.get("requires_any")
                 if requires_any:
-                    has_required = any(req in query_lower for req in requires_any)
+                    has_required = any(
+                        fuzzy_keyword_in_query(
+                            req, query_lower,
+                            threshold=get_keyword_threshold(req),
+                        )
+                        for req in requires_any
+                    )
                     if not has_required:
                         continue
 
                 confidence = min(0.95, 0.7 + len(matched) * 0.1)
+                reasoning = f"Priority {priority} intent matched: {matched}"
+                if was_corrected:
+                    reasoning += f" (typo corrected: '{original_query}')"
                 return AnswerTypeResult(
                     answer_type=answer_type,
                     confidence=confidence,
                     matched_patterns=matched,
-                    reasoning=f"Priority {priority} intent matched: {matched}"
+                    reasoning=reasoning,
                 )
 
         # =================================================================

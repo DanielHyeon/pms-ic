@@ -32,6 +32,7 @@ def register_blueprints(app):
     from . import report_routes
     from . import db_admin_routes
     from . import wbs_routes
+    from .normalization_admin_routes import normalization_admin_bp
 
     app.register_blueprint(chat_bp)
     app.register_blueprint(document_bp)
@@ -43,3 +44,4 @@ def register_blueprints(app):
     app.register_blueprint(report_bp)
     app.register_blueprint(db_admin_bp)
     app.register_blueprint(wbs_bp)
+    app.register_blueprint(normalization_admin_bp)

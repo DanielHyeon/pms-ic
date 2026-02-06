@@ -58,6 +58,33 @@ register_blueprints(app)
 # Initialization
 # =============================================================================
 
+def _init_redis_cache():
+    """Initialize Redis connection for normalization cache (best-effort)."""
+    from services.normalization_cache import init_normalization_cache
+    try:
+        import redis as redis_lib
+        from config.database import get_redis_config
+        config = get_redis_config()
+        redis_client = redis_lib.Redis(
+            host=config.host,
+            port=config.port,
+            password=config.password or None,
+            db=config.db,
+            socket_connect_timeout=0.1,
+            socket_timeout=0.15,
+            retry_on_timeout=False,
+            health_check_interval=30,
+            decode_responses=True,
+        )
+        redis_client.ping()
+        init_normalization_cache(redis_client)
+        state.redis_client = redis_client
+        logger.info("Redis connected for normalization cache")
+    except Exception as e:
+        logger.warning(f"Redis unavailable ({e}), using memory-only cache")
+        init_normalization_cache(None)
+
+
 def init_llm_service():
     """Initialize LLM service on startup (싱글톤 상태 사용)"""
     try:
@@ -65,6 +92,9 @@ def init_llm_service():
         logger.info("Initializing LLM service on startup...")
         logger.info(f"Model path: {DEFAULT_MODEL_PATH}")
         logger.info("=" * 60)
+
+        # Initialize Redis for normalization cache (optional)
+        _init_redis_cache()
 
         model_service = get_model_service()
         model_service.load_model()
@@ -74,6 +104,7 @@ def init_llm_service():
         logger.info(f"  - Model loaded: {state.is_model_loaded}")
         logger.info(f"  - RAG service loaded: {state.is_rag_loaded}")
         logger.info(f"  - Chat workflow loaded: {state.is_workflow_loaded}")
+        logger.info(f"  - Redis connected: {state.redis_client is not None}")
         logger.info("=" * 60)
     except Exception as e:
         logger.error("=" * 60)

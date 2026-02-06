@@ -51,6 +51,8 @@ class LLMServiceState:
         # OCR engine configuration
         # Options: varco, paddle, tesseract, pypdf
         self._ocr_engine: str = os.getenv("OCR_ENGINE", "varco")
+        # Redis client (optional, for shared normalization cache)
+        self._redis_client: Optional[Any] = None
         self._initialized = True
         logger.info("LLMServiceState singleton initialized")
 
@@ -135,6 +137,16 @@ class LLMServiceState:
         logger.info(f"OCR engine changed to: {value}")
 
     @property
+    def redis_client(self) -> Optional[Any]:
+        """Get the Redis client instance"""
+        return self._redis_client
+
+    @redis_client.setter
+    def redis_client(self, value: Optional[Any]):
+        """Set the Redis client instance"""
+        self._redis_client = value
+
+    @property
     def is_model_loaded(self) -> bool:
         """Check if model is loaded"""
         return self._llm is not None
@@ -190,6 +202,7 @@ class LLMServiceState:
         self._rag_service = None
         self._chat_workflow = None
         self._two_track_workflow = None
+        self._redis_client = None
         logger.info("LLMServiceState reset")
 
     def health_status(self) -> dict:
@@ -202,7 +215,8 @@ class LLMServiceState:
             "current_model_path": self._current_model_path,
             "lightweight_model_path": self._lightweight_model_path,
             "medium_model_path": self._medium_model_path,
-            "ocr_engine": self._ocr_engine
+            "ocr_engine": self._ocr_engine,
+            "redis_connected": self._redis_client is not None,
         }
 
 

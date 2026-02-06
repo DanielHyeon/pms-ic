@@ -39,6 +39,10 @@ class EventType(str, Enum):
     QUERY_RECEIVED = "query_received"
     INTENT_CLASSIFIED = "intent_classified"
 
+    # P0.5: Query Normalization
+    QUERY_NORMALIZED = "query_normalized"
+    SHADOW_DICT_EVALUATED = "shadow_dict_evaluated"
+
     # P1: Data Query
     HANDLER_SELECTED = "handler_selected"
     DATA_QUERY_EXECUTED = "data_query_executed"
@@ -317,6 +321,35 @@ class ClarificationAbandonedPayload:
 
 
 @dataclass
+class QueryNormalizedPayload:
+    """QUERY_NORMALIZED event payload."""
+    original_query: str                    # PIIMasker.mask_query() applied
+    normalized_query: str                  # PIIMasker.mask_query() applied
+    q_fingerprint: str                     # sha256(original)[:32] for cache tracing
+    layers_applied: List[str] = field(default_factory=list)   # ["L2"], ["L2","L3"], etc.
+    cache_hit: bool = False                # normalization cache hit
+    negative_cache_hit: bool = False       # negative cache hit
+    l3_called: bool = False                # L3 actually invoked
+    l3_success: bool = False               # L3 led to non-UNKNOWN
+    original_intent: str = ""              # intent before normalization
+    final_intent: str = ""                 # intent after normalization
+    duration_ms: int = 0                   # total normalization time
+    normalizer_version: str = ""
+    typo_dict_version: str = ""
+    threshold_version: str = ""
+
+
+@dataclass
+class ShadowDictEvaluatedPayload:
+    """SHADOW_DICT_EVALUATED event payload."""
+    q_fingerprint: str
+    shadow_corrected: str                  # masked
+    production_intent: str
+    shadow_intent: str
+    would_change_routing: bool = False
+
+
+@dataclass
 class ResponseGeneratedPayload:
     """RESPONSE_GENERATED event payload."""
     intent: str
@@ -331,6 +364,8 @@ class ResponseGeneratedPayload:
 
 # Payload class mapping
 PAYLOAD_CLASSES = {
+    EventType.QUERY_NORMALIZED.value: QueryNormalizedPayload,
+    EventType.SHADOW_DICT_EVALUATED.value: ShadowDictEvaluatedPayload,
     EventType.INTENT_CLASSIFIED.value: IntentClassifiedPayload,
     EventType.DATA_QUERY_EXECUTED.value: DataQueryExecutedPayload,
     EventType.DATA_EMPTY_DETECTED.value: DataEmptyDetectedPayload,

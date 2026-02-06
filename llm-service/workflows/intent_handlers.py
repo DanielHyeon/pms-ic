@@ -43,6 +43,7 @@ from contracts.degradation_tips import (
     DegradationReason, DegradationPlan,
     EMPTY_DATA_TIPS, DB_FAILURE_TIPS,
 )
+from utils.korean_normalizer import apply_typo_corrections, fuzzy_keyword_in_query
 
 logger = logging.getLogger(__name__)
 
@@ -660,12 +661,12 @@ def handle_tasks_by_status(ctx: HandlerContext) -> ResponseContract:
     db_failed = False
     status_filter = "REVIEW"  # Default to review/testing
 
-    # Detect status from message
-    message_lower = ctx.message.lower()
-    if any(kw in message_lower for kw in ["테스트", "검토", "리뷰", "review", "testing", "qa"]):
+    # Detect status from message (with typo tolerance)
+    message_lower = apply_typo_corrections(ctx.message).lower()
+    if any(fuzzy_keyword_in_query(kw, message_lower) for kw in ["테스트", "검토", "리뷰", "review", "testing", "qa"]):
         status_filter = "REVIEW"
         query = TASKS_IN_REVIEW_QUERY
-    elif any(kw in message_lower for kw in ["진행", "작업 중", "doing", "wip", "in progress"]):
+    elif any(fuzzy_keyword_in_query(kw, message_lower) for kw in ["진행", "작업 중", "doing", "wip", "in progress"]):
         status_filter = "IN_PROGRESS"
         query = TASKS_IN_PROGRESS_QUERY
     else:

@@ -545,13 +545,120 @@ class TwoTrackWorkflow:
         - Single state key: state["intent"] only (NOT state["answer_type"] for routing)
         - Intent value = lowercase snake_case (e.g., "backlog_list")
         - Fallback is UNKNOWN -> RAG, NOT status_metric
+
+        Layer 3 Enhancement:
+        - If classification is UNKNOWN and query has Korean text,
+          use L1 LLM to correct typos and re-classify.
         """
         start_time = time.time()
         message = state.get("message") or ""
 
-        # Classify answer type
+        # Classify answer type (Layer 1+2 normalization built into classifier)
         classifier = get_answer_type_classifier()
         result = classifier.classify(message)
+
+        # Layer 3: LLM-based typo correction retry for UNKNOWN results
+        # Enhanced with negative cache, rate limiting, and event emission
+        llm_normalization_info = None
+        norm_l3_called = False
+        norm_l3_success = False
+        norm_negative_cache_hit = False
+        norm_layers = []
+
+        if result.answer_type == AnswerType.UNKNOWN and self.llm_l1:
+            try:
+                from utils.korean_normalizer import normalize_query_with_llm, has_korean
+                from services.normalization_cache import get_normalization_cache
+
+                if has_korean(message):
+                    cache_mgr = get_normalization_cache()
+                    original_intent = result.answer_type.value
+
+                    # Check negative cache first (confirmed UNKNOWN - skip L3)
+                    if cache_mgr.get_negative(message):
+                        norm_negative_cache_hit = True
+                        logger.debug(f"Negative cache hit, skipping L3: '{message}'")
+                    # Check L3 rate limit
+                    elif not cache_mgr.rate_limiter.is_allowed():
+                        logger.debug("L3 rate limit exceeded, skipping")
+                    else:
+                        # Invoke L3 LLM normalization
+                        norm_l3_called = True
+                        normalized = normalize_query_with_llm(
+                            self.llm_l1, message, self.model_path_l1 or ""
+                        )
+                        if normalized and normalized.strip() != message.strip():
+                            retry_result = classifier.classify(normalized)
+                            if retry_result.answer_type != AnswerType.UNKNOWN:
+                                # L3 success: update result
+                                norm_l3_success = True
+                                norm_layers.append("L3")
+                                result = retry_result
+                                state["message"] = normalized
+                                llm_normalization_info = {
+                                    "original": message,
+                                    "normalized": normalized,
+                                    "method": "llm_l1",
+                                    "new_intent": result.answer_type.value,
+                                }
+                                logger.info(
+                                    f"Layer 3 LLM normalization: '{message}' -> '{normalized}' "
+                                    f"-> {result.answer_type.value}"
+                                )
+                                # Record candidate for Phase 2 auto-expansion
+                                try:
+                                    from services.typo_candidate_collector import get_candidate_collector
+                                    get_candidate_collector().record_correction(
+                                        message, normalized, result.answer_type.value
+                                    )
+                                except Exception:
+                                    pass
+                            else:
+                                # L3 called but still UNKNOWN -> set negative cache
+                                cache_mgr.set_negative(message)
+                        else:
+                            # L3 returned same text or None -> confirmed UNKNOWN
+                            cache_mgr.set_negative(message)
+            except Exception as e:
+                logger.warning(f"Layer 3 LLM normalization failed: {e}")
+
+        # Emit QUERY_NORMALIZED event (sampled)
+        try:
+            from services.normalization_cache import get_normalization_cache
+            from observability.p4_events import (
+                EventType, emit_event, PIIMasker, get_trace_id
+            )
+            from services.normalization_cache import query_fingerprint
+            from config.constants import NORMALIZATION
+
+            cache_mgr = get_normalization_cache()
+            if cache_mgr.should_emit_event(norm_l3_called, norm_negative_cache_hit):
+                emit_event(
+                    EventType.QUERY_NORMALIZED.value,
+                    trace_id=get_trace_id() or state.get("trace_id", ""),
+                    phase="P0.5",
+                    step_name="query_normalization",
+                    outcome="ok" if norm_l3_success else "unchanged",
+                    duration_ms=int((time.time() - start_time) * 1000),
+                    original_query=PIIMasker.mask_query(message),
+                    normalized_query=PIIMasker.mask_query(
+                        state.get("message") or message
+                    ),
+                    q_fingerprint=query_fingerprint(message)[:32],
+                    layers_applied=norm_layers,
+                    cache_hit=False,
+                    negative_cache_hit=norm_negative_cache_hit,
+                    l3_called=norm_l3_called,
+                    l3_success=norm_l3_success,
+                    original_intent=result.answer_type.value
+                        if not llm_normalization_info else "unknown",
+                    final_intent=result.answer_type.value,
+                    normalizer_version=NORMALIZATION.NORMALIZER_VERSION,
+                    typo_dict_version=NORMALIZATION.TYPO_DICT_VERSION,
+                    threshold_version=NORMALIZATION.THRESHOLD_VERSION,
+                )
+        except Exception as e:
+            logger.debug(f"Failed to emit QUERY_NORMALIZED event: {e}")
 
         # ============================================================
         # CRITICAL: Single state key - use "intent" ONLY
@@ -580,6 +687,8 @@ class TwoTrackWorkflow:
             "confidence": result.confidence,
             "matched_patterns": result.matched_patterns,
         }
+        if llm_normalization_info:
+            state["debug_info"]["query_normalization"] = llm_normalization_info
         state["metrics"]["answer_type_time_ms"] = (time.time() - start_time) * 1000
 
         logger.info(
