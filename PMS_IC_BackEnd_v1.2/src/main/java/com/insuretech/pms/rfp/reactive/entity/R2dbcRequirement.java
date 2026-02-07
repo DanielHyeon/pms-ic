@@ -29,6 +29,10 @@ public class R2dbcRequirement extends R2dbcBaseEntity {
     @Column("project_id")
     private String projectId;
 
+    @Nullable
+    @Column("source_requirement_id")
+    private String sourceRequirementId;
+
     @Column("requirement_code")
     private String code;
 

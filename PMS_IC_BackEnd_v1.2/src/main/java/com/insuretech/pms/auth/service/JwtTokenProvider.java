@@ -11,7 +11,15 @@ import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import com.insuretech.pms.common.security.ProjectScope;
 
 @Slf4j
 @Component
@@ -89,5 +97,55 @@ public class JwtTokenProvider {
             log.error("JWT claims string is empty: {}", e.getMessage());
         }
         return false;
+    }
+
+    /**
+     * Generate a token with project-scoped roles and capabilities.
+     * Backward-compatible: tokens without projectRoles are still valid.
+     */
+    public String generateToken(String username, List<ProjectScope> projectScopes) {
+        Date now = new Date();
+        Date expiryDate = new Date(now.getTime() + jwtExpiration);
+
+        List<Map<String, Object>> projectRolesClaim = projectScopes.stream()
+                .map(scope -> {
+                    Map<String, Object> entry = new HashMap<>();
+                    entry.put("projectId", scope.getProjectId());
+                    entry.put("role", scope.getRole());
+                    entry.put("capabilities", new ArrayList<>(scope.getCapabilities()));
+                    entry.put("allowedPartIds", new ArrayList<>(scope.getAllowedPartIds()));
+                    return entry;
+                })
+                .collect(Collectors.toList());
+
+        return Jwts.builder()
+                .subject(username)
+                .claim("projectRoles", projectRolesClaim)
+                .issuedAt(now)
+                .expiration(expiryDate)
+                .signWith(secretKey)
+                .compact();
+    }
+
+    /**
+     * Extract projectRoles claim from token.
+     * Returns empty list if absent (backward-compatible with old tokens).
+     */
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> getProjectRolesFromToken(String token) {
+        try {
+            Claims claims = Jwts.parser()
+                    .verifyWith(secretKey)
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+            Object projectRoles = claims.get("projectRoles");
+            if (projectRoles instanceof List) {
+                return (List<Map<String, Object>>) projectRoles;
+            }
+        } catch (Exception e) {
+            log.debug("No projectRoles claim in token: {}", e.getMessage());
+        }
+        return Collections.emptyList();
     }
 }

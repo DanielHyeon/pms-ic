@@ -802,6 +802,38 @@ export class ApiService {
     return this.fetchWithFallback(`/stories/epics?projectId=${projectId}`, {}, ['OCR 엔진', 'AI 모델', '인프라', '데이터 관리']);
   }
 
+  async getEpicsForProject(projectId: string) {
+    const response = await this.fetchWithFallback(`/projects/${projectId}/epics`, {}, { data: [] });
+    return response?.data || response || [];
+  }
+
+  async getEpicById(epicId: string) {
+    const response = await this.fetchWithFallback(`/epics/${epicId}`, {}, null);
+    return response?.data || response;
+  }
+
+  async createEpic(projectId: string, data: any) {
+    const response = await this.fetchWithFallback(`/projects/${projectId}/epics`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }, null);
+    return response?.data || response;
+  }
+
+  async updateEpic(epicId: string, data: any) {
+    const response = await this.fetchWithFallback(`/epics/${epicId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }, null);
+    return response?.data || response;
+  }
+
+  async deleteEpic(epicId: string) {
+    return this.fetchWithFallback(`/epics/${epicId}`, {
+      method: 'DELETE',
+    }, null);
+  }
+
   async createStory(story: any) {
     return this.fetchWithFallback('/stories', {
       method: 'POST',
@@ -2826,6 +2858,42 @@ export class ApiService {
     return this.fetchWithFallback(
       `/wbs-snapshots/${snapshotId}`,
       { method: 'DELETE' },
+      null
+    );
+  }
+
+  // ==================== View APIs (Phase 3) ====================
+
+  async getPoBacklogView(projectId: string) {
+    return this.fetchWithFallback(
+      `/projects/${projectId}/views/po-backlog`,
+      {},
+      null
+    );
+  }
+
+  async getPmWorkboardView(projectId: string) {
+    return this.fetchWithFallback(
+      `/projects/${projectId}/views/pm-workboard`,
+      {},
+      null
+    );
+  }
+
+  async getPmoPortfolioView(projectId: string) {
+    return this.fetchWithFallback(
+      `/projects/${projectId}/views/pmo-portfolio`,
+      {},
+      null
+    );
+  }
+
+  // ==================== Data Quality API (Phase 4) ====================
+
+  async getDataQuality(projectId: string) {
+    return this.fetchWithFallback(
+      `/projects/${projectId}/data-quality`,
+      {},
       null
     );
   }

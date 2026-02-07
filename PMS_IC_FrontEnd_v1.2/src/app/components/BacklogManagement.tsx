@@ -262,13 +262,8 @@ export default function BacklogManagement({ userRole }: BacklogManagementProps) 
   };
 
   // Convert stories to BacklogStory format for EpicTreeView
-  // Maps legacy statuses to new status model
-  const mapStatus = (status: string) => {
-    if (status === 'COMPLETED') return 'DONE';
-    if (status === 'SELECTED') return 'IN_SPRINT';
-    if (status === 'BACKLOG') return 'READY';
-    return status;
-  };
+  // Status values are now normalized in DB (Phase 2)
+  const mapStatus = (status: string) => status;
 
   const allBacklogStories: BacklogStory[] = stories.map((s) => ({
     id: `story-${s.id}`,

@@ -1,0 +1,64 @@
+name: Data Quality Gate
+
+on:
+  push:
+    paths:
+      - 'PMS_IC_BackEnd_v1.2/src/main/resources/data.sql'
+      - 'PMS_IC_BackEnd_v1.2/src/main/resources/schema.sql'
+      - 'PMS_IC_BackEnd_v1.2/src/main/resources/db/migration/**'
+  pull_request:
+    paths:
+      - 'PMS_IC_BackEnd_v1.2/src/main/resources/data.sql'
+      - 'PMS_IC_BackEnd_v1.2/src/main/resources/schema.sql'
+      - 'PMS_IC_BackEnd_v1.2/src/main/resources/db/migration/**'
+
+jobs:
+  data-quality:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: pms_ic_test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Load schema
+        env:
+          PGPASSWORD: test
+        run: |
+          psql -h localhost -U test -d pms_ic_test \
+            -f PMS_IC_BackEnd_v1.2/src/main/resources/schema.sql
+
+      - name: Run Flyway migrations
+        env:
+          PGPASSWORD: test
+        run: |
+          for f in $(ls PMS_IC_BackEnd_v1.2/src/main/resources/db/migration/V*.sql | sort); do
+            echo "Running migration: $f"
+            psql -h localhost -U test -d pms_ic_test -f "$f"
+          done
+
+      - name: Load seed data
+        env:
+          PGPASSWORD: test
+        run: |
+          psql -h localhost -U test -d pms_ic_test \
+            -f PMS_IC_BackEnd_v1.2/src/main/resources/data.sql
+
+      - name: Run data quality checks
+        env:
+          PGPASSWORD: test
+        run: |
+          psql -h localhost -U test -d pms_ic_test \
+            -f scripts/ci_data_quality_check.sql

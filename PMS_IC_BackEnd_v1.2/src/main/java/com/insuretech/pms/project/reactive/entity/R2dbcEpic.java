@@ -33,7 +33,7 @@ public class R2dbcEpic extends R2dbcBaseEntity {
 
     @Column("status")
     @Builder.Default
-    private String status = "DRAFT";
+    private String status = "BACKLOG";
 
     @Nullable
     @Column("goal")
@@ -75,9 +75,13 @@ public class R2dbcEpic extends R2dbcBaseEntity {
     @Builder.Default
     private String priority = "MEDIUM";
 
+    @Column("order_num")
+    @Builder.Default
+    private Integer orderNum = 0;
+
     public enum EpicStatus {
-        DRAFT,
-        ACTIVE,
+        BACKLOG,
+        IN_PROGRESS,
         COMPLETED,
         CANCELLED
     }

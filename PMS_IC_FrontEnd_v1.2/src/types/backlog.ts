@@ -13,21 +13,27 @@
 export type Priority = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
 export type ItemStatus = 'OPEN' | 'IN_PROGRESS' | 'DONE' | 'BLOCKED' | 'CANCELLED';
 
+// Epic status (DB standard: BACKLOG → IN_PROGRESS → COMPLETED / CANCELLED)
+export type EpicStatus = 'BACKLOG' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+
 // Epic (Level 1)
 export interface Epic {
   id: string;
   projectId: string;
   phaseId?: string; // Link to Phase
-  wbsTaskId?: string; // Link to WBS
   name: string;
   description?: string;
-  status: ItemStatus;
+  goal?: string;
+  status: EpicStatus;
   priority: Priority;
-  startDate?: string;
-  targetDate?: string;
+  targetDate?: string; // Maps to target_completion_date
   progress: number; // 0-100
-  order: number;
+  orderNum: number; // Maps to order_num in DB
   color?: string; // For visual grouping
+  businessValue?: number;
+  totalStoryPoints?: number;
+  itemCount?: number;
+  ownerId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -37,7 +43,6 @@ export interface EpicFormData {
   description: string;
   phaseId?: string;
   priority: Priority;
-  startDate?: string;
   targetDate?: string;
   color?: string;
 }

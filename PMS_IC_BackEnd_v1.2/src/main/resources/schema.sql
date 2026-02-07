@@ -14,6 +14,7 @@ CREATE SCHEMA IF NOT EXISTS rfp;
 CREATE SCHEMA IF NOT EXISTS education;
 CREATE SCHEMA IF NOT EXISTS lineage;
 CREATE SCHEMA IF NOT EXISTS risk;
+CREATE SCHEMA IF NOT EXISTS audit;
 
 -- ============================================
 -- AUTH SCHEMA
@@ -262,7 +263,8 @@ CREATE TABLE IF NOT EXISTS project.epics (
     business_value INTEGER DEFAULT 0,
     total_story_points INTEGER DEFAULT 0,
     item_count INTEGER DEFAULT 0,
-    target_completion_date DATE
+    target_completion_date DATE,
+    order_num INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS project.features (
@@ -775,6 +777,7 @@ CREATE TABLE IF NOT EXISTS project.requirements (
     id VARCHAR(36) PRIMARY KEY,
     rfp_id VARCHAR(36),
     project_id VARCHAR(36) NOT NULL,
+    source_requirement_id VARCHAR(36),
     requirement_code VARCHAR(50) NOT NULL UNIQUE,
     title VARCHAR(255) NOT NULL,
     description TEXT,
@@ -854,10 +857,12 @@ CREATE TABLE IF NOT EXISTS task.user_stories (
     status VARCHAR(50) DEFAULT 'IDEA',
     assignee_id VARCHAR(36),
     epic VARCHAR(100),
+    epic_id VARCHAR(36),
     priority_order INTEGER,
     feature_id VARCHAR(36),
     wbs_item_id VARCHAR(36),
     part_id VARCHAR(36),
+    backlog_item_id VARCHAR(36),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP,
     created_by VARCHAR(36),
@@ -1467,3 +1472,26 @@ CREATE INDEX IF NOT EXISTS idx_sql_logs_date ON report.text_to_sql_logs(created_
 -- Lineage indexes
 CREATE INDEX IF NOT EXISTS idx_outbox_events_status ON lineage.outbox_events(status);
 CREATE INDEX IF NOT EXISTS idx_outbox_events_aggregate ON lineage.outbox_events(aggregate_type, aggregate_id);
+
+-- ============================================
+-- AUDIT SCHEMA
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS audit.status_transition_events (
+    id               VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    tenant_id        VARCHAR(36),
+    project_id       VARCHAR(36),
+    entity_type      VARCHAR(32) NOT NULL,
+    entity_id        VARCHAR(36) NOT NULL,
+    from_status      VARCHAR(32),
+    to_status        VARCHAR(32) NOT NULL,
+    changed_by       VARCHAR(36),
+    change_source    VARCHAR(32) NOT NULL,
+    changed_at       TIMESTAMP NOT NULL DEFAULT NOW(),
+    metadata         JSONB
+);
+
+CREATE INDEX IF NOT EXISTS idx_transition_entity_time
+    ON audit.status_transition_events(entity_type, entity_id, changed_at);
+CREATE INDEX IF NOT EXISTS idx_transition_project_time
+    ON audit.status_transition_events(project_id, changed_at);

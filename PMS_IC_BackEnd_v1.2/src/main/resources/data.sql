@@ -439,26 +439,26 @@ ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, goal = EXCLUDED.goal, statu
 -- ============================================
 -- 5.2. USER STORIES (task.user_stories) - For Lineage Tracking
 -- ============================================
-INSERT INTO task.user_stories (id, project_id, title, description, priority, status, story_points, sprint_id, epic, neo4j_node_id, created_at, updated_at)
+INSERT INTO task.user_stories (id, project_id, title, description, priority, status, story_points, sprint_id, epic, epic_id, feature_id, part_id, backlog_item_id, neo4j_node_id, created_at, updated_at)
 VALUES
-    -- Project 1 User Stories
-    ('story-001-01', 'proj-001', 'OCR 문서 업로드', '보험심사 담당자로서, 스캔한 문서를 업로드하여 시스템이 자동으로 텍스트를 추출할 수 있게 하고 싶습니다', 'CRITICAL', 'COMPLETED', 8, 'sprint-001-01', '문서 처리', NULL, NOW(), NOW()),
-    ('story-001-02', 'proj-001', '사기 탐지 대시보드', '사기 분석가로서, 사기 위험 점수를 확인하여 조사 우선순위를 정할 수 있게 하고 싶습니다', 'CRITICAL', 'IN_PROGRESS', 13, 'sprint-001-02', '사기 탐지', NULL, NOW(), NOW()),
-    ('story-001-03', 'proj-001', '보험청구 API 연동', '개발자로서, RESTful API를 통해 외부 시스템이 보험청구 관리 시스템과 연동할 수 있게 하고 싶습니다', 'HIGH', 'SELECTED', 8, 'sprint-001-02', 'API 개발', NULL, NOW(), NOW()),
-    ('story-001-04', 'proj-001', '데이터 암호화 구현', '보안 담당자로서, 모든 개인정보가 암호화되어 규정을 준수할 수 있게 하고 싶습니다', 'CRITICAL', 'BACKLOG', 5, NULL, '보안', NULL, NOW(), NOW()),
-    -- Project 2 User Stories
-    ('story-002-01', 'proj-002', '사용자 리서치 분석', '제품 오너로서, 사용자 리서치 인사이트를 확보하여 더 나은 UX를 설계하고 싶습니다', 'HIGH', 'IN_PROGRESS', 5, 'sprint-002-01', '리서치', NULL, NOW(), NOW())
-ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.description, epic = EXCLUDED.epic;
+    -- Project 1 User Stories (status normalized: COMPLETED→DONE, SELECTED→IN_SPRINT)
+    ('story-001-01', 'proj-001', 'OCR 문서 업로드', '보험심사 담당자로서, 스캔한 문서를 업로드하여 시스템이 자동으로 텍스트를 추출할 수 있게 하고 싶습니다', 'CRITICAL', 'DONE', 8, 'sprint-001-01', '문서 처리 자동화', 'epic-001-01', 'feat-001-01', 'part-001-ai', 'bl-item-001', NULL, NOW(), NOW()),
+    ('story-001-02', 'proj-001', '사기 탐지 대시보드', '사기 분석가로서, 사기 위험 점수를 확인하여 조사 우선순위를 정할 수 있게 하고 싶습니다', 'CRITICAL', 'IN_PROGRESS', 13, 'sprint-001-02', '사기 탐지 시스템', 'epic-001-02', 'feat-001-04', 'part-001-ai', 'bl-item-002', NULL, NOW(), NOW()),
+    ('story-001-03', 'proj-001', '보험청구 API 연동', '개발자로서, RESTful API를 통해 외부 시스템이 보험청구 관리 시스템과 연동할 수 있게 하고 싶습니다', 'HIGH', 'IN_SPRINT', 8, 'sprint-001-02', 'API 플랫폼 구축', 'epic-001-03', 'feat-001-06', 'part-001-si', 'bl-item-003', NULL, NOW(), NOW()),
+    ('story-001-04', 'proj-001', '데이터 암호화 구현', '보안 담당자로서, 모든 개인정보가 암호화되어 규정을 준수할 수 있게 하고 싶습니다', 'CRITICAL', 'BACKLOG', 5, NULL, '보안 및 규정 준수', 'epic-001-04', NULL, NULL, 'bl-item-004', NULL, NOW(), NOW()),
+    -- Project 2 User Stories (no matching epic for '리서치' - intentionally NULL, no backlog_item link)
+    ('story-002-01', 'proj-002', '사용자 리서치 분석', '제품 오너로서, 사용자 리서치 인사이트를 확보하여 더 나은 UX를 설계하고 싶습니다', 'HIGH', 'IN_PROGRESS', 5, 'sprint-002-01', '리서치', NULL, 'feat-002-01', 'part-002-ux', NULL, NULL, NOW(), NOW())
+ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.description, epic = EXCLUDED.epic, epic_id = EXCLUDED.epic_id, feature_id = EXCLUDED.feature_id, part_id = EXCLUDED.part_id, backlog_item_id = EXCLUDED.backlog_item_id, status = EXCLUDED.status;
 
 -- ============================================
 -- 5.3. USER STORY - REQUIREMENT LINKS (For Lineage Edges)
 -- ============================================
 INSERT INTO task.user_story_requirement_links (user_story_id, requirement_id)
 VALUES
-    ('story-001-01', 'req-001-01'),  -- OCR Story linked to OCR Requirement
-    ('story-001-02', 'req-001-02'),  -- Fraud Story linked to Fraud Requirement
-    ('story-001-03', 'req-001-03'),  -- API Story linked to Claims API Requirement
-    ('story-001-04', 'req-001-05')   -- Encryption Story linked to Security Requirement
+    ('story-001-01', 'preq-001-01'),  -- OCR Story linked to OCR Requirement (project.requirements)
+    ('story-001-02', 'preq-001-02'),  -- Fraud Story linked to Fraud Requirement
+    ('story-001-03', 'preq-001-03'),  -- API Story linked to Claims API Requirement
+    ('story-001-04', 'preq-001-05')   -- Encryption Story linked to Security Requirement
 ON CONFLICT DO NOTHING;
 
 -- ============================================
@@ -513,6 +513,63 @@ VALUES
     ('req-002-04', 'rfp-002', 'proj-002', 'REQ-MOB-004', '푸시 알림', '청구 상태 업데이트를 위한 실시간 알림', 'FUNCTIONAL', 'MEDIUM', 'IDENTIFIED', 0, 'tenant-001', NOW(), NOW()),
     ('req-002-05', 'rfp-002', 'proj-002', 'REQ-MOB-005', '오프라인 모드', '앱은 오프라인에서 작동하고 연결 시 데이터 동기화 가능해야 함', 'NON_FUNCTIONAL', 'MEDIUM', 'IDENTIFIED', 0, 'tenant-001', NOW(), NOW())
 ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.description;
+
+-- ============================================
+-- 7.1 PROJECT REQUIREMENTS (project.requirements - snapshot from rfp.requirements)
+-- ID: preq- prefix, source_requirement_id tracks original rfp requirement
+-- ============================================
+INSERT INTO project.requirements (
+    id, rfp_id, project_id, source_requirement_id,
+    requirement_code, title, description,
+    category, priority, status, progress_percentage,
+    tenant_id, created_by, created_at, updated_at
+)
+VALUES
+    ('preq-001-01', 'rfp-001', 'proj-001', 'req-001-01', 'P-REQ-AI-001',
+     '문서 OCR 처리', '스캔된 보험 문서에서 99% 정확도로 텍스트 추출',
+     'AI', 'CRITICAL', 'APPROVED', 60,
+     'tenant-001', 'system', '2026-02-01 00:00:00', '2026-02-01 00:00:00'),
+    ('preq-001-02', 'rfp-001', 'proj-001', 'req-001-02', 'P-REQ-AI-002',
+     '사기 탐지 알고리즘', '설정 가능한 민감도 임계값의 ML 기반 사기 탐지',
+     'AI', 'CRITICAL', 'ANALYZED', 30,
+     'tenant-001', 'system', '2026-02-01 00:00:00', '2026-02-01 00:00:00'),
+    ('preq-001-03', 'rfp-001', 'proj-001', 'req-001-03', 'P-REQ-SI-001',
+     '보험청구 관리 API', '보험청구 전체 생명주기 관리를 위한 RESTful API',
+     'FUNCTIONAL', 'HIGH', 'IDENTIFIED', 0,
+     'tenant-001', 'system', '2026-02-01 00:00:00', '2026-02-01 00:00:00'),
+    ('preq-001-04', 'rfp-001', 'proj-001', 'req-001-04', 'P-REQ-SI-002',
+     '레거시 시스템 연동', 'ESB를 통한 기존 보험증권 관리 시스템과의 연동',
+     'INTEGRATION', 'HIGH', 'IDENTIFIED', 0,
+     'tenant-001', 'system', '2026-02-01 00:00:00', '2026-02-01 00:00:00'),
+    ('preq-001-05', 'rfp-001', 'proj-001', 'req-001-05', 'P-REQ-SEC-001',
+     '데이터 암호화', '모든 개인정보 AES-256 암호화 (저장/전송)',
+     'SECURITY', 'CRITICAL', 'APPROVED', 0,
+     'tenant-001', 'system', '2026-02-01 00:00:00', '2026-02-01 00:00:00'),
+    ('preq-001-06', 'rfp-001', 'proj-001', 'req-001-06', 'P-REQ-NF-001',
+     '성능 요구사항', '1000명 동시 사용자, 2초 미만 응답 시간',
+     'NON_FUNCTIONAL', 'HIGH', 'ANALYZED', 0,
+     'tenant-001', 'system', '2026-02-01 00:00:00', '2026-02-01 00:00:00'),
+    ('preq-002-01', 'rfp-002', 'proj-002', 'req-002-01', 'P-REQ-MOB-001',
+     '사용자 인증', '모바일 앱 생체인식 및 비밀번호 기반 인증',
+     'SECURITY', 'CRITICAL', 'IDENTIFIED', 0,
+     'tenant-001', 'system', '2026-02-01 00:00:00', '2026-02-01 00:00:00'),
+    ('preq-002-02', 'rfp-002', 'proj-002', 'req-002-02', 'P-REQ-MOB-002',
+     '보험증권 대시보드', '모든 사용자 보험증권과 주요 정보 표시',
+     'FUNCTIONAL', 'HIGH', 'IDENTIFIED', 0,
+     'tenant-001', 'system', '2026-02-01 00:00:00', '2026-02-01 00:00:00'),
+    ('preq-002-03', 'rfp-002', 'proj-002', 'req-002-03', 'P-REQ-MOB-003',
+     '청구 제출', '모바일에서 사진 업로드와 함께 청구 제출',
+     'FUNCTIONAL', 'CRITICAL', 'IDENTIFIED', 0,
+     'tenant-001', 'system', '2026-02-01 00:00:00', '2026-02-01 00:00:00'),
+    ('preq-002-04', 'rfp-002', 'proj-002', 'req-002-04', 'P-REQ-MOB-004',
+     '푸시 알림', '청구 상태 업데이트 실시간 알림',
+     'FUNCTIONAL', 'MEDIUM', 'IDENTIFIED', 0,
+     'tenant-001', 'system', '2026-02-01 00:00:00', '2026-02-01 00:00:00'),
+    ('preq-002-05', 'rfp-002', 'proj-002', 'req-002-05', 'P-REQ-MOB-005',
+     '오프라인 모드', '오프라인 작동 및 연결 시 데이터 동기화',
+     'NON_FUNCTIONAL', 'MEDIUM', 'IDENTIFIED', 0,
+     'tenant-001', 'system', '2026-02-01 00:00:00', '2026-02-01 00:00:00')
+ON CONFLICT (id) DO NOTHING;
 
 -- ============================================
 -- 8. PARTS (project.parts)
@@ -1056,17 +1113,17 @@ ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 -- ============================================
 INSERT INTO project.backlog_items (id, backlog_id, requirement_id, origin_type, epic_id, priority_order, status, story_points, estimated_effort_hours, acceptance_criteria, sprint_id, created_at, updated_at)
 VALUES
-    -- Project 1 Backlog Items
-    ('bl-item-001', 'backlog-001', 'req-001-01', 'RFP', 'epic-001-01', 1, 'IN_SPRINT', 8, 32, '- OCR 정확도 97% 이상\n- 처리 시간 5초 이내', 'sprint-001-02', NOW(), NOW()),
-    ('bl-item-002', 'backlog-001', 'req-001-02', 'RFP', 'epic-001-02', 2, 'BACKLOG', 13, 52, '- 사기 탐지율 95% 이상\n- 오탐률 5% 이하', NULL, NOW(), NOW()),
-    ('bl-item-003', 'backlog-001', 'req-001-03', 'RFP', 'epic-001-03', 3, 'BACKLOG', 8, 32, '- RESTful API 100% 커버리지\n- 응답 시간 200ms 이내', NULL, NOW(), NOW()),
-    ('bl-item-004', 'backlog-001', 'req-001-05', 'RFP', 'epic-001-04', 4, 'BACKLOG', 5, 20, '- AES-256 암호화 적용\n- 보안 감사 통과', NULL, NOW(), NOW()),
+    -- Project 1 Backlog Items (requirement_id uses preq- IDs from project.requirements)
+    ('bl-item-001', 'backlog-001', 'preq-001-01', 'RFP', 'epic-001-01', 1, 'IN_SPRINT', 8, 32, '- OCR 정확도 97% 이상\n- 처리 시간 5초 이내', 'sprint-001-02', NOW(), NOW()),
+    ('bl-item-002', 'backlog-001', 'preq-001-02', 'RFP', 'epic-001-02', 2, 'BACKLOG', 13, 52, '- 사기 탐지율 95% 이상\n- 오탐률 5% 이하', NULL, NOW(), NOW()),
+    ('bl-item-003', 'backlog-001', 'preq-001-03', 'RFP', 'epic-001-03', 3, 'BACKLOG', 8, 32, '- RESTful API 100% 커버리지\n- 응답 시간 200ms 이내', NULL, NOW(), NOW()),
+    ('bl-item-004', 'backlog-001', 'preq-001-05', 'RFP', 'epic-001-04', 4, 'BACKLOG', 5, 20, '- AES-256 암호화 적용\n- 보안 감사 통과', NULL, NOW(), NOW()),
 
     -- Project 2 Backlog Items
-    ('bl-item-005', 'backlog-002', 'req-002-01', 'RFP', 'epic-002-01', 1, 'BACKLOG', 8, 32, '- 생체인증 지원\n- 로그인 시간 3초 이내', NULL, NOW(), NOW()),
-    ('bl-item-006', 'backlog-002', 'req-002-02', 'RFP', 'epic-002-01', 2, 'BACKLOG', 5, 20, '- 보험증권 목록 표시\n- 실시간 상태 업데이트', NULL, NOW(), NOW()),
-    ('bl-item-007', 'backlog-002', 'req-002-03', 'RFP', 'epic-002-01', 3, 'BACKLOG', 13, 52, '- 사진 업로드 지원\n- 제출 확인 알림', NULL, NOW(), NOW())
-ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status;
+    ('bl-item-005', 'backlog-002', 'preq-002-01', 'RFP', 'epic-002-01', 1, 'BACKLOG', 8, 32, '- 생체인증 지원\n- 로그인 시간 3초 이내', NULL, NOW(), NOW()),
+    ('bl-item-006', 'backlog-002', 'preq-002-02', 'RFP', 'epic-002-01', 2, 'BACKLOG', 5, 20, '- 보험증권 목록 표시\n- 실시간 상태 업데이트', NULL, NOW(), NOW()),
+    ('bl-item-007', 'backlog-002', 'preq-002-03', 'RFP', 'epic-002-01', 3, 'BACKLOG', 13, 52, '- 사진 업로드 지원\n- 제출 확인 알림', NULL, NOW(), NOW())
+ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, requirement_id = EXCLUDED.requirement_id;
 
 -- ============================================
 -- 31. UPDATE USER STORIES with Feature Links
@@ -1078,13 +1135,13 @@ UPDATE task.user_stories SET feature_id = NULL, wbs_item_id = NULL WHERE id = 's
 UPDATE task.user_stories SET feature_id = 'feat-002-01', wbs_item_id = 'wbs-item-014' WHERE id = 'story-002-01';
 
 -- ============================================
--- 32. UPDATE TASKS with Part Links
+-- 32. UPDATE TASKS with Part Links (corrected IDs matching project.parts)
 -- ============================================
-UPDATE task.tasks SET part_id = 'part-001-01' WHERE id IN ('task-001-08', 'task-001-09', 'task-001-10');
-UPDATE task.tasks SET part_id = 'part-001-02' WHERE id IN ('task-001-04', 'task-001-05', 'task-001-06', 'task-001-11', 'task-001-12');
-UPDATE task.tasks SET part_id = 'part-001-03' WHERE id = 'task-001-07';
-UPDATE task.tasks SET part_id = 'part-002-01' WHERE id IN ('task-002-06', 'task-002-07');
-UPDATE task.tasks SET part_id = 'part-002-03' WHERE id = 'task-002-08';
+UPDATE task.tasks SET part_id = 'part-001-ai' WHERE id IN ('task-001-08', 'task-001-09', 'task-001-10');
+UPDATE task.tasks SET part_id = 'part-001-si' WHERE id IN ('task-001-04', 'task-001-05', 'task-001-06', 'task-001-11', 'task-001-12');
+UPDATE task.tasks SET part_id = 'part-001-common' WHERE id = 'task-001-07';
+UPDATE task.tasks SET part_id = 'part-002-ux' WHERE id IN ('task-002-06', 'task-002-07');
+UPDATE task.tasks SET part_id = 'part-002-mobile' WHERE id = 'task-002-08';
 
 -- ============================================
 -- 33. REPORT TEMPLATES (report.report_templates)

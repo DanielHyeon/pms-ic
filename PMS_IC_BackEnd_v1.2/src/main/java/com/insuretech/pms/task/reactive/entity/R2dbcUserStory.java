@@ -58,6 +58,10 @@ public class R2dbcUserStory extends R2dbcBaseEntity {
     private String epic;
 
     @Nullable
+    @Column("epic_id")
+    private String epicId;
+
+    @Nullable
     @Column("priority_order")
     private Integer priorityOrder;
 
@@ -72,6 +76,10 @@ public class R2dbcUserStory extends R2dbcBaseEntity {
     @Nullable
     @Column("part_id")
     private String partId;
+
+    @Nullable
+    @Column("backlog_item_id")
+    private String backlogItemId;
 
     public enum Priority {
         LOW,

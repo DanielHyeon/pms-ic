@@ -59,7 +59,6 @@ export default function EpicFormModal({
         description: epic.description || '',
         phaseId: epic.phaseId,
         priority: epic.priority,
-        startDate: epic.startDate,
         targetDate: epic.targetDate,
         color: epic.color || '#3B82F6',
       });
@@ -197,32 +196,19 @@ export default function EpicFormModal({
             </div>
           </div>
 
-          {/* Dates */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                <Calendar size={14} className="inline mr-1" />
-                시작일
-              </label>
-              <input
-                type="date"
-                value={formData.startDate || ''}
-                onChange={(e) => setFormData({ ...formData, startDate: e.target.value || undefined })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                <Calendar size={14} className="inline mr-1" />
-                목표 완료일
-              </label>
-              <input
-                type="date"
-                value={formData.targetDate || ''}
-                onChange={(e) => setFormData({ ...formData, targetDate: e.target.value || undefined })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+          {/* Target Date */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              <Calendar size={14} className="inline mr-1" />
+              목표 완료일
+            </label>
+            <input
+              type="date"
+              title="목표 완료일"
+              value={formData.targetDate || ''}
+              onChange={(e) => setFormData({ ...formData, targetDate: e.target.value || undefined })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
 
           {/* Color Selection */}

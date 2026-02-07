@@ -22,8 +22,9 @@ import RequirementManagement from './components/RequirementManagement';
 import { LineageManagement } from './components/lineage';
 import { ProjectProvider } from '../contexts/ProjectContext';
 import ToastContainer from './components/ToastContainer';
+import { ProjectShell } from './components/workbench/ProjectShell';
 
-export type View = 'dashboard' | 'projects' | 'parts' | 'rfp' | 'requirements' | 'lineage' | 'phases' | 'kanban' | 'backlog' | 'roles' | 'common' | 'education' | 'settings' | 'system-settings';
+export type View = 'dashboard' | 'projects' | 'parts' | 'rfp' | 'requirements' | 'lineage' | 'phases' | 'kanban' | 'backlog' | 'workbench' | 'roles' | 'common' | 'education' | 'settings' | 'system-settings';
 
 export type UserRole = 'sponsor' | 'pmo_head' | 'pm' | 'developer' | 'qa' | 'business_analyst' | 'auditor' | 'admin';
 
@@ -56,14 +57,14 @@ export default function App() {
   // 역할별 메뉴 접근 권한
   const getAvailableMenus = (role: UserRole): View[] => {
     const menuAccess: Record<UserRole, View[]> = {
-      sponsor: ['dashboard', 'rfp', 'requirements', 'lineage', 'phases', 'roles', 'common', 'education', 'settings'],
-      pmo_head: ['dashboard', 'projects', 'parts', 'rfp', 'requirements', 'lineage', 'phases', 'kanban', 'backlog', 'roles', 'common', 'education', 'system-settings', 'settings'],
-      pm: ['dashboard', 'projects', 'parts', 'rfp', 'requirements', 'lineage', 'phases', 'kanban', 'backlog', 'common', 'education', 'settings'],
-      developer: ['dashboard', 'requirements', 'lineage', 'kanban', 'backlog', 'education', 'settings'],
-      qa: ['dashboard', 'requirements', 'lineage', 'kanban', 'backlog', 'education', 'settings'],
-      business_analyst: ['dashboard', 'rfp', 'requirements', 'lineage', 'phases', 'backlog', 'education', 'settings'],
+      sponsor: ['dashboard', 'rfp', 'requirements', 'lineage', 'phases', 'workbench', 'roles', 'common', 'education', 'settings'],
+      pmo_head: ['dashboard', 'projects', 'parts', 'rfp', 'requirements', 'lineage', 'phases', 'kanban', 'backlog', 'workbench', 'roles', 'common', 'education', 'system-settings', 'settings'],
+      pm: ['dashboard', 'projects', 'parts', 'rfp', 'requirements', 'lineage', 'phases', 'kanban', 'backlog', 'workbench', 'common', 'education', 'settings'],
+      developer: ['dashboard', 'requirements', 'lineage', 'kanban', 'backlog', 'workbench', 'education', 'settings'],
+      qa: ['dashboard', 'requirements', 'lineage', 'kanban', 'backlog', 'workbench', 'education', 'settings'],
+      business_analyst: ['dashboard', 'rfp', 'requirements', 'lineage', 'phases', 'backlog', 'workbench', 'education', 'settings'],
       auditor: ['dashboard', 'requirements', 'lineage', 'phases', 'roles', 'settings'],
-      admin: ['dashboard', 'projects', 'parts', 'rfp', 'requirements', 'lineage', 'phases', 'kanban', 'backlog', 'roles', 'common', 'education', 'system-settings', 'settings'],
+      admin: ['dashboard', 'projects', 'parts', 'rfp', 'requirements', 'lineage', 'phases', 'kanban', 'backlog', 'workbench', 'roles', 'common', 'education', 'system-settings', 'settings'],
     };
     return menuAccess[role] || [];
   };
@@ -78,6 +79,7 @@ export default function App() {
     { id: 'phases' as View, label: '단계별 관리', icon: GitBranch },
     { id: 'kanban' as View, label: '칸반 보드', icon: Kanban },
     { id: 'backlog' as View, label: '백로그 관리', icon: ListTodo },
+    { id: 'workbench' as View, label: 'Workbench', icon: LayoutDashboard },
     { id: 'roles' as View, label: '권한 관리', icon: Users },
     { id: 'common' as View, label: '공통 관리', icon: FolderOpen },
     { id: 'education' as View, label: '교육 관리', icon: GraduationCap },
@@ -111,6 +113,8 @@ export default function App() {
         return <KanbanBoard userRole={currentUser?.role || 'pm'} />;
       case 'backlog':
         return <BacklogManagement userRole={currentUser?.role || 'pm'} />;
+      case 'workbench':
+        return <ProjectShell />;
       case 'roles':
         return <RoleManagement userRole={currentUser?.role || 'pm'} />;
       case 'common':

@@ -25,6 +25,7 @@ public class EpicDto {
     private String color;
     private Integer progress;
     private String priority;
+    private Integer orderNum;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -45,6 +46,7 @@ public class EpicDto {
                 .color(entity.getColor())
                 .progress(entity.getProgress())
                 .priority(entity.getPriority())
+                .orderNum(entity.getOrderNum())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();
