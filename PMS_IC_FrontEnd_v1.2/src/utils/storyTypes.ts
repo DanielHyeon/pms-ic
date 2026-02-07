@@ -49,40 +49,44 @@ export const mapToLegacyStatus = (status: StoryStatus): LegacyStoryStatus => {
 };
 
 export interface UserStory {
-  id: number;
+  id: string;
   title: string;
   description: string;
   priority: number;
   storyPoints?: number;
   status: StoryStatus;
   assignee?: string;
-  epic: string;
+  epicId: string | null;
+  sprintId?: string;
+  partId?: string;
+  featureId: string | null;
+  wbsItemId: string | null;
   acceptanceCriteria: string[];
 }
 
 export interface StoryFormData {
   title: string;
   description: string;
-  epic: string;
+  epicId: string;
   acceptanceCriteria: string[];
 }
 
 export const createEmptyStoryForm = (): StoryFormData => ({
   title: '',
   description: '',
-  epic: '',
+  epicId: '',
   acceptanceCriteria: [''],
 });
 
 export const storyToFormData = (story: UserStory): StoryFormData => ({
   title: story.title,
   description: story.description,
-  epic: story.epic,
+  epicId: story.epicId || '',
   acceptanceCriteria: story.acceptanceCriteria.length > 0 ? [...story.acceptanceCriteria] : [''],
 });
 
 export const validateStoryForm = (form: StoryFormData): boolean => {
-  return !!(form.title.trim() && form.description.trim() && form.epic.trim());
+  return !!(form.title.trim() && form.description.trim() && form.epicId.trim());
 };
 
 export const getPriorityColor = (priority: number): string => {

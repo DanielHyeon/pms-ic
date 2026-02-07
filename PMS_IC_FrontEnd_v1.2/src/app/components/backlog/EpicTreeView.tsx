@@ -381,9 +381,7 @@ export default function EpicTreeView({
     });
   };
 
-  // Stories in backlog (not in any sprint) - IDEA, REFINED, or READY status without sprint assignment
-  const backlogStories = stories.filter((s) => (s.status === 'IDEA' || s.status === 'REFINED' || s.status === 'READY') && !s.sprintId);
-
+  // Parent component is responsible for filtering — EpicTreeView is a pure renderer
   return (
     <div className="space-y-3">
       {/* Header */}
@@ -431,7 +429,7 @@ export default function EpicTreeView({
               key={epic.id}
               epic={epic}
               features={features}
-              stories={backlogStories}
+              stories={stories}
               isExpanded={expandedEpics.has(epic.id)}
               onToggle={() => toggleEpic(epic.id)}
               onStorySelect={onStorySelect}

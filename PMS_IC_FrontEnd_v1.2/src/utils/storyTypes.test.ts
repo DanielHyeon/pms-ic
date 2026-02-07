@@ -110,7 +110,7 @@ describe('validateStoryForm', () => {
       const form: StoryFormData = {
         title: 'User authentication',
         description: 'Implement login functionality',
-        epic: 'Authentication',
+        epicId: 'epic-auth-01',
         acceptanceCriteria: ['User can login'],
       }
       expect(validateStoryForm(form)).toBe(true)
@@ -120,7 +120,7 @@ describe('validateStoryForm', () => {
       const form: StoryFormData = {
         title: 'Test Story',
         description: 'Test Description',
-        epic: 'Test Epic',
+        epicId: 'epic-test-01',
         acceptanceCriteria: [],
       }
       expect(validateStoryForm(form)).toBe(true)
@@ -132,7 +132,7 @@ describe('validateStoryForm', () => {
       const form: StoryFormData = {
         title: '',
         description: 'Valid description',
-        epic: 'Valid epic',
+        epicId: 'epic-valid-01',
         acceptanceCriteria: [],
       }
       expect(validateStoryForm(form)).toBe(false)
@@ -142,7 +142,7 @@ describe('validateStoryForm', () => {
       const form: StoryFormData = {
         title: 'Valid title',
         description: '',
-        epic: 'Valid epic',
+        epicId: 'epic-valid-01',
         acceptanceCriteria: [],
       }
       expect(validateStoryForm(form)).toBe(false)
@@ -152,7 +152,7 @@ describe('validateStoryForm', () => {
       const form: StoryFormData = {
         title: 'Valid title',
         description: 'Valid description',
-        epic: '',
+        epicId: '',
         acceptanceCriteria: [],
       }
       expect(validateStoryForm(form)).toBe(false)
@@ -164,7 +164,7 @@ describe('validateStoryForm', () => {
       const form: StoryFormData = {
         title: '   ',
         description: 'Valid description',
-        epic: 'Valid epic',
+        epicId: 'epic-valid-01',
         acceptanceCriteria: [],
       }
       expect(validateStoryForm(form)).toBe(false)
@@ -174,7 +174,7 @@ describe('validateStoryForm', () => {
       const form: StoryFormData = {
         title: 'Valid title',
         description: '   ',
-        epic: 'Valid epic',
+        epicId: 'epic-valid-01',
         acceptanceCriteria: [],
       }
       expect(validateStoryForm(form)).toBe(false)
@@ -184,7 +184,7 @@ describe('validateStoryForm', () => {
       const form: StoryFormData = {
         title: 'Valid title',
         description: 'Valid description',
-        epic: '\t\n',
+        epicId: '\t\n',
         acceptanceCriteria: [],
       }
       expect(validateStoryForm(form)).toBe(false)
@@ -198,7 +198,7 @@ describe('createEmptyStoryForm', () => {
     expect(form).toEqual({
       title: '',
       description: '',
-      epic: '',
+      epicId: '',
       acceptanceCriteria: [''],
     })
   })
@@ -214,14 +214,16 @@ describe('createEmptyStoryForm', () => {
 describe('storyToFormData', () => {
   it('should convert a UserStory to StoryFormData', () => {
     const story: UserStory = {
-      id: 1,
+      id: 'story-test-01',
       title: 'Test Story',
       description: 'Test Description',
       priority: 1,
       storyPoints: 5,
       status: 'IDEA',
       assignee: 'john.doe',
-      epic: 'Test Epic',
+      epicId: 'epic-test-01',
+      featureId: null,
+      wbsItemId: null,
       acceptanceCriteria: ['Criteria 1', 'Criteria 2'],
     }
 
@@ -229,19 +231,21 @@ describe('storyToFormData', () => {
     expect(formData).toEqual({
       title: 'Test Story',
       description: 'Test Description',
-      epic: 'Test Epic',
+      epicId: 'epic-test-01',
       acceptanceCriteria: ['Criteria 1', 'Criteria 2'],
     })
   })
 
   it('should return single empty string when story has empty acceptanceCriteria', () => {
     const story: UserStory = {
-      id: 1,
+      id: 'story-test-02',
       title: 'Test Story',
       description: 'Test Description',
       priority: 1,
       status: 'IDEA',
-      epic: 'Test Epic',
+      epicId: 'epic-test-02',
+      featureId: null,
+      wbsItemId: null,
       acceptanceCriteria: [],
     }
 
@@ -251,12 +255,14 @@ describe('storyToFormData', () => {
 
   it('should create a copy of acceptanceCriteria array', () => {
     const story: UserStory = {
-      id: 1,
+      id: 'story-test-03',
       title: 'Test Story',
       description: 'Test Description',
       priority: 1,
       status: 'IDEA',
-      epic: 'Test Epic',
+      epicId: null,
+      featureId: null,
+      wbsItemId: null,
       acceptanceCriteria: ['Original'],
     }
 

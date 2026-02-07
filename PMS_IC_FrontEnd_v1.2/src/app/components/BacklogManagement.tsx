@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   ChevronDown,
   ChevronRight,
@@ -18,7 +18,7 @@ import {
 import { UserRole } from '../App';
 import { useStories, useCreateStory, useUpdateStory, useUpdateStoryPriority } from '../../hooks/api/useStories';
 import { useActiveSprint, useAssignToSprint } from '../../hooks/api/useSprints';
-import { useCreateEpic, useUpdateEpic } from '../../hooks/api/useEpics';
+import { useEpics, useCreateEpic, useUpdateEpic } from '../../hooks/api/useEpics';
 import { useCreateFeature, useUpdateFeature } from '../../hooks/api/useFeatures';
 import { useParts } from '../../hooks/api/useParts';
 import { canEdit as checkCanEdit, canPrioritize as checkCanPrioritize } from '../../utils/rolePermissions';
@@ -51,15 +51,18 @@ export default function BacklogManagement({ userRole }: BacklogManagementProps) 
   const updateStoryMutation = useUpdateStory(projectId);
   const updatePriorityMutation = useUpdateStoryPriority(projectId);
   const assignToSprintMutation = useAssignToSprint();
+  const { data: epicList = [] } = useEpics(projectId);
   const createEpicMutation = useCreateEpic();
   const updateEpicMutation = useUpdateEpic();
   const createFeatureMutation = useCreateFeature();
   const updateFeatureMutation = useUpdateFeature();
 
-  const [expandedStory, setExpandedStory] = useState<number | null>(null);
+  const epicById = useMemo(() => new Map(epicList.map((e) => [e.id, e])), [epicList]);
+
+  const [expandedStory, setExpandedStory] = useState<string | null>(null);
   const [selectedPartFilter, setSelectedPartFilter] = useState<string>('');
   const [showPlanningPoker, setShowPlanningPoker] = useState(false);
-  const [selectedStoryForPoker, setSelectedStoryForPoker] = useState<number | null>(null);
+  const [selectedStoryForPoker, setSelectedStoryForPoker] = useState<string | null>(null);
   const [selectedPokerCard, setSelectedPokerCard] = useState<number | null>(null);
   const [isPokerConfirmed, setIsPokerConfirmed] = useState(false);
   const [showAddStoryModal, setShowAddStoryModal] = useState(false);
@@ -94,7 +97,7 @@ export default function BacklogManagement({ userRole }: BacklogManagementProps) 
     const storyData = {
       title: storyForm.title,
       description: storyForm.description,
-      epic: storyForm.epic,
+      epicId: storyForm.epicId,
       acceptanceCriteria: storyForm.acceptanceCriteria.filter((c) => c.trim() !== ''),
     };
 
@@ -110,19 +113,17 @@ export default function BacklogManagement({ userRole }: BacklogManagementProps) 
     });
   };
 
-  const epics = Array.from(new Set(stories.map((s) => s.epic)));
-
-  const movePriority = (id: number, direction: 'up' | 'down') => {
+  const movePriority = (id: string, direction: 'up' | 'down') => {
     if (!canPrioritize) return;
     updatePriorityMutation.mutate({ id, direction });
   };
 
-  const moveToSprint = (storyId: number) => {
+  const moveToSprint = (storyId: string) => {
     if (!canEdit) return;
     updateStoryMutation.mutate({ id: storyId, data: { status: 'IN_SPRINT' } });
   };
 
-  const removeFromSprint = (storyId: number) => {
+  const removeFromSprint = (storyId: string) => {
     if (!canEdit) return;
     updateStoryMutation.mutate({ id: storyId, data: { status: 'READY' } });
   };
@@ -145,7 +146,7 @@ export default function BacklogManagement({ userRole }: BacklogManagementProps) 
         data: {
           title: storyForm.title,
           description: storyForm.description,
-          epic: storyForm.epic,
+          epicId: storyForm.epicId,
           acceptanceCriteria: storyForm.acceptanceCriteria.filter((c) => c.trim() !== ''),
         },
       },
@@ -181,22 +182,23 @@ export default function BacklogManagement({ userRole }: BacklogManagementProps) 
 
   // Handlers for Epic Tree View
   const handleStorySelect = (story: BacklogStory) => {
-    // Convert to old UserStory format for edit modal
-    const legacyStory: UserStory = {
-      id: parseInt(story.id.replace(/\D/g, '')) || 0,
+    // Convert BacklogStory to UserStory for edit modal
+    const userStory: UserStory = {
+      id: story.id,
       title: story.title,
       description: story.description || '',
-      epic: story.epicId || '',
+      epicId: story.epicId || null,
       priority: story.priority === 'CRITICAL' ? 1 : story.priority === 'HIGH' ? 2 : story.priority === 'MEDIUM' ? 3 : 4,
       status: story.status === 'DONE' ? 'DONE' : story.status === 'IN_SPRINT' ? 'IN_SPRINT' : 'READY',
       storyPoints: story.storyPoints,
+      partId: story.partId,
       acceptanceCriteria: story.acceptanceCriteria || [],
     };
-    openEditModal(legacyStory);
+    openEditModal(userStory);
   };
 
   const handleAddStoryToEpic = (epicId: string, featureId?: string) => {
-    setStoryForm({ ...createEmptyStoryForm(), epic: epicId });
+    setStoryForm({ ...createEmptyStoryForm(), epicId });
     setShowAddStoryModal(true);
   };
 
@@ -266,11 +268,11 @@ export default function BacklogManagement({ userRole }: BacklogManagementProps) 
   const mapStatus = (status: string) => status;
 
   const allBacklogStories: BacklogStory[] = stories.map((s) => ({
-    id: `story-${s.id}`,
+    id: s.id,
     title: s.title,
     description: s.description,
-    epicId: s.epic,
-    partId: (s as any).partId, // Part ID for filtering
+    epicId: s.epicId || '',
+    partId: s.partId,
     priority: s.priority <= 1 ? 'CRITICAL' : s.priority === 2 ? 'HIGH' : s.priority === 3 ? 'MEDIUM' : 'LOW',
     status: mapStatus(s.status) as BacklogStory['status'],
     storyPoints: s.storyPoints,
@@ -492,7 +494,7 @@ export default function BacklogManagement({ userRole }: BacklogManagementProps) 
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs text-purple-600 font-medium">Story #{story.id}</span>
-                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">{story.epic}</span>
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">{epicById.get(story.epicId ?? '')?.name || ''}</span>
                       </div>
                       <h4 className="font-medium text-gray-900">{story.title}</h4>
                       <p className="text-sm text-gray-500 mt-1">{story.description}</p>
@@ -670,28 +672,19 @@ export default function BacklogManagement({ userRole }: BacklogManagementProps) 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">에픽 *</label>
                 <select
-                  value={storyForm.epic}
-                  onChange={(e) => setStoryForm({ ...storyForm, epic: e.target.value })}
+                  value={storyForm.epicId}
+                  onChange={(e) => setStoryForm({ ...storyForm, epicId: e.target.value })}
                   title="에픽 선택"
                   aria-label="에픽 선택"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">에픽 선택</option>
-                  {epics.map((epic) => (
-                    <option key={epic} value={epic}>
-                      {epic}
+                  {epicList.map((epic) => (
+                    <option key={epic.id} value={epic.id}>
+                      {epic.name}
                     </option>
                   ))}
-                  <option value="NEW">+ 새 에픽 추가</option>
                 </select>
-                {storyForm.epic === 'NEW' && (
-                  <input
-                    type="text"
-                    placeholder="새 에픽 이름 입력"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mt-2"
-                    onChange={(e) => setStoryForm({ ...storyForm, epic: e.target.value })}
-                  />
-                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -806,16 +799,16 @@ export default function BacklogManagement({ userRole }: BacklogManagementProps) 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">에픽 *</label>
                 <select
-                  value={storyForm.epic}
-                  onChange={(e) => setStoryForm({ ...storyForm, epic: e.target.value })}
+                  value={storyForm.epicId}
+                  onChange={(e) => setStoryForm({ ...storyForm, epicId: e.target.value })}
                   title="에픽 선택"
                   aria-label="에픽 선택"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">에픽 선택</option>
-                  {epics.map((epic) => (
-                    <option key={epic} value={epic}>
-                      {epic}
+                  {epicList.map((epic) => (
+                    <option key={epic.id} value={epic.id}>
+                      {epic.name}
                     </option>
                   ))}
                 </select>
@@ -968,7 +961,7 @@ export default function BacklogManagement({ userRole }: BacklogManagementProps) 
                       <div className="flex items-start justify-between">
                         <div className="flex-1 min-w-0">
                           <h4 className="font-medium text-gray-900 text-sm truncate">{story.title}</h4>
-                          <p className="text-xs text-gray-500 mt-0.5 truncate">{story.epic}</p>
+                          <p className="text-xs text-gray-500 mt-0.5 truncate">{epicById.get(story.epicId ?? '')?.name || ''}</p>
                         </div>
                         <div className="flex items-center gap-1 ml-2">
                           <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium">
@@ -1060,7 +1053,7 @@ export default function BacklogManagement({ userRole }: BacklogManagementProps) 
                             <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-sm font-medium">
                               {story.storyPoints || '?'} SP
                             </span>
-                            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-sm">{story.epic}</span>
+                            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-sm">{epicById.get(story.epicId ?? '')?.name || ''}</span>
                           </div>
                         </div>
                       </div>

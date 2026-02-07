@@ -34,7 +34,11 @@ public class UserStoryResponse {
 
     private String epic;
 
+    private String epicId;
+
     private String featureId;
+
+    private String wbsItemId;
 
     private String partId;
 
@@ -61,7 +65,9 @@ public class UserStoryResponse {
                 .status(story.getStatus())
                 .assigneeId(story.getAssigneeId())
                 .epic(story.getEpic())
+                .epicId(story.getEpicId())
                 .featureId(story.getFeatureId())
+                .wbsItemId(story.getWbsItemId())
                 .partId(story.getPartId())
                 .acceptanceCriteriaList(acceptanceCriteriaList)
                 .priorityOrder(story.getPriorityOrder())
