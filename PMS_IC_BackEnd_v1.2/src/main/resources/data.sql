@@ -36,7 +36,19 @@ VALUES
     ('U005', 'qa@insure.com', '$2b$10$pnu8J3dTzmxXXaX.w8UqXuu/JySVGgeO/.bTHBKxdeQ9mBLaaBicy', '최지훈', 'QA', '품질보증팀', true, NOW(), NOW()),
     ('U006', 'ba@insure.com', '$2b$10$pnu8J3dTzmxXXaX.w8UqXuu/JySVGgeO/.bTHBKxdeQ9mBLaaBicy', '이영희', 'BUSINESS_ANALYST', '보험심사팀', true, NOW(), NOW()),
     ('U007', 'auditor@insure.com', '$2b$10$pnu8J3dTzmxXXaX.w8UqXuu/JySVGgeO/.bTHBKxdeQ9mBLaaBicy', '감리인', 'AUDITOR', '외부감리법인', true, NOW(), NOW()),
-    ('U008', 'admin@insure.com', '$2b$10$pnu8J3dTzmxXXaX.w8UqXuu/JySVGgeO/.bTHBKxdeQ9mBLaaBicy', '시스템관리자', 'ADMIN', 'IT운영팀', true, NOW(), NOW())
+    ('U008', 'admin@insure.com', '$2b$10$pnu8J3dTzmxXXaX.w8UqXuu/JySVGgeO/.bTHBKxdeQ9mBLaaBicy', '시스템관리자', 'ADMIN', 'IT운영팀', true, NOW(), NOW()),
+
+    -- Extended team members for Part assignments
+    ('user-dev-004', 'dev.jung.sumin@insuretech.com', '$2b$10$pnu8J3dTzmxXXaX.w8UqXuu/JySVGgeO/.bTHBKxdeQ9mBLaaBicy', '정수민', 'DEVELOPER', 'AI개발팀', true, NOW(), NOW()),
+    ('user-dev-005', 'dev.oh@insuretech.com', '$2b$10$pnu8J3dTzmxXXaX.w8UqXuu/JySVGgeO/.bTHBKxdeQ9mBLaaBicy', '오민석', 'DEVELOPER', 'AI개발팀', true, NOW(), NOW()),
+    ('user-dev-006', 'dev.kang@insuretech.com', '$2b$10$pnu8J3dTzmxXXaX.w8UqXuu/JySVGgeO/.bTHBKxdeQ9mBLaaBicy', '강민호', 'DEVELOPER', '백엔드개발팀', true, NOW(), NOW()),
+    ('user-dev-007', 'dev.yoon@insuretech.com', '$2b$10$pnu8J3dTzmxXXaX.w8UqXuu/JySVGgeO/.bTHBKxdeQ9mBLaaBicy', '윤서연', 'DEVELOPER', '백엔드개발팀', true, NOW(), NOW()),
+    ('user-dev-008', 'dev.im@insuretech.com', '$2b$10$pnu8J3dTzmxXXaX.w8UqXuu/JySVGgeO/.bTHBKxdeQ9mBLaaBicy', '임재현', 'DEVELOPER', '공통개발팀', true, NOW(), NOW()),
+    ('user-dev-009', 'dev.song@insuretech.com', '$2b$10$pnu8J3dTzmxXXaX.w8UqXuu/JySVGgeO/.bTHBKxdeQ9mBLaaBicy', '송유나', 'DEVELOPER', '공통개발팀', true, NOW(), NOW()),
+    ('user-qa-002', 'qa.bae@insuretech.com', '$2b$10$pnu8J3dTzmxXXaX.w8UqXuu/JySVGgeO/.bTHBKxdeQ9mBLaaBicy', '배지원', 'QA', '품질보증팀', true, NOW(), NOW()),
+    ('user-ux-001', 'ux.kim@insuretech.com', '$2b$10$pnu8J3dTzmxXXaX.w8UqXuu/JySVGgeO/.bTHBKxdeQ9mBLaaBicy', '김다은', 'DEVELOPER', 'UX디자인팀', true, NOW(), NOW()),
+    ('user-ios-001', 'ios.hong@insuretech.com', '$2b$10$pnu8J3dTzmxXXaX.w8UqXuu/JySVGgeO/.bTHBKxdeQ9mBLaaBicy', '홍길동', 'DEVELOPER', '모바일개발팀', true, NOW(), NOW()),
+    ('user-android-001', 'android.lee@insuretech.com', '$2b$10$pnu8J3dTzmxXXaX.w8UqXuu/JySVGgeO/.bTHBKxdeQ9mBLaaBicy', '이순신', 'DEVELOPER', '모바일개발팀', true, NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
 -- ============================================

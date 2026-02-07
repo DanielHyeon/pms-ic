@@ -115,24 +115,23 @@ BEGIN
     FROM task.user_stories;
 
     IF v_null_epic_rate > 20 THEN
-        RAISE WARNING 'SOFT WARNING: epic_id NULL rate = %% (threshold: 20%%)',
+        RAISE WARNING 'SOFT WARNING: epic_id NULL rate = %%% (threshold: 20%%)',
             v_null_epic_rate;
     END IF;
 
     IF v_null_part_rate > 30 THEN
-        RAISE WARNING 'SOFT WARNING: part_id NULL rate = %% (threshold: 30%%)',
+        RAISE WARNING 'SOFT WARNING: part_id NULL rate = %%% (threshold: 30%%)',
             v_null_part_rate;
     END IF;
 
     -- ============================================================
     -- Final result
     -- ============================================================
-    RAISE NOTICE 'DATA QUALITY GATE PASSED: '
-        'orphan(p=%,e=%,r=%) mismatch(p=%,e=%) feature_no_part=% '
-        'optionA(dup_bl=%,dup_sr=%,inv_bl=%) epic_null=%%% part_null=%%%',
+    RAISE NOTICE 'DATA QUALITY GATE PASSED';
+    RAISE NOTICE '  orphan(p=%,e=%,r=%) mismatch(p=%,e=%) feature_no_part=%',
         v_orphan_parts, v_orphan_epics, v_orphan_reqs,
-        v_mismatch_parts, v_mismatch_epics,
-        v_feature_no_part,
+        v_mismatch_parts, v_mismatch_epics, v_feature_no_part;
+    RAISE NOTICE '  optionA(dup_bl=%,dup_sr=%,inv_bl=%) epic_null=%%% part_null=%%%',
         v_dup_backlog_req, v_dup_story_req, v_invalid_backlog_ref,
         v_null_epic_rate, v_null_part_rate;
 END $$;

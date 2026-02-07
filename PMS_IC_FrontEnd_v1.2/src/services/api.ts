@@ -839,10 +839,10 @@ export class ApiService {
     return this.deleteKpi(phaseId, kpiId);
   }
 
-  // Kanban Board API - uses v2 endpoint with projectId in path
-  async getKanbanBoard(projectId?: string) {
+  // Kanban Board API - uses v2 endpoint (delegates to primary getKanbanBoard)
+  async getKanbanBoardV2(projectId?: string) {
     if (!projectId) return { columns: [] };
-    return this.fetchWithFallback(`${V2}/projects/${projectId}/kanban`, {}, { columns: [] });
+    return this.getKanbanBoard(projectId);
   }
 
   async getTasks(projectId?: string) {
