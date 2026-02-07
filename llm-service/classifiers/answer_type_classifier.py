@@ -49,6 +49,7 @@ class AnswerType(Enum):
     COMPLETED_TASKS = "completed_tasks"       # Completed tasks list
     TASKS_BY_STATUS = "tasks_by_status"       # Tasks filtered by specific status
     KANBAN_OVERVIEW = "kanban_overview"        # Kanban board summary
+    ENTITY_PROGRESS = "entity_progress"      # Specific entity progress query
 
     # Priority 2: General status (constrained)
     STATUS_METRIC = "status_metric"           # Numbers, percentages, counts
@@ -476,7 +477,26 @@ class AnswerTypeClassifier:
         # Check by priority order (1, 2, 3)
         # Layer 1: Uses fuzzy jamo matching for keyword tolerance
         # =================================================================
+        from utils.entity_resolver import extract_entity_name, has_progress_signal
+
         for priority in [1, 2, 3]:
+            # Entity progress intercept: between P1 and P2
+            # P1 intents (sprint, backlog, risk, etc.) already checked;
+            # catch entity-specific progress BEFORE P2 STATUS_METRIC absorbs it
+            if priority == 2:
+                if has_progress_signal(query_lower):
+                    entity_candidate = extract_entity_name(query)
+                    if entity_candidate:
+                        reasoning = f"Entity progress query: target='{entity_candidate}'"
+                        if was_corrected:
+                            reasoning += f" (typo corrected: '{original_query}')"
+                        return AnswerTypeResult(
+                            answer_type=AnswerType.ENTITY_PROGRESS,
+                            confidence=0.85,
+                            matched_patterns=["entity_progress"],
+                            reasoning=reasoning,
+                        )
+
             for answer_type, config in INTENT_PATTERNS.items():
                 if config.get("priority") != priority:
                     continue
@@ -832,6 +852,7 @@ class AnswerTypeClassifier:
             AnswerType.COMPLETED_TASKS,
             AnswerType.TASKS_BY_STATUS,
             AnswerType.KANBAN_OVERVIEW,
+            AnswerType.ENTITY_PROGRESS,
         }
 
     def should_use_rag(self, answer_type: AnswerType) -> bool:

@@ -42,6 +42,7 @@ def render(contract: ResponseContract) -> str:
         "completed_tasks": render_completed_tasks,
         "tasks_by_status": render_tasks_by_status,
         "kanban_overview": render_kanban_overview,
+        "entity_progress": render_entity_progress,
         "casual": render_casual,
         "status_list": render_status_list,
     }
@@ -610,6 +611,213 @@ def render_completed_tasks(contract: ResponseContract) -> str:
     return "\n".join(lines)
 
 
+def render_entity_progress(contract: ResponseContract) -> str:
+    """
+    Render entity progress with completeness info.
+
+    Shows WBS entity progress details with NULL-safe rendering:
+    - progress value or "— (미설정)" for NULL
+    - completeness metadata (calculation method, confidence)
+    - children summary by status
+    """
+    lines = []
+
+    lines.append(f"📊 **WBS 항목 진행률** (기준: {contract.reference_time})")
+    if contract.scope:
+        lines.append(f"📍 {contract.scope}")
+    lines.append("")
+
+    if contract.has_error():
+        for warning in contract.warnings:
+            lines.append(f"⚠️ {warning}")
+        lines.append("")
+        _append_tips(lines, contract.tips)
+        lines.append(f"_데이터 출처: {contract.provenance}_")
+        return "\n".join(lines)
+
+    data = contract.data
+
+    # Disambiguation case (multiple matches)
+    disambiguation = data.get("disambiguation")
+    if disambiguation:
+        match_count = data.get("match_count", 0)
+        search_term = data.get("search_term", "")
+        lines.append(f"**'{search_term}'** 검색 결과: {match_count}건")
+        lines.append("")
+        for item in disambiguation:
+            name = item.get("name", "?")
+            etype = _translate_entity_type(item.get("type"))
+            code = item.get("code") or ""
+            status = _translate_status(item.get("status"))
+            progress = item.get("progress")
+            phase = item.get("phase_name") or ""
+
+            code_str = f" ({code})" if code else ""
+            progress_str = f" {progress}%" if progress is not None else ""
+            phase_str = f" | {phase}" if phase else ""
+            lines.append(f"  - **{name}**{code_str} [{etype}] {status}{progress_str}{phase_str}")
+        lines.append("")
+
+        for warning in contract.warnings:
+            lines.append(f"ℹ️ {warning}")
+        _append_tips(lines, contract.tips)
+        lines.append(f"_데이터 출처: {contract.provenance}_")
+        return "\n".join(lines)
+
+    # Single entity detail
+    entity = data.get("entity", {})
+    if not entity:
+        # No match found
+        for warning in contract.warnings:
+            lines.append(f"ℹ️ {warning}")
+        lines.append("")
+        _append_tips(lines, contract.tips)
+        lines.append(f"_데이터 출처: {contract.provenance}_")
+        return "\n".join(lines)
+
+    name = entity.get("name", "?")
+    etype = _translate_entity_type(entity.get("type"))
+    code = entity.get("code") or ""
+    status = _translate_status(entity.get("status"))
+    progress = entity.get("progress")
+    progress_is_null = entity.get("progress_is_null", False)
+
+    code_str = f": {code}" if code else ""
+    lines.append(f"**{name}** ({etype}{code_str})")
+
+    lines.append(f"- 상태: {status}")
+
+    # Progress display - NULL-safe
+    # Priority: child_weighted_avg > direct DB value > status_based
+    completeness = data.get("completeness", {})
+    calc = completeness.get("calculation", "")
+    child_progress = completeness.get("progress") if calc == "child_weighted_avg" else None
+
+    if child_progress is not None:
+        # Prefer child-calculated value (most accurate, real-time)
+        filled = int(child_progress / 10)
+        bar = "█" * filled + "░" * (10 - filled)
+        lines.append(f"- 진행률: [{bar}] {child_progress}% (하위 항목 기준)")
+        # Warn if direct value differs from calculated value
+        if not progress_is_null and progress is not None and progress != child_progress:
+            lines.append(f"  ⚠️ 항목 직접 설정값({progress}%)과 차이 있음 → 하위 항목 기준 값을 표시합니다")
+    elif progress_is_null:
+        if calc == "status_based":
+            entity_status = entity.get("status", "")
+            if entity_status == "IN_PROGRESS":
+                lines.append("- 진행률: — (미설정, 상태 기반 추정 약 50%)")
+            elif entity_status == "COMPLETED":
+                lines.append("- 진행률: — (미설정, 상태 기반 추정 약 100%)")
+            else:
+                lines.append("- 진행률: — (미설정)")
+        else:
+            lines.append("- 진행률: — (미설정)")
+    else:
+        filled = int(progress / 10) if progress else 0
+        bar = "█" * filled + "░" * (10 - filled)
+        lines.append(f"- 진행률: [{bar}] {progress}%")
+
+    # Hierarchy
+    hierarchy = data.get("hierarchy", {})
+    if hierarchy.get("phase"):
+        lines.append(f"- 페이즈: {hierarchy['phase']}")
+    if hierarchy.get("group"):
+        lines.append(f"- 상위 그룹: {hierarchy['group']}")
+
+    # Schedule
+    schedule = data.get("schedule", {})
+    if schedule.get("planned_start") and schedule.get("planned_end"):
+        remaining = schedule.get("days_remaining")
+        remaining_str = f" (남은 {remaining}일)" if remaining is not None else ""
+        overdue_str = " ⚠️ 기한 초과" if schedule.get("is_overdue") else ""
+        lines.append(f"- 기간: {schedule['planned_start']} ~ {schedule['planned_end']}{remaining_str}{overdue_str}")
+
+    # Effort
+    effort = data.get("effort", {})
+    if effort.get("estimated_hours") is not None and effort.get("actual_hours") is not None:
+        lines.append(f"- 공수: 실적 {effort['actual_hours']}h / 예상 {effort['estimated_hours']}h")
+
+    lines.append("")
+
+    # Children summary
+    children = data.get("children", {})
+    if children and children.get("total", 0) > 0:
+        total = children["total"]
+        by_status = children.get("by_status", {})
+        lines.append(f"**하위 항목 현황** ({total}개)")
+
+        status_emoji = {
+            "COMPLETED": "✅", "IN_PROGRESS": "🔄",
+            "NOT_STARTED": "📝", "ON_HOLD": "⏸️", "CANCELLED": "❌",
+        }
+        status_order = ["COMPLETED", "IN_PROGRESS", "NOT_STARTED", "ON_HOLD", "CANCELLED"]
+
+        for s in status_order:
+            if s in by_status:
+                emoji = status_emoji.get(s, "📌")
+                label = _translate_status(s)
+                lines.append(f"  {emoji} {label}: {by_status[s]}개")
+
+        # Any other statuses
+        for s, count in by_status.items():
+            if s not in status_order:
+                lines.append(f"  📌 {_translate_status(s)}: {count}개")
+
+        lines.append("")
+
+    # Warnings
+    for warning in contract.warnings:
+        lines.append(f"⚠️ {warning}")
+    if contract.warnings:
+        lines.append("")
+
+    # Completeness info
+    completeness = data.get("completeness", {})
+    if completeness:
+        calc = completeness.get("calculation", "")
+        confidence = completeness.get("confidence", "")
+        null_count = completeness.get("null_count", 0)
+        null_ratio = completeness.get("null_ratio", 0)
+
+        calc_labels = {
+            "direct": "직접 입력값",
+            "child_weighted_avg": "하위 항목 가중 평균 (NULL 제외)",
+            "linked_task": "연결 태스크 상태 기반",
+            "status_based": "상태 기반 추정",
+        }
+        confidence_labels = {
+            "high": "높음",
+            "medium": "보통",
+            "low": "낮음",
+        }
+
+        lines.append("💡 **산출 근거**:")
+        lines.append(f"  - 방식: {calc_labels.get(calc, calc)}")
+        if null_count > 0:
+            completeness_pct = round((1 - null_ratio) * 100)
+            lines.append(f"  - 완전성: {completeness_pct}% ({null_count}건 progress 미설정)")
+        lines.append(f"  - 신뢰도: {confidence_labels.get(confidence, confidence)}")
+        lines.append("")
+
+    _append_tips(lines, contract.tips)
+    lines.append(f"_데이터 출처: {contract.provenance}_")
+    return "\n".join(lines)
+
+
+def _translate_entity_type(entity_type: str | None) -> str:
+    """Translate entity type to display name"""
+    if not entity_type:
+        return "항목"
+    translations = {
+        "phase": "Phase",
+        "wbs_item": "WBS Item",
+        "wbs_group": "WBS Group",
+        "wbs_task": "WBS Task",
+        "user_story": "User Story",
+    }
+    return translations.get(entity_type, entity_type)
+
+
 def render_casual(contract: ResponseContract) -> str:
     """Render casual greeting"""
     return (
@@ -779,6 +987,8 @@ def _translate_status(status: str | None) -> str:
         "TODO": "할 일",
         "ACTIVE": "활성",
         "COMPLETED": "완료",
+        "NOT_STARTED": "미시작",
+        "ON_HOLD": "보류",
     }
 
     return translations.get(status.upper(), status)

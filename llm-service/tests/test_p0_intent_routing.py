@@ -423,6 +423,289 @@ class TestKanbanClassificationFixes:
 # Phase 2: Kanban Overview Tests
 # =============================================================================
 
+class TestEntityProgressClassification:
+    """Entity progress classification tests (P6)"""
+
+    @pytest.fixture
+    def classifier(self):
+        return AnswerTypeClassifier()
+
+    def test_specific_entity_progress(self, classifier):
+        """Named WBS entity + progress keyword → ENTITY_PROGRESS"""
+        cases = [
+            "ocr 성능 평가 진행율은",
+            "요구사항 분석 진행률 알려줘",
+            "데이터 처리 파이프라인 어디까지 됐어",
+            "UI 설계 검토 몇 퍼센트야",
+        ]
+        for msg in cases:
+            result = classifier.classify(msg)
+            assert result.answer_type == AnswerType.ENTITY_PROGRESS, \
+                f"Expected ENTITY_PROGRESS for '{msg}', got {result.answer_type}"
+
+    def test_project_progress_stays_metric(self, classifier):
+        """Project-level progress → status_metric (NOT entity_progress)"""
+        cases = [
+            "프로젝트 진행율은",
+            "전체 진행률 보여줘",
+            "진행률 알려줘",
+        ]
+        for msg in cases:
+            result = classifier.classify(msg)
+            assert result.answer_type != AnswerType.ENTITY_PROGRESS, \
+                f"'{msg}' should NOT be ENTITY_PROGRESS, got {result.answer_type}"
+
+    def test_sprint_progress_not_entity(self, classifier):
+        """Sprint progress → sprint_progress (NOT entity_progress)"""
+        result = classifier.classify("이번 스프린트 진행률")
+        assert result.answer_type == AnswerType.SPRINT_PROGRESS
+
+    def test_short_name_stays_metric(self, classifier):
+        """Too-short entity name (<=2 chars) → NOT entity_progress"""
+        cases = [
+            "UI 진행률",
+            "QA 진행률",
+        ]
+        for msg in cases:
+            result = classifier.classify(msg)
+            assert result.answer_type != AnswerType.ENTITY_PROGRESS, \
+                f"'{msg}' should NOT be ENTITY_PROGRESS (name too short)"
+
+    def test_scope_word_stripped(self, classifier):
+        """Scope words in candidate should be stripped"""
+        result = classifier.classify("프로젝트 OCR 성능 평가 진행률")
+        assert result.answer_type == AnswerType.ENTITY_PROGRESS
+
+    def test_sprint_synonym_delegation(self, classifier):
+        """Sprint synonym in query → NOT entity_progress"""
+        cases = [
+            "Sprint 1 진행률",
+            "스프린트 3 진행률",
+            "iteration 진행률",
+        ]
+        for msg in cases:
+            result = classifier.classify(msg)
+            assert result.answer_type != AnswerType.ENTITY_PROGRESS, \
+                f"'{msg}' should NOT be ENTITY_PROGRESS (sprint delegation)"
+
+    def test_time_adverb_stripped(self, classifier):
+        """Time adverbs should be stripped from candidate"""
+        result = classifier.classify("금주 OCR 평가 진행률")
+        # "금주" stripped, "OCR 평가" remains (4 chars > 2, valid)
+        assert result.answer_type == AnswerType.ENTITY_PROGRESS
+
+    def test_phase_prefix_query(self, classifier):
+        """Phase prefix '단계:' queries → ENTITY_PROGRESS"""
+        cases = [
+            "단계: AI 모델 설계/학습 진행율은",
+            "단계 데이터 처리 진행률",
+        ]
+        for msg in cases:
+            result = classifier.classify(msg)
+            assert result.answer_type == AnswerType.ENTITY_PROGRESS, \
+                f"Expected ENTITY_PROGRESS for '{msg}', got {result.answer_type}"
+
+    def test_phase_only_stays_metric(self, classifier):
+        """'단계 진행률' alone should NOT be entity_progress"""
+        result = classifier.classify("단계 진행률")
+        assert result.answer_type != AnswerType.ENTITY_PROGRESS
+
+
+class TestEntityProgressHandler:
+    """Entity progress handler registration and rendering tests"""
+
+    def test_entity_progress_handler_registered(self):
+        """entity_progress handler should be registered"""
+        assert has_dedicated_handler("entity_progress")
+        assert get_handler("entity_progress") is not None
+
+    def test_entity_progress_header_rendering(self):
+        """Entity progress should render with distinct WBS header"""
+        contract = ResponseContract(
+            intent="entity_progress",
+            reference_time="2026-02-07 14:30 KST",
+            scope="Project: Test",
+            data={
+                "entity": {
+                    "name": "OCR 성능 평가", "type": "wbs_item",
+                    "status": "IN_PROGRESS", "progress": 65,
+                    "progress_is_null": False,
+                },
+                "completeness": {
+                    "calculation": "child_weighted_avg",
+                    "confidence": "high",
+                    "null_count": 0,
+                    "null_ratio": 0.0,
+                },
+            },
+        )
+        result = render(contract)
+        assert "📊 **WBS 항목 진행률**" in result
+        assert "📊 **Project Status**" not in result, \
+            "REGRESSION: Status header in entity_progress response!"
+        assert "OCR 성능 평가" in result
+
+    def test_null_progress_shows_dash_not_zero(self):
+        """NULL progress renders as dash with warning, NOT '0%'"""
+        contract = ResponseContract(
+            intent="entity_progress",
+            reference_time="2026-02-07 14:30 KST",
+            scope="Project: Test",
+            data={
+                "entity": {
+                    "name": "테스트 항목", "type": "wbs_item",
+                    "status": "IN_PROGRESS", "progress": None,
+                    "progress_is_null": True,
+                },
+                "completeness": {
+                    "calculation": "status_based",
+                    "confidence": "low",
+                    "null_count": 5,
+                    "null_ratio": 1.0,
+                },
+            },
+        )
+        result = render(contract)
+        assert "미설정" in result
+        # 0% should NOT appear when progress_is_null
+        assert "0%" not in result or "추정" in result
+
+    def test_disambiguation_list_rendering(self):
+        """Multiple matches render as disambiguation list"""
+        contract = ResponseContract(
+            intent="entity_progress",
+            reference_time="2026-02-07 14:30 KST",
+            scope="Project: Test",
+            data={
+                "disambiguation": [
+                    {"name": "OCR 1단계", "type": "wbs_item", "status": "IN_PROGRESS", "progress": 40},
+                    {"name": "OCR 2단계", "type": "wbs_item", "status": "NOT_STARTED", "progress": 0},
+                ],
+                "match_count": 2,
+                "search_term": "OCR",
+            },
+            warnings=["2건의 항목이 검색되었습니다. 정확한 이름을 입력해 주세요."],
+        )
+        result = render(contract)
+        assert "OCR 1단계" in result
+        assert "OCR 2단계" in result
+        assert "2건" in result
+
+    def test_completeness_info_shown(self):
+        """Completeness metadata is rendered"""
+        contract = ResponseContract(
+            intent="entity_progress",
+            reference_time="2026-02-07 14:30 KST",
+            scope="Project: Test",
+            data={
+                "entity": {
+                    "name": "데이터 처리", "type": "wbs_item",
+                    "status": "IN_PROGRESS", "progress": 45,
+                    "progress_is_null": False,
+                },
+                "completeness": {
+                    "calculation": "child_weighted_avg",
+                    "confidence": "medium",
+                    "null_count": 2,
+                    "null_ratio": 0.4,
+                    "progress": 45,
+                },
+                "children_summary": {
+                    "total": 5,
+                    "by_status": {"IN_PROGRESS": 2, "COMPLETED": 1, "NOT_STARTED": 2},
+                },
+            },
+        )
+        result = render(contract)
+        assert "산출 근거" in result or "confidence" in result.lower() or "신뢰도" in result
+
+    def test_child_calculated_preferred_over_direct(self):
+        """Child-weighted average should be preferred over stale direct value"""
+        contract = ResponseContract(
+            intent="entity_progress",
+            reference_time="2026-02-07 14:30 KST",
+            scope="Project: Test",
+            data={
+                "entity": {
+                    "name": "분류 모델 학습", "type": "wbs_item",
+                    "status": "IN_PROGRESS", "progress": 85,
+                    "progress_is_null": False,
+                },
+                "completeness": {
+                    "calculation": "child_weighted_avg",
+                    "confidence": "high",
+                    "null_count": 0,
+                    "null_ratio": 0.0,
+                    "progress": 83,
+                },
+            },
+        )
+        result = render(contract)
+        # Should show child-calculated 83%, not stale 85%
+        assert "83%" in result
+        assert "하위 항목 기준" in result
+        # Should warn about discrepancy
+        assert "85%" in result
+        assert "차이" in result
+
+    def test_no_discrepancy_warning_when_values_match(self):
+        """No discrepancy warning when direct and calculated values match"""
+        contract = ResponseContract(
+            intent="entity_progress",
+            reference_time="2026-02-07 14:30 KST",
+            scope="Project: Test",
+            data={
+                "entity": {
+                    "name": "OCR 평가", "type": "wbs_item",
+                    "status": "IN_PROGRESS", "progress": 60,
+                    "progress_is_null": False,
+                },
+                "completeness": {
+                    "calculation": "child_weighted_avg",
+                    "confidence": "high",
+                    "null_count": 0,
+                    "null_ratio": 0.0,
+                    "progress": 60,
+                },
+            },
+        )
+        result = render(contract)
+        assert "60%" in result
+        assert "차이" not in result
+
+
+    def test_phase_entity_type_rendering(self):
+        """Phase entity type should render correctly with Phase label"""
+        contract = ResponseContract(
+            intent="entity_progress",
+            reference_time="2026-02-07 14:30 KST",
+            scope="Project: Test",
+            data={
+                "entity": {
+                    "name": "AI 모델 설계/학습", "type": "phase",
+                    "status": "IN_PROGRESS", "progress": 45,
+                    "progress_is_null": False,
+                },
+                "completeness": {
+                    "calculation": "child_weighted_avg",
+                    "confidence": "medium",
+                    "null_count": 1,
+                    "null_ratio": 0.2,
+                    "progress": 42,
+                },
+                "children": {
+                    "total": 5,
+                    "by_status": {"IN_PROGRESS": 3, "COMPLETED": 1, "NOT_STARTED": 1},
+                    "completion_rate": 20.0,
+                },
+            },
+        )
+        result = render(contract)
+        assert "AI 모델 설계/학습" in result
+        assert "Phase" in result
+        assert "42%" in result  # child-calculated preferred
+
+
 class TestKanbanOverviewIntent:
     """Kanban board overview intent tests (Phase 2)"""
 

@@ -1,6 +1,9 @@
 -- Mock Data for PMS Insurance Claims
--- Version: 20260123
+-- Version: 20260207
 -- Description: Sample data with 2 projects for testing (Korean localized)
+-- Updated: Added new columns from Flyway migrations V20260125~V20260225
+--   (WBS groups/items/tasks hours & assignee, epics extended fields,
+--    features part/wbs linkage, deliverables RAG status, weekly reports scope)
 
 -- ============================================
 -- 1. USERS (auth.users)
@@ -436,15 +439,15 @@ ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, goal = EXCLUDED.goal, statu
 -- ============================================
 -- 5.2. USER STORIES (task.user_stories) - For Lineage Tracking
 -- ============================================
-INSERT INTO task.user_stories (id, project_id, title, description, priority, status, story_points, sprint_id, epic, created_at, updated_at)
+INSERT INTO task.user_stories (id, project_id, title, description, priority, status, story_points, sprint_id, epic, neo4j_node_id, created_at, updated_at)
 VALUES
     -- Project 1 User Stories
-    ('story-001-01', 'proj-001', 'OCR 문서 업로드', '보험심사 담당자로서, 스캔한 문서를 업로드하여 시스템이 자동으로 텍스트를 추출할 수 있게 하고 싶습니다', 'CRITICAL', 'COMPLETED', 8, 'sprint-001-01', '문서 처리', NOW(), NOW()),
-    ('story-001-02', 'proj-001', '사기 탐지 대시보드', '사기 분석가로서, 사기 위험 점수를 확인하여 조사 우선순위를 정할 수 있게 하고 싶습니다', 'CRITICAL', 'IN_PROGRESS', 13, 'sprint-001-02', '사기 탐지', NOW(), NOW()),
-    ('story-001-03', 'proj-001', '보험청구 API 연동', '개발자로서, RESTful API를 통해 외부 시스템이 보험청구 관리 시스템과 연동할 수 있게 하고 싶습니다', 'HIGH', 'SELECTED', 8, 'sprint-001-02', 'API 개발', NOW(), NOW()),
-    ('story-001-04', 'proj-001', '데이터 암호화 구현', '보안 담당자로서, 모든 개인정보가 암호화되어 규정을 준수할 수 있게 하고 싶습니다', 'CRITICAL', 'BACKLOG', 5, NULL, '보안', NOW(), NOW()),
+    ('story-001-01', 'proj-001', 'OCR 문서 업로드', '보험심사 담당자로서, 스캔한 문서를 업로드하여 시스템이 자동으로 텍스트를 추출할 수 있게 하고 싶습니다', 'CRITICAL', 'COMPLETED', 8, 'sprint-001-01', '문서 처리', NULL, NOW(), NOW()),
+    ('story-001-02', 'proj-001', '사기 탐지 대시보드', '사기 분석가로서, 사기 위험 점수를 확인하여 조사 우선순위를 정할 수 있게 하고 싶습니다', 'CRITICAL', 'IN_PROGRESS', 13, 'sprint-001-02', '사기 탐지', NULL, NOW(), NOW()),
+    ('story-001-03', 'proj-001', '보험청구 API 연동', '개발자로서, RESTful API를 통해 외부 시스템이 보험청구 관리 시스템과 연동할 수 있게 하고 싶습니다', 'HIGH', 'SELECTED', 8, 'sprint-001-02', 'API 개발', NULL, NOW(), NOW()),
+    ('story-001-04', 'proj-001', '데이터 암호화 구현', '보안 담당자로서, 모든 개인정보가 암호화되어 규정을 준수할 수 있게 하고 싶습니다', 'CRITICAL', 'BACKLOG', 5, NULL, '보안', NULL, NOW(), NOW()),
     -- Project 2 User Stories
-    ('story-002-01', 'proj-002', '사용자 리서치 분석', '제품 오너로서, 사용자 리서치 인사이트를 확보하여 더 나은 UX를 설계하고 싶습니다', 'HIGH', 'IN_PROGRESS', 5, 'sprint-002-01', '리서치', NOW(), NOW())
+    ('story-002-01', 'proj-002', '사용자 리서치 분석', '제품 오너로서, 사용자 리서치 인사이트를 확보하여 더 나은 UX를 설계하고 싶습니다', 'HIGH', 'IN_PROGRESS', 5, 'sprint-002-01', '리서치', NULL, NOW(), NOW())
 ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.description, epic = EXCLUDED.epic;
 
 -- ============================================
@@ -637,131 +640,131 @@ ON CONFLICT (id) DO NOTHING;
 -- ============================================
 -- 12. EPICS (project.epics)
 -- ============================================
-INSERT INTO project.epics (id, project_id, name, description, goal, priority, status, owner_id, created_at, updated_at)
+INSERT INTO project.epics (id, project_id, name, description, goal, priority, status, owner_id, phase_id, color, progress, business_value, total_story_points, item_count, target_completion_date, created_at, updated_at)
 VALUES
     -- Project 1 Epics
-    ('epic-001-01', 'proj-001', '문서 처리 자동화', 'AI 기반 보험 문서 자동 분류 및 데이터 추출', '문서 처리 시간 80% 단축', 'CRITICAL', 'IN_PROGRESS', 'user-dev-002', NOW(), NOW()),
-    ('epic-001-02', 'proj-001', '사기 탐지 시스템', '머신러닝 기반 보험 사기 탐지 알고리즘 개발', '사기 탐지율 95% 달성', 'CRITICAL', 'BACKLOG', 'user-dev-002', NOW(), NOW()),
-    ('epic-001-03', 'proj-001', 'API 플랫폼 구축', 'RESTful API 기반 외부 시스템 연동 플랫폼', '10개 이상 외부 시스템 연동', 'HIGH', 'BACKLOG', 'user-dev-001', NOW(), NOW()),
-    ('epic-001-04', 'proj-001', '보안 및 규정 준수', '데이터 암호화 및 보험업 규정 준수 체계', '금융감독원 보안 감사 통과', 'HIGH', 'BACKLOG', 'user-dev-003', NOW(), NOW()),
+    ('epic-001-01', 'proj-001', '문서 처리 자동화', 'AI 기반 보험 문서 자동 분류 및 데이터 추출', '문서 처리 시간 80% 단축', 'CRITICAL', 'IN_PROGRESS', 'user-dev-002', 'phase-001-03', '#3B82F6', 20, 100, 21, 3, '2026-04-30', NOW(), NOW()),
+    ('epic-001-02', 'proj-001', '사기 탐지 시스템', '머신러닝 기반 보험 사기 탐지 알고리즘 개발', '사기 탐지율 95% 달성', 'CRITICAL', 'BACKLOG', 'user-dev-002', 'phase-001-03', '#EF4444', 0, 100, 13, 2, '2026-05-15', NOW(), NOW()),
+    ('epic-001-03', 'proj-001', 'API 플랫폼 구축', 'RESTful API 기반 외부 시스템 연동 플랫폼', '10개 이상 외부 시스템 연동', 'HIGH', 'BACKLOG', 'user-dev-001', 'phase-001-04', '#10B981', 0, 80, 8, 2, '2026-05-31', NOW(), NOW()),
+    ('epic-001-04', 'proj-001', '보안 및 규정 준수', '데이터 암호화 및 보험업 규정 준수 체계', '금융감독원 보안 감사 통과', 'HIGH', 'BACKLOG', 'user-dev-003', NULL, '#F59E0B', 0, 80, 5, 0, '2026-06-15', NOW(), NOW()),
 
     -- Project 2 Epics
-    ('epic-002-01', 'proj-002', '모바일 UX 혁신', '사용자 중심의 모바일 앱 UX 설계', '앱 평점 4.5 이상 달성', 'HIGH', 'IN_PROGRESS', 'user-ba-001', NOW(), NOW()),
-    ('epic-002-02', 'proj-002', '실시간 알림 시스템', '푸시 알림 및 SMS 연동 시스템', '알림 도달률 99% 달성', 'MEDIUM', 'BACKLOG', 'user-dev-003', NOW(), NOW())
-ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description;
+    ('epic-002-01', 'proj-002', '모바일 UX 혁신', '사용자 중심의 모바일 앱 UX 설계', '앱 평점 4.5 이상 달성', 'HIGH', 'IN_PROGRESS', 'user-ba-001', 'phase-002-02', '#8B5CF6', 15, 80, 5, 3, '2026-05-31', NOW(), NOW()),
+    ('epic-002-02', 'proj-002', '실시간 알림 시스템', '푸시 알림 및 SMS 연동 시스템', '알림 도달률 99% 달성', 'MEDIUM', 'BACKLOG', 'user-dev-003', NULL, '#6366F1', 0, 50, 0, 0, '2026-07-31', NOW(), NOW())
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, progress = EXCLUDED.progress;
 
 -- ============================================
 -- 13. FEATURES (project.features)
 -- ============================================
-INSERT INTO project.features (id, epic_id, project_id, name, description, priority, status, created_at, updated_at)
+INSERT INTO project.features (id, epic_id, project_id, name, description, priority, status, part_id, wbs_group_id, order_num, created_at, updated_at)
 VALUES
     -- Document Processing Features
-    ('feat-001-01', 'epic-001-01', 'proj-001', 'OCR 엔진 통합', '문서 스캔 및 텍스트 추출 엔진 구현', 'CRITICAL', 'IN_PROGRESS', NOW(), NOW()),
-    ('feat-001-02', 'epic-001-01', 'proj-001', '문서 분류 AI', '문서 유형 자동 분류 모델', 'HIGH', 'BACKLOG', NOW(), NOW()),
-    ('feat-001-03', 'epic-001-01', 'proj-001', '데이터 추출 파이프라인', '정형 데이터 추출 및 검증 파이프라인', 'HIGH', 'BACKLOG', NOW(), NOW()),
+    ('feat-001-01', 'epic-001-01', 'proj-001', 'OCR 엔진 통합', '문서 스캔 및 텍스트 추출 엔진 구현', 'CRITICAL', 'IN_PROGRESS', 'part-001-ai', 'wbs-grp-001-06', 1, NOW(), NOW()),
+    ('feat-001-02', 'epic-001-01', 'proj-001', '문서 분류 AI', '문서 유형 자동 분류 모델', 'HIGH', 'BACKLOG', 'part-001-ai', 'wbs-grp-001-07', 2, NOW(), NOW()),
+    ('feat-001-03', 'epic-001-01', 'proj-001', '데이터 추출 파이프라인', '정형 데이터 추출 및 검증 파이프라인', 'HIGH', 'BACKLOG', 'part-001-ai', 'wbs-grp-001-10', 3, NOW(), NOW()),
 
     -- Fraud Detection Features
-    ('feat-001-04', 'epic-001-02', 'proj-001', '사기 패턴 분석', '과거 사기 사례 패턴 학습', 'CRITICAL', 'BACKLOG', NOW(), NOW()),
-    ('feat-001-05', 'epic-001-02', 'proj-001', '실시간 스코어링', '청구 건별 사기 위험 점수 산출', 'HIGH', 'BACKLOG', NOW(), NOW()),
+    ('feat-001-04', 'epic-001-02', 'proj-001', '사기 패턴 분석', '과거 사기 사례 패턴 학습', 'CRITICAL', 'BACKLOG', 'part-001-ai', 'wbs-grp-001-08', 1, NOW(), NOW()),
+    ('feat-001-05', 'epic-001-02', 'proj-001', '실시간 스코어링', '청구 건별 사기 위험 점수 산출', 'HIGH', 'BACKLOG', 'part-001-ai', NULL, 2, NOW(), NOW()),
 
     -- API Platform Features
-    ('feat-001-06', 'epic-001-03', 'proj-001', 'API Gateway', 'API 게이트웨이 및 인증 시스템', 'HIGH', 'BACKLOG', NOW(), NOW()),
-    ('feat-001-07', 'epic-001-03', 'proj-001', '레거시 연동', '기존 보험증권 시스템 ESB 연동', 'HIGH', 'BACKLOG', NOW(), NOW()),
+    ('feat-001-06', 'epic-001-03', 'proj-001', 'API Gateway', 'API 게이트웨이 및 인증 시스템', 'HIGH', 'BACKLOG', 'part-001-si', 'wbs-grp-001-09', 1, NOW(), NOW()),
+    ('feat-001-07', 'epic-001-03', 'proj-001', '레거시 연동', '기존 보험증권 시스템 ESB 연동', 'HIGH', 'BACKLOG', 'part-001-si', 'wbs-grp-001-11', 2, NOW(), NOW()),
 
     -- Mobile UX Features
-    ('feat-002-01', 'epic-002-01', 'proj-002', '홈 대시보드', '보험증권 요약 및 주요 정보 표시', 'HIGH', 'IN_PROGRESS', NOW(), NOW()),
-    ('feat-002-02', 'epic-002-01', 'proj-002', '청구 제출 위저드', '단계별 청구 제출 가이드', 'HIGH', 'BACKLOG', NOW(), NOW()),
-    ('feat-002-03', 'epic-002-01', 'proj-002', '생체인증 로그인', '지문/Face ID 기반 로그인', 'CRITICAL', 'BACKLOG', NOW(), NOW())
+    ('feat-002-01', 'epic-002-01', 'proj-002', '홈 대시보드', '보험증권 요약 및 주요 정보 표시', 'HIGH', 'IN_PROGRESS', 'part-002-ux', 'wbs-grp-002-02', 1, NOW(), NOW()),
+    ('feat-002-02', 'epic-002-01', 'proj-002', '청구 제출 위저드', '단계별 청구 제출 가이드', 'HIGH', 'BACKLOG', 'part-002-mobile', NULL, 2, NOW(), NOW()),
+    ('feat-002-03', 'epic-002-01', 'proj-002', '생체인증 로그인', '지문/Face ID 기반 로그인', 'CRITICAL', 'BACKLOG', 'part-002-mobile', NULL, 3, NOW(), NOW())
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description;
 
 -- ============================================
 -- 14. WBS GROUPS (project.wbs_groups)
 -- ============================================
-INSERT INTO project.wbs_groups (id, project_id, phase_id, name, description, order_num, created_at, updated_at)
+INSERT INTO project.wbs_groups (id, project_id, phase_id, code, name, description, status, progress, weight, planned_start_date, planned_end_date, actual_start_date, actual_end_date, order_num, linked_epic_id, created_at, updated_at)
 VALUES
     -- Project 1, Phase 1: Requirements Analysis
-    ('wbs-grp-001-01', 'proj-001', 'phase-001-01', '요구사항 수집', 'RFP 분석 및 이해관계자 요구사항 수집', 1, NOW(), NOW()),
-    ('wbs-grp-001-02', 'proj-001', 'phase-001-01', '요구사항 분석', '수집된 요구사항 분석 및 문서화', 2, NOW(), NOW()),
+    ('wbs-grp-001-01', 'proj-001', 'phase-001-01', 'WBS-001', '요구사항 수집', 'RFP 분석 및 이해관계자 요구사항 수집', 'COMPLETED', 100, 100, '2026-01-15', '2026-01-25', '2026-01-15', '2026-01-24', 1, NULL, NOW(), NOW()),
+    ('wbs-grp-001-02', 'proj-001', 'phase-001-01', 'WBS-002', '요구사항 분석', '수집된 요구사항 분석 및 문서화', 'COMPLETED', 100, 100, '2026-01-25', '2026-01-31', '2026-01-24', '2026-01-30', 2, NULL, NOW(), NOW()),
 
     -- Project 1, Phase 2: System Design
-    ('wbs-grp-001-03', 'proj-001', 'phase-001-02', '아키텍처 설계', '시스템 아키텍처 및 기술 스택 설계', 1, NOW(), NOW()),
-    ('wbs-grp-001-04', 'proj-001', 'phase-001-02', '데이터 모델링', '데이터베이스 스키마 및 엔티티 설계', 2, NOW(), NOW()),
-    ('wbs-grp-001-05', 'proj-001', 'phase-001-02', 'API 설계', 'RESTful API 인터페이스 설계', 3, NOW(), NOW()),
+    ('wbs-grp-001-03', 'proj-001', 'phase-001-02', 'WBS-001', '아키텍처 설계', '시스템 아키텍처 및 기술 스택 설계', 'COMPLETED', 100, 100, '2026-02-01', '2026-02-10', '2026-02-01', '2026-02-09', 1, NULL, NOW(), NOW()),
+    ('wbs-grp-001-04', 'proj-001', 'phase-001-02', 'WBS-002', '데이터 모델링', '데이터베이스 스키마 및 엔티티 설계', 'IN_PROGRESS', 60, 100, '2026-02-10', '2026-02-18', '2026-02-10', NULL, 2, NULL, NOW(), NOW()),
+    ('wbs-grp-001-05', 'proj-001', 'phase-001-02', 'WBS-003', 'API 설계', 'RESTful API 인터페이스 설계', 'IN_PROGRESS', 40, 100, '2026-02-15', '2026-02-25', '2026-02-15', NULL, 3, NULL, NOW(), NOW()),
 
     -- Project 1, Phase 3: AI Development
-    ('wbs-grp-001-06', 'proj-001', 'phase-001-03', 'OCR 모델 개발', '문서 인식을 위한 OCR 모델 개발', 1, NOW(), NOW()),
-    ('wbs-grp-001-07', 'proj-001', 'phase-001-03', '문서 분류 AI', '문서 유형 분류 AI 모델 개발', 2, NOW(), NOW()),
-    ('wbs-grp-001-08', 'proj-001', 'phase-001-03', '사기 탐지 모델', '사기 탐지 ML 모델 개발', 3, NOW(), NOW()),
+    ('wbs-grp-001-06', 'proj-001', 'phase-001-03', 'WBS-001', 'OCR 모델 개발', '문서 인식을 위한 OCR 모델 개발', 'NOT_STARTED', 0, 100, '2026-03-01', '2026-03-15', NULL, NULL, 1, 'epic-001-01', NOW(), NOW()),
+    ('wbs-grp-001-07', 'proj-001', 'phase-001-03', 'WBS-002', '문서 분류 AI', '문서 유형 분류 AI 모델 개발', 'NOT_STARTED', 0, 100, '2026-03-10', '2026-03-25', NULL, NULL, 2, 'epic-001-01', NOW(), NOW()),
+    ('wbs-grp-001-08', 'proj-001', 'phase-001-03', 'WBS-003', '사기 탐지 모델', '사기 탐지 ML 모델 개발', 'NOT_STARTED', 0, 100, '2026-03-20', '2026-04-10', NULL, NULL, 3, 'epic-001-02', NOW(), NOW()),
 
     -- Project 1, Phase 4: Backend Development
-    ('wbs-grp-001-09', 'proj-001', 'phase-001-04', '청구 관리 API', '보험청구 관리 REST API 개발', 1, NOW(), NOW()),
-    ('wbs-grp-001-10', 'proj-001', 'phase-001-04', '문서 처리 서비스', '문서 업로드 및 처리 서비스 개발', 2, NOW(), NOW()),
-    ('wbs-grp-001-11', 'proj-001', 'phase-001-04', '레거시 연동', '기존 시스템 ESB 연동 개발', 3, NOW(), NOW()),
+    ('wbs-grp-001-09', 'proj-001', 'phase-001-04', 'WBS-001', '청구 관리 API', '보험청구 관리 REST API 개발', 'NOT_STARTED', 0, 100, '2026-03-15', '2026-03-30', NULL, NULL, 1, 'epic-001-03', NOW(), NOW()),
+    ('wbs-grp-001-10', 'proj-001', 'phase-001-04', 'WBS-002', '문서 처리 서비스', '문서 업로드 및 처리 서비스 개발', 'NOT_STARTED', 0, 100, '2026-04-01', '2026-04-15', NULL, NULL, 2, 'epic-001-01', NOW(), NOW()),
+    ('wbs-grp-001-11', 'proj-001', 'phase-001-04', 'WBS-003', '레거시 연동', '기존 시스템 ESB 연동 개발', 'NOT_STARTED', 0, 100, '2026-04-15', '2026-05-15', NULL, NULL, 3, 'epic-001-03', NOW(), NOW()),
 
     -- Project 2 WBS Groups
-    ('wbs-grp-002-01', 'proj-002', 'phase-002-01', '시장 조사', '경쟁사 분석 및 시장 니즈 조사', 1, NOW(), NOW()),
-    ('wbs-grp-002-02', 'proj-002', 'phase-002-02', 'UI/UX 설계', '모바일 앱 인터페이스 설계', 1, NOW(), NOW()),
-    ('wbs-grp-002-03', 'proj-002', 'phase-002-03', '앱 개발', 'iOS/Android 앱 개발', 1, NOW(), NOW())
-ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
+    ('wbs-grp-002-01', 'proj-002', 'phase-002-01', 'WBS-001', '시장 조사', '경쟁사 분석 및 시장 니즈 조사', 'IN_PROGRESS', 45, 100, '2026-02-01', '2026-02-25', '2026-02-01', NULL, 1, 'epic-002-01', NOW(), NOW()),
+    ('wbs-grp-002-02', 'proj-002', 'phase-002-02', 'WBS-001', 'UI/UX 설계', '모바일 앱 인터페이스 설계', 'NOT_STARTED', 0, 100, '2026-03-01', '2026-03-31', NULL, NULL, 1, 'epic-002-01', NOW(), NOW()),
+    ('wbs-grp-002-03', 'proj-002', 'phase-002-03', 'WBS-001', '앱 개발', 'iOS/Android 앱 개발', 'NOT_STARTED', 0, 100, '2026-04-01', '2026-06-15', NULL, NULL, 1, NULL, NOW(), NOW())
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, status = EXCLUDED.status, progress = EXCLUDED.progress;
 
 -- ============================================
 -- 15. WBS ITEMS (project.wbs_items)
 -- ============================================
-INSERT INTO project.wbs_items (id, group_id, phase_id, code, name, description, order_num, status, planned_start_date, planned_end_date, actual_start_date, actual_end_date, progress, weight, track_type, created_at, updated_at)
+INSERT INTO project.wbs_items (id, group_id, phase_id, code, name, description, order_num, status, planned_start_date, planned_end_date, actual_start_date, actual_end_date, progress, weight, track_type, estimated_hours, actual_hours, assignee_id, created_at, updated_at)
 VALUES
     -- Requirements Analysis Items
-    ('wbs-item-001', 'wbs-grp-001-01', 'phase-001-01', 'WBS-1.1.1', 'RFP 문서 분석', 'RFP 문서 상세 분석 및 요구사항 도출', 1, 'COMPLETED', '2026-01-15', '2026-01-18', '2026-01-15', '2026-01-17', 100, 1.0, 'COMMON', NOW(), NOW()),
-    ('wbs-item-002', 'wbs-grp-001-01', 'phase-001-01', 'WBS-1.1.2', '이해관계자 인터뷰', '핵심 이해관계자 인터뷰 진행', 2, 'COMPLETED', '2026-01-18', '2026-01-25', '2026-01-18', '2026-01-24', 100, 1.5, 'COMMON', NOW(), NOW()),
-    ('wbs-item-003', 'wbs-grp-001-02', 'phase-001-01', 'WBS-1.2.1', '요구사항 명세서 작성', '상세 요구사항 명세서(SRS) 작성', 1, 'COMPLETED', '2026-01-25', '2026-01-31', '2026-01-24', '2026-01-30', 100, 2.0, 'COMMON', NOW(), NOW()),
+    ('wbs-item-001', 'wbs-grp-001-01', 'phase-001-01', 'WBS-1.1.1', 'RFP 문서 분석', 'RFP 문서 상세 분석 및 요구사항 도출', 1, 'COMPLETED', '2026-01-15', '2026-01-18', '2026-01-15', '2026-01-17', 100, 1.0, 'COMMON', 16, 14, 'user-ba-001', NOW(), NOW()),
+    ('wbs-item-002', 'wbs-grp-001-01', 'phase-001-01', 'WBS-1.1.2', '이해관계자 인터뷰', '핵심 이해관계자 인터뷰 진행', 2, 'COMPLETED', '2026-01-18', '2026-01-25', '2026-01-18', '2026-01-24', 100, 1.5, 'COMMON', 24, 22, 'user-ba-001', NOW(), NOW()),
+    ('wbs-item-003', 'wbs-grp-001-02', 'phase-001-01', 'WBS-1.2.1', '요구사항 명세서 작성', '상세 요구사항 명세서(SRS) 작성', 1, 'COMPLETED', '2026-01-25', '2026-01-31', '2026-01-24', '2026-01-30', 100, 2.0, 'COMMON', 40, 38, 'user-ba-001', NOW(), NOW()),
 
     -- System Design Items
-    ('wbs-item-004', 'wbs-grp-001-03', 'phase-001-02', 'WBS-2.1.1', '고수준 아키텍처 설계', '시스템 전체 아키텍처 다이어그램 작성', 1, 'COMPLETED', '2026-02-01', '2026-02-07', '2026-02-01', '2026-02-06', 100, 1.5, 'COMMON', NOW(), NOW()),
-    ('wbs-item-005', 'wbs-grp-001-03', 'phase-001-02', 'WBS-2.1.2', '기술 스택 선정', '프레임워크 및 도구 선정', 2, 'COMPLETED', '2026-02-07', '2026-02-10', '2026-02-06', '2026-02-09', 100, 1.0, 'COMMON', NOW(), NOW()),
-    ('wbs-item-006', 'wbs-grp-001-04', 'phase-001-02', 'WBS-2.2.1', 'ERD 설계', '데이터베이스 ERD 설계', 1, 'IN_PROGRESS', '2026-02-10', '2026-02-15', '2026-02-10', NULL, 70, 1.5, 'SI', NOW(), NOW()),
-    ('wbs-item-007', 'wbs-grp-001-04', 'phase-001-02', 'WBS-2.2.2', 'Neo4j 그래프 모델', '그래프 데이터베이스 모델 설계', 2, 'IN_PROGRESS', '2026-02-12', '2026-02-18', '2026-02-12', NULL, 50, 1.0, 'AI', NOW(), NOW()),
-    ('wbs-item-008', 'wbs-grp-001-05', 'phase-001-02', 'WBS-2.3.1', 'API 명세서 작성', 'OpenAPI 3.0 명세서 작성', 1, 'IN_PROGRESS', '2026-02-15', '2026-02-25', '2026-02-15', NULL, 40, 2.0, 'SI', NOW(), NOW()),
+    ('wbs-item-004', 'wbs-grp-001-03', 'phase-001-02', 'WBS-2.1.1', '고수준 아키텍처 설계', '시스템 전체 아키텍처 다이어그램 작성', 1, 'COMPLETED', '2026-02-01', '2026-02-07', '2026-02-01', '2026-02-06', 100, 1.5, 'COMMON', 32, 30, 'user-dev-001', NOW(), NOW()),
+    ('wbs-item-005', 'wbs-grp-001-03', 'phase-001-02', 'WBS-2.1.2', '기술 스택 선정', '프레임워크 및 도구 선정', 2, 'COMPLETED', '2026-02-07', '2026-02-10', '2026-02-06', '2026-02-09', 100, 1.0, 'COMMON', 16, 14, 'user-dev-001', NOW(), NOW()),
+    ('wbs-item-006', 'wbs-grp-001-04', 'phase-001-02', 'WBS-2.2.1', 'ERD 설계', '데이터베이스 ERD 설계', 1, 'IN_PROGRESS', '2026-02-10', '2026-02-15', '2026-02-10', NULL, 70, 1.5, 'SI', 24, 17, 'user-dev-002', NOW(), NOW()),
+    ('wbs-item-007', 'wbs-grp-001-04', 'phase-001-02', 'WBS-2.2.2', 'Neo4j 그래프 모델', '그래프 데이터베이스 모델 설계', 2, 'IN_PROGRESS', '2026-02-12', '2026-02-18', '2026-02-12', NULL, 50, 1.0, 'AI', 20, 10, 'user-dev-002', NOW(), NOW()),
+    ('wbs-item-008', 'wbs-grp-001-05', 'phase-001-02', 'WBS-2.3.1', 'API 명세서 작성', 'OpenAPI 3.0 명세서 작성', 1, 'IN_PROGRESS', '2026-02-15', '2026-02-25', '2026-02-15', NULL, 40, 2.0, 'SI', 40, 16, 'user-dev-001', NOW(), NOW()),
 
     -- AI Development Items
-    ('wbs-item-009', 'wbs-grp-001-06', 'phase-001-03', 'WBS-3.1.1', 'OCR 모델 훈련', '문서 인식 OCR 모델 훈련', 1, 'NOT_STARTED', '2026-03-01', '2026-03-15', NULL, NULL, 0, 3.0, 'AI', NOW(), NOW()),
-    ('wbs-item-010', 'wbs-grp-001-07', 'phase-001-03', 'WBS-3.2.1', '분류 모델 개발', '문서 유형 분류 모델 개발', 1, 'NOT_STARTED', '2026-03-10', '2026-03-25', NULL, NULL, 0, 2.5, 'AI', NOW(), NOW()),
-    ('wbs-item-011', 'wbs-grp-001-08', 'phase-001-03', 'WBS-3.3.1', '사기 탐지 알고리즘', '사기 패턴 탐지 ML 알고리즘', 1, 'NOT_STARTED', '2026-03-20', '2026-04-10', NULL, NULL, 0, 3.0, 'AI', NOW(), NOW()),
+    ('wbs-item-009', 'wbs-grp-001-06', 'phase-001-03', 'WBS-3.1.1', 'OCR 모델 훈련', '문서 인식 OCR 모델 훈련', 1, 'NOT_STARTED', '2026-03-01', '2026-03-15', NULL, NULL, 0, 3.0, 'AI', 80, 0, 'user-dev-002', NOW(), NOW()),
+    ('wbs-item-010', 'wbs-grp-001-07', 'phase-001-03', 'WBS-3.2.1', '분류 모델 개발', '문서 유형 분류 모델 개발', 1, 'NOT_STARTED', '2026-03-10', '2026-03-25', NULL, NULL, 0, 2.5, 'AI', 60, 0, 'user-dev-002', NOW(), NOW()),
+    ('wbs-item-011', 'wbs-grp-001-08', 'phase-001-03', 'WBS-3.3.1', '사기 탐지 알고리즘', '사기 패턴 탐지 ML 알고리즘', 1, 'NOT_STARTED', '2026-03-20', '2026-04-10', NULL, NULL, 0, 3.0, 'AI', 80, 0, 'user-dev-002', NOW(), NOW()),
 
     -- Backend Development Items
-    ('wbs-item-012', 'wbs-grp-001-09', 'phase-001-04', 'WBS-4.1.1', '청구 CRUD API', '보험청구 기본 CRUD API 구현', 1, 'NOT_STARTED', '2026-03-15', '2026-03-30', NULL, NULL, 0, 2.0, 'SI', NOW(), NOW()),
-    ('wbs-item-013', 'wbs-grp-001-10', 'phase-001-04', 'WBS-4.2.1', '파일 업로드 서비스', '문서 파일 업로드/저장 서비스', 1, 'NOT_STARTED', '2026-04-01', '2026-04-15', NULL, NULL, 0, 1.5, 'SI', NOW(), NOW()),
+    ('wbs-item-012', 'wbs-grp-001-09', 'phase-001-04', 'WBS-4.1.1', '청구 CRUD API', '보험청구 기본 CRUD API 구현', 1, 'NOT_STARTED', '2026-03-15', '2026-03-30', NULL, NULL, 0, 2.0, 'SI', 48, 0, 'user-dev-001', NOW(), NOW()),
+    ('wbs-item-013', 'wbs-grp-001-10', 'phase-001-04', 'WBS-4.2.1', '파일 업로드 서비스', '문서 파일 업로드/저장 서비스', 1, 'NOT_STARTED', '2026-04-01', '2026-04-15', NULL, NULL, 0, 1.5, 'SI', 32, 0, 'user-dev-003', NOW(), NOW()),
 
     -- Project 2 WBS Items
-    ('wbs-item-014', 'wbs-grp-002-01', 'phase-002-01', 'WBS-P2-1.1', '경쟁사 앱 분석', '주요 경쟁사 모바일 앱 분석', 1, 'IN_PROGRESS', '2026-02-01', '2026-02-15', '2026-02-01', NULL, 60, 1.5, 'COMMON', NOW(), NOW()),
-    ('wbs-item-015', 'wbs-grp-002-01', 'phase-002-01', 'WBS-P2-1.2', '사용자 조사', '목표 사용자 그룹 설문 및 인터뷰', 2, 'IN_PROGRESS', '2026-02-10', '2026-02-25', '2026-02-10', NULL, 30, 2.0, 'COMMON', NOW(), NOW())
+    ('wbs-item-014', 'wbs-grp-002-01', 'phase-002-01', 'WBS-P2-1.1', '경쟁사 앱 분석', '주요 경쟁사 모바일 앱 분석', 1, 'IN_PROGRESS', '2026-02-01', '2026-02-15', '2026-02-01', NULL, 60, 1.5, 'COMMON', 24, 14, 'user-ba-001', NOW(), NOW()),
+    ('wbs-item-015', 'wbs-grp-002-01', 'phase-002-01', 'WBS-P2-1.2', '사용자 조사', '목표 사용자 그룹 설문 및 인터뷰', 2, 'IN_PROGRESS', '2026-02-10', '2026-02-25', '2026-02-10', NULL, 30, 2.0, 'COMMON', 40, 12, 'user-ba-001', NOW(), NOW())
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, progress = EXCLUDED.progress;
 
 -- ============================================
 -- 16. WBS TASKS (project.wbs_tasks)
 -- ============================================
-INSERT INTO project.wbs_tasks (id, item_id, group_id, phase_id, code, name, description, order_num, status, planned_start_date, planned_end_date, actual_start_date, actual_end_date, progress, weight, linked_task_id, created_at, updated_at)
+INSERT INTO project.wbs_tasks (id, item_id, group_id, phase_id, code, name, description, order_num, status, planned_start_date, planned_end_date, actual_start_date, actual_end_date, progress, weight, estimated_hours, actual_hours, assignee_id, linked_task_id, created_at, updated_at)
 VALUES
     -- Requirements Analysis WBS Tasks
-    ('wbs-task-001', 'wbs-item-001', 'wbs-grp-001-01', 'phase-001-01', 'T-1.1.1.1', 'RFP 핵심 요구사항 추출', 'RFP에서 핵심 요구사항 항목 추출', 1, 'COMPLETED', '2026-01-15', '2026-01-16', '2026-01-15', '2026-01-16', 100, 0.5, 'task-001-01', NOW(), NOW()),
-    ('wbs-task-002', 'wbs-item-001', 'wbs-grp-001-01', 'phase-001-01', 'T-1.1.1.2', '기능/비기능 요구사항 분류', '요구사항을 기능/비기능으로 분류', 2, 'COMPLETED', '2026-01-16', '2026-01-17', '2026-01-16', '2026-01-17', 100, 0.5, NULL, NOW(), NOW()),
-    ('wbs-task-003', 'wbs-item-002', 'wbs-grp-001-01', 'phase-001-01', 'T-1.1.2.1', '이해관계자 목록 작성', '인터뷰 대상 이해관계자 식별', 1, 'COMPLETED', '2026-01-18', '2026-01-19', '2026-01-18', '2026-01-19', 100, 0.3, NULL, NOW(), NOW()),
-    ('wbs-task-004', 'wbs-item-002', 'wbs-grp-001-01', 'phase-001-01', 'T-1.1.2.2', '인터뷰 진행', '이해관계자 인터뷰 실시', 2, 'COMPLETED', '2026-01-19', '2026-01-24', '2026-01-19', '2026-01-23', 100, 0.7, 'task-001-02', NOW(), NOW()),
+    ('wbs-task-001', 'wbs-item-001', 'wbs-grp-001-01', 'phase-001-01', 'T-1.1.1.1', 'RFP 핵심 요구사항 추출', 'RFP에서 핵심 요구사항 항목 추출', 1, 'COMPLETED', '2026-01-15', '2026-01-16', '2026-01-15', '2026-01-16', 100, 0.5, 8, 7, 'user-ba-001', 'task-001-01', NOW(), NOW()),
+    ('wbs-task-002', 'wbs-item-001', 'wbs-grp-001-01', 'phase-001-01', 'T-1.1.1.2', '기능/비기능 요구사항 분류', '요구사항을 기능/비기능으로 분류', 2, 'COMPLETED', '2026-01-16', '2026-01-17', '2026-01-16', '2026-01-17', 100, 0.5, 8, 7, 'user-ba-001', NULL, NOW(), NOW()),
+    ('wbs-task-003', 'wbs-item-002', 'wbs-grp-001-01', 'phase-001-01', 'T-1.1.2.1', '이해관계자 목록 작성', '인터뷰 대상 이해관계자 식별', 1, 'COMPLETED', '2026-01-18', '2026-01-19', '2026-01-18', '2026-01-19', 100, 0.3, 4, 4, 'user-ba-001', NULL, NOW(), NOW()),
+    ('wbs-task-004', 'wbs-item-002', 'wbs-grp-001-01', 'phase-001-01', 'T-1.1.2.2', '인터뷰 진행', '이해관계자 인터뷰 실시', 2, 'COMPLETED', '2026-01-19', '2026-01-24', '2026-01-19', '2026-01-23', 100, 0.7, 20, 18, 'user-ba-001', 'task-001-02', NOW(), NOW()),
 
     -- System Design WBS Tasks
-    ('wbs-task-005', 'wbs-item-004', 'wbs-grp-001-03', 'phase-001-02', 'T-2.1.1.1', '컴포넌트 다이어그램 작성', '시스템 컴포넌트 다이어그램', 1, 'COMPLETED', '2026-02-01', '2026-02-03', '2026-02-01', '2026-02-03', 100, 0.5, NULL, NOW(), NOW()),
-    ('wbs-task-006', 'wbs-item-004', 'wbs-grp-001-03', 'phase-001-02', 'T-2.1.1.2', '배포 아키텍처 설계', 'Docker/K8s 배포 구조 설계', 2, 'COMPLETED', '2026-02-03', '2026-02-06', '2026-02-03', '2026-02-06', 100, 0.5, NULL, NOW(), NOW()),
-    ('wbs-task-007', 'wbs-item-006', 'wbs-grp-001-04', 'phase-001-02', 'T-2.2.1.1', 'PostgreSQL ERD 설계', '관계형 DB 스키마 설계', 1, 'IN_PROGRESS', '2026-02-10', '2026-02-13', '2026-02-10', NULL, 80, 0.5, 'task-001-05', NOW(), NOW()),
-    ('wbs-task-008', 'wbs-item-006', 'wbs-grp-001-04', 'phase-001-02', 'T-2.2.1.2', '테이블 정규화', '3NF 정규화 및 검증', 2, 'IN_PROGRESS', '2026-02-13', '2026-02-15', '2026-02-13', NULL, 50, 0.5, NULL, NOW(), NOW()),
-    ('wbs-task-009', 'wbs-item-007', 'wbs-grp-001-04', 'phase-001-02', 'T-2.2.2.1', 'Neo4j 노드 설계', '그래프 노드 및 레이블 설계', 1, 'IN_PROGRESS', '2026-02-12', '2026-02-15', '2026-02-12', NULL, 60, 0.5, NULL, NOW(), NOW()),
-    ('wbs-task-010', 'wbs-item-008', 'wbs-grp-001-05', 'phase-001-02', 'T-2.3.1.1', 'OpenAPI 스키마 정의', 'API 스키마 및 응답 모델 정의', 1, 'IN_PROGRESS', '2026-02-15', '2026-02-20', '2026-02-15', NULL, 40, 1.0, 'task-001-06', NOW(), NOW()),
+    ('wbs-task-005', 'wbs-item-004', 'wbs-grp-001-03', 'phase-001-02', 'T-2.1.1.1', '컴포넌트 다이어그램 작성', '시스템 컴포넌트 다이어그램', 1, 'COMPLETED', '2026-02-01', '2026-02-03', '2026-02-01', '2026-02-03', 100, 0.5, 16, 15, 'user-dev-001', NULL, NOW(), NOW()),
+    ('wbs-task-006', 'wbs-item-004', 'wbs-grp-001-03', 'phase-001-02', 'T-2.1.1.2', '배포 아키텍처 설계', 'Docker/K8s 배포 구조 설계', 2, 'COMPLETED', '2026-02-03', '2026-02-06', '2026-02-03', '2026-02-06', 100, 0.5, 16, 15, 'user-dev-001', NULL, NOW(), NOW()),
+    ('wbs-task-007', 'wbs-item-006', 'wbs-grp-001-04', 'phase-001-02', 'T-2.2.1.1', 'PostgreSQL ERD 설계', '관계형 DB 스키마 설계', 1, 'IN_PROGRESS', '2026-02-10', '2026-02-13', '2026-02-10', NULL, 80, 0.5, 12, 10, 'user-dev-002', 'task-001-05', NOW(), NOW()),
+    ('wbs-task-008', 'wbs-item-006', 'wbs-grp-001-04', 'phase-001-02', 'T-2.2.1.2', '테이블 정규화', '3NF 정규화 및 검증', 2, 'IN_PROGRESS', '2026-02-13', '2026-02-15', '2026-02-13', NULL, 50, 0.5, 12, 7, 'user-dev-002', NULL, NOW(), NOW()),
+    ('wbs-task-009', 'wbs-item-007', 'wbs-grp-001-04', 'phase-001-02', 'T-2.2.2.1', 'Neo4j 노드 설계', '그래프 노드 및 레이블 설계', 1, 'IN_PROGRESS', '2026-02-12', '2026-02-15', '2026-02-12', NULL, 60, 0.5, 16, 10, 'user-dev-002', NULL, NOW(), NOW()),
+    ('wbs-task-010', 'wbs-item-008', 'wbs-grp-001-05', 'phase-001-02', 'T-2.3.1.1', 'OpenAPI 스키마 정의', 'API 스키마 및 응답 모델 정의', 1, 'IN_PROGRESS', '2026-02-15', '2026-02-20', '2026-02-15', NULL, 40, 1.0, 24, 10, 'user-dev-001', 'task-001-06', NOW(), NOW()),
 
     -- AI Development WBS Tasks
-    ('wbs-task-011', 'wbs-item-009', 'wbs-grp-001-06', 'phase-001-03', 'T-3.1.1.1', '학습 데이터 수집', 'OCR 훈련용 문서 데이터 수집', 1, 'NOT_STARTED', '2026-03-01', '2026-03-05', NULL, NULL, 0, 1.0, NULL, NOW(), NOW()),
-    ('wbs-task-012', 'wbs-item-009', 'wbs-grp-001-06', 'phase-001-03', 'T-3.1.1.2', '데이터 전처리', '이미지 정규화 및 라벨링', 2, 'NOT_STARTED', '2026-03-05', '2026-03-10', NULL, NULL, 0, 1.0, NULL, NOW(), NOW()),
-    ('wbs-task-013', 'wbs-item-009', 'wbs-grp-001-06', 'phase-001-03', 'T-3.1.1.3', '모델 훈련 및 튜닝', 'OCR 모델 훈련 및 하이퍼파라미터 튜닝', 3, 'NOT_STARTED', '2026-03-10', '2026-03-15', NULL, NULL, 0, 1.0, 'task-001-09', NOW(), NOW()),
+    ('wbs-task-011', 'wbs-item-009', 'wbs-grp-001-06', 'phase-001-03', 'T-3.1.1.1', '학습 데이터 수집', 'OCR 훈련용 문서 데이터 수집', 1, 'NOT_STARTED', '2026-03-01', '2026-03-05', NULL, NULL, 0, 1.0, 24, 0, 'user-dev-002', NULL, NOW(), NOW()),
+    ('wbs-task-012', 'wbs-item-009', 'wbs-grp-001-06', 'phase-001-03', 'T-3.1.1.2', '데이터 전처리', '이미지 정규화 및 라벨링', 2, 'NOT_STARTED', '2026-03-05', '2026-03-10', NULL, NULL, 0, 1.0, 32, 0, 'user-dev-002', NULL, NOW(), NOW()),
+    ('wbs-task-013', 'wbs-item-009', 'wbs-grp-001-06', 'phase-001-03', 'T-3.1.1.3', '모델 훈련 및 튜닝', 'OCR 모델 훈련 및 하이퍼파라미터 튜닝', 3, 'NOT_STARTED', '2026-03-10', '2026-03-15', NULL, NULL, 0, 1.0, 24, 0, 'user-dev-002', 'task-001-09', NOW(), NOW()),
 
     -- Project 2 WBS Tasks
-    ('wbs-task-014', 'wbs-item-014', 'wbs-grp-002-01', 'phase-002-01', 'T-P2-1.1.1', '경쟁 앱 기능 매트릭스', '경쟁사 앱 기능 비교 분석표 작성', 1, 'IN_PROGRESS', '2026-02-01', '2026-02-08', '2026-02-01', NULL, 70, 0.7, 'task-002-01', NOW(), NOW()),
-    ('wbs-task-015', 'wbs-item-014', 'wbs-grp-002-01', 'phase-002-01', 'T-P2-1.1.2', 'UX 벤치마킹', '경쟁사 앱 UX 패턴 분석', 2, 'IN_PROGRESS', '2026-02-08', '2026-02-15', '2026-02-08', NULL, 40, 0.8, NULL, NOW(), NOW())
+    ('wbs-task-014', 'wbs-item-014', 'wbs-grp-002-01', 'phase-002-01', 'T-P2-1.1.1', '경쟁 앱 기능 매트릭스', '경쟁사 앱 기능 비교 분석표 작성', 1, 'IN_PROGRESS', '2026-02-01', '2026-02-08', '2026-02-01', NULL, 70, 0.7, 12, 8, 'user-ba-001', 'task-002-01', NOW(), NOW()),
+    ('wbs-task-015', 'wbs-item-014', 'wbs-grp-002-01', 'phase-002-01', 'T-P2-1.1.2', 'UX 벤치마킹', '경쟁사 앱 UX 패턴 분석', 2, 'IN_PROGRESS', '2026-02-08', '2026-02-15', '2026-02-08', NULL, 40, 0.8, 16, 6, 'user-ba-001', NULL, NOW(), NOW())
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, progress = EXCLUDED.progress;
 
 -- ============================================
@@ -850,7 +853,7 @@ ON CONFLICT (id) DO UPDATE SET content = EXCLUDED.content;
 -- ============================================
 -- 20. WEEKLY REPORTS (task.weekly_reports)
 -- ============================================
-INSERT INTO task.weekly_reports (id, project_id, sprint_id, week_number, year, start_date, end_date, generated_by, generated_at, total_tasks, completed_tasks, in_progress_tasks, pending_tasks, blocked_tasks, velocity, planned_story_points, completed_story_points, completion_rate, summary, highlights, blockers, next_week_plans, status, created_at, updated_at)
+INSERT INTO task.weekly_reports (id, project_id, sprint_id, week_number, year, start_date, end_date, generated_by, generated_at, total_tasks, completed_tasks, in_progress_tasks, pending_tasks, blocked_tasks, velocity, planned_story_points, completed_story_points, completion_rate, summary, highlights, blockers, next_week_plans, status, part_id, scope_type, created_at, updated_at)
 VALUES
     -- Project 1 Weekly Reports
     ('wr-001-01', 'proj-001', 'sprint-001-01', 3, 2026, '2026-01-15', '2026-01-21', 'U003', '2026-01-22 09:00:00', 5, 3, 2, 0, 0, 32.0, 35, 32, 91.43,
@@ -858,28 +861,28 @@ VALUES
      '- RFP 요구사항 문서화 완료\n- 이해관계자 인터뷰 진행 중\n- 팀 온보딩 완료',
      '- 없음',
      '- 요구사항 승인 획득\n- 시스템 설계 단계 착수 준비',
-     'PUBLISHED', NOW(), NOW()),
+     'PUBLISHED', NULL, 'PROJECT', NOW(), NOW()),
 
     ('wr-001-02', 'proj-001', 'sprint-001-01', 4, 2026, '2026-01-22', '2026-01-28', 'U003', '2026-01-29 09:00:00', 6, 5, 1, 0, 0, 38.0, 35, 38, 108.57,
      '요구사항 분석 단계 완료. 모든 요구사항 승인됨.',
      '- 요구사항 명세서 완료 및 승인\n- 이해관계자 인터뷰 전체 완료\n- 스프린트 1 성공적 완료',
      '- 없음',
      '- 시스템 설계 단계 착수\n- 아키텍처 설계 시작',
-     'PUBLISHED', NOW(), NOW()),
+     'PUBLISHED', NULL, 'PROJECT', NOW(), NOW()),
 
     ('wr-001-03', 'proj-001', 'sprint-001-02', 5, 2026, '2026-01-29', '2026-02-04', 'U003', '2026-02-05 09:00:00', 8, 4, 3, 1, 0, 35.0, 35, 35, 100.00,
      '시스템 설계 단계 시작. 아키텍처 설계 순조롭게 진행.',
      '- 고수준 아키텍처 설계 완료\n- 기술 스택 확정\n- ERD 설계 착수',
      '- 보안 아키텍처 검토 담당자 미배정',
      '- ERD 및 API 설계 진행\n- 보안 담당자 배정',
-     'PUBLISHED', NOW(), NOW()),
+     'PUBLISHED', NULL, 'PROJECT', NOW(), NOW()),
 
     ('wr-001-04', 'proj-001', 'sprint-001-02', 6, 2026, '2026-02-05', '2026-02-11', 'U003', '2026-02-12 09:00:00', 7, 2, 4, 1, 0, 42.0, 40, 42, 105.00,
      '설계 단계 중반. ERD 및 API 설계 진행 중.',
      '- ERD 설계 80% 완료\n- Neo4j 그래프 모델 설계 시작\n- API 명세서 초안 검토 중',
      '- API 명세서 검토 지연',
      '- 설계 문서 검토 완료\n- AI 개발 환경 사전 준비',
-     'DRAFT', NOW(), NOW()),
+     'DRAFT', NULL, 'PROJECT', NOW(), NOW()),
 
     -- Project 2 Weekly Reports
     ('wr-002-01', 'proj-002', 'sprint-002-01', 5, 2026, '2026-01-29', '2026-02-04', 'user-pm-002', '2026-02-05 09:00:00', 4, 0, 2, 2, 0, 0.0, 20, 0, 0.00,
@@ -887,51 +890,51 @@ VALUES
      '- 경쟁사 분석 착수\n- 사용자 페르소나 개발 시작',
      '- 없음',
      '- 경쟁사 분석 완료\n- 사용자 조사 진행',
-     'PUBLISHED', NOW(), NOW()),
+     'PUBLISHED', NULL, 'PROJECT', NOW(), NOW()),
 
     ('wr-002-02', 'proj-002', 'sprint-002-01', 6, 2026, '2026-02-05', '2026-02-11', 'user-pm-002', '2026-02-12 09:00:00', 4, 0, 2, 2, 0, 15.0, 20, 15, 75.00,
      '시장조사 단계 진행 중. 경쟁사 분석 완료 예정.',
      '- 경쟁사 앱 기능 매트릭스 70% 완료\n- UX 벤치마킹 진행 중',
      '- 사용자 조사 참여자 모집 지연',
      '- 경쟁사 분석 완료\n- 사용자 인터뷰 일정 확정',
-     'DRAFT', NOW(), NOW())
+     'DRAFT', NULL, 'PROJECT', NOW(), NOW())
 ON CONFLICT (id) DO UPDATE SET summary = EXCLUDED.summary;
 
 -- ============================================
 -- 21. ISSUES (project.issues)
 -- ============================================
-INSERT INTO project.issues (id, project_id, title, description, issue_type, status, priority, assignee, reporter, reviewer, due_date, resolved_at, comments, created_at, updated_at)
+INSERT INTO project.issues (id, project_id, title, description, issue_type, status, priority, assignee, reporter, reviewer, due_date, resolved_at, resolution, comments, created_at, updated_at)
 VALUES
     -- Project 1 Issues
-    ('issue-001-01', 'proj-001', '보안 아키텍처 검토 담당자 미배정', '시스템 설계 단계에서 보안 아키텍처 검토를 위한 전문 담당자가 아직 배정되지 않음', 'RISK', 'OPEN', 'HIGH', NULL, 'user-pm-001', 'user-pmo-001', '2026-02-15', NULL, '외부 보안 컨설턴트 투입 검토 중', NOW(), NOW()),
-    ('issue-001-02', 'proj-001', 'API 명세서 검토 지연', 'API 명세서 초안 검토가 일정보다 2일 지연됨', 'ISSUE', 'IN_PROGRESS', 'MEDIUM', 'user-dev-001', 'user-pm-001', 'user-dev-003', '2026-02-20', NULL, '추가 검토자 투입으로 해결 중', NOW(), NOW()),
-    ('issue-001-03', 'proj-001', 'Neo4j 라이선스 검토 필요', 'Neo4j Enterprise Edition 라이선스 비용 및 조건 검토 필요', 'QUESTION', 'OPEN', 'LOW', 'user-ba-001', 'user-dev-002', NULL, '2026-02-28', NULL, NULL, NOW(), NOW()),
-    ('issue-001-04', 'proj-001', 'RFP 요구사항 변경 요청', '고객사에서 OCR 정확도 요구사항을 99%에서 97%로 완화 요청', 'CHANGE_REQUEST', 'RESOLVED', 'HIGH', 'user-ba-001', 'user-sponsor-001', 'user-pm-001', '2026-01-25', '2026-01-24', '고객 협의 후 97%로 조정 합의', NOW(), NOW()),
+    ('issue-001-01', 'proj-001', '보안 아키텍처 검토 담당자 미배정', '시스템 설계 단계에서 보안 아키텍처 검토를 위한 전문 담당자가 아직 배정되지 않음', 'RISK', 'OPEN', 'HIGH', NULL, 'user-pm-001', 'user-pmo-001', '2026-02-15', NULL, NULL, '외부 보안 컨설턴트 투입 검토 중', NOW(), NOW()),
+    ('issue-001-02', 'proj-001', 'API 명세서 검토 지연', 'API 명세서 초안 검토가 일정보다 2일 지연됨', 'ISSUE', 'IN_PROGRESS', 'MEDIUM', 'user-dev-001', 'user-pm-001', 'user-dev-003', '2026-02-20', NULL, NULL, '추가 검토자 투입으로 해결 중', NOW(), NOW()),
+    ('issue-001-03', 'proj-001', 'Neo4j 라이선스 검토 필요', 'Neo4j Enterprise Edition 라이선스 비용 및 조건 검토 필요', 'QUESTION', 'OPEN', 'LOW', 'user-ba-001', 'user-dev-002', NULL, '2026-02-28', NULL, NULL, NULL, NOW(), NOW()),
+    ('issue-001-04', 'proj-001', 'RFP 요구사항 변경 요청', '고객사에서 OCR 정확도 요구사항을 99%에서 97%로 완화 요청', 'CHANGE_REQUEST', 'RESOLVED', 'HIGH', 'user-ba-001', 'user-sponsor-001', 'user-pm-001', '2026-01-25', '2026-01-24', '고객 협의 후 97%로 조정 합의', '고객 협의 후 97%로 조정 합의', NOW(), NOW()),
 
     -- Project 2 Issues
-    ('issue-002-01', 'proj-002', '사용자 조사 참여자 모집 지연', '모바일 앱 사용자 조사를 위한 참여자 모집이 예상보다 지연됨', 'ISSUE', 'OPEN', 'MEDIUM', 'user-ba-001', 'user-pm-002', NULL, '2026-02-20', NULL, '마케팅팀 협조 요청 중', NOW(), NOW()),
-    ('issue-002-02', 'proj-002', 'iOS 개발자 부족', 'Swift 전문 개발자 1명 추가 투입 필요', 'RISK', 'OPEN', 'HIGH', NULL, 'user-pm-002', 'user-pmo-001', '2026-03-15', NULL, '채용 진행 중', NOW(), NOW())
+    ('issue-002-01', 'proj-002', '사용자 조사 참여자 모집 지연', '모바일 앱 사용자 조사를 위한 참여자 모집이 예상보다 지연됨', 'ISSUE', 'OPEN', 'MEDIUM', 'user-ba-001', 'user-pm-002', NULL, '2026-02-20', NULL, NULL, '마케팅팀 협조 요청 중', NOW(), NOW()),
+    ('issue-002-02', 'proj-002', 'iOS 개발자 부족', 'Swift 전문 개발자 1명 추가 투입 필요', 'RISK', 'OPEN', 'HIGH', NULL, 'user-pm-002', 'user-pmo-001', '2026-03-15', NULL, NULL, '채용 진행 중', NOW(), NOW())
 ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, status = EXCLUDED.status;
 
 -- ============================================
 -- 22. DELIVERABLES (project.deliverables)
 -- ============================================
-INSERT INTO project.deliverables (id, project_id, phase_id, name, description, type, status, file_path, file_name, file_size, uploaded_by, approver, approved_at, created_at, updated_at)
+INSERT INTO project.deliverables (id, project_id, phase_id, name, description, type, status, file_path, file_name, file_size, uploaded_by, approver, approved_at, rag_status, rag_version, rag_doc_id, created_at, updated_at)
 VALUES
     -- Project 1 Deliverables (Phase 1)
-    ('deliv-001-01', 'proj-001', 'phase-001-01', '요구사항 명세서(SRS)', 'AI 보험심사 처리 시스템 소프트웨어 요구사항 명세서', 'DOCUMENT', 'APPROVED', '/docs/proj-001/SRS_v1.0.pdf', 'SRS_v1.0.pdf', 2457600, 'user-ba-001', 'user-sponsor-001', '2026-01-30', NOW(), NOW()),
-    ('deliv-001-02', 'proj-001', 'phase-001-01', '이해관계자 인터뷰 보고서', '핵심 이해관계자 인터뷰 결과 종합 보고서', 'DOCUMENT', 'APPROVED', '/docs/proj-001/stakeholder_interviews.pdf', 'stakeholder_interviews.pdf', 1536000, 'user-ba-001', 'user-pm-001', '2026-01-28', NOW(), NOW()),
-    ('deliv-001-03', 'proj-001', 'phase-001-01', '요구사항 추적 매트릭스', 'RFP 요구사항과 SRS 매핑 문서', 'SPREADSHEET', 'APPROVED', '/docs/proj-001/RTM.xlsx', 'RTM.xlsx', 512000, 'user-ba-001', 'user-pm-001', '2026-01-31', NOW(), NOW()),
+    ('deliv-001-01', 'proj-001', 'phase-001-01', '요구사항 명세서(SRS)', 'AI 보험심사 처리 시스템 소프트웨어 요구사항 명세서', 'DOCUMENT', 'APPROVED', '/docs/proj-001/SRS_v1.0.pdf', 'SRS_v1.0.pdf', 2457600, 'user-ba-001', 'user-sponsor-001', '2026-01-30', 'READY', 1, 'deliverable:deliv-001-01', NOW(), NOW()),
+    ('deliv-001-02', 'proj-001', 'phase-001-01', '이해관계자 인터뷰 보고서', '핵심 이해관계자 인터뷰 결과 종합 보고서', 'DOCUMENT', 'APPROVED', '/docs/proj-001/stakeholder_interviews.pdf', 'stakeholder_interviews.pdf', 1536000, 'user-ba-001', 'user-pm-001', '2026-01-28', 'READY', 1, 'deliverable:deliv-001-02', NOW(), NOW()),
+    ('deliv-001-03', 'proj-001', 'phase-001-01', '요구사항 추적 매트릭스', 'RFP 요구사항과 SRS 매핑 문서', 'SPREADSHEET', 'APPROVED', '/docs/proj-001/RTM.xlsx', 'RTM.xlsx', 512000, 'user-ba-001', 'user-pm-001', '2026-01-31', 'READY', 1, 'deliverable:deliv-001-03', NOW(), NOW()),
 
     -- Project 1 Deliverables (Phase 2)
-    ('deliv-001-04', 'proj-001', 'phase-001-02', '시스템 아키텍처 설계서', '고수준 시스템 아키텍처 설계 문서', 'DOCUMENT', 'APPROVED', '/docs/proj-001/architecture_v1.0.pdf', 'architecture_v1.0.pdf', 3072000, 'user-dev-001', 'user-pmo-001', '2026-02-08', NOW(), NOW()),
-    ('deliv-001-05', 'proj-001', 'phase-001-02', '기술 스택 선정 보고서', '프레임워크 및 도구 선정 근거 문서', 'DOCUMENT', 'APPROVED', '/docs/proj-001/tech_stack.pdf', 'tech_stack.pdf', 1024000, 'user-dev-001', 'user-pm-001', '2026-02-10', NOW(), NOW()),
-    ('deliv-001-06', 'proj-001', 'phase-001-02', 'ERD 설계 문서', '데이터베이스 ERD 및 스키마 설계', 'DIAGRAM', 'DRAFT', '/docs/proj-001/ERD_draft.pdf', 'ERD_draft.pdf', 2048000, 'user-dev-002', NULL, NULL, NOW(), NOW()),
-    ('deliv-001-07', 'proj-001', 'phase-001-02', 'API 명세서 (OpenAPI)', 'RESTful API 명세서 OpenAPI 3.0 형식', 'SPECIFICATION', 'REVIEW', '/docs/proj-001/api_spec_draft.yaml', 'api_spec_draft.yaml', 256000, 'user-dev-001', NULL, NULL, NOW(), NOW()),
+    ('deliv-001-04', 'proj-001', 'phase-001-02', '시스템 아키텍처 설계서', '고수준 시스템 아키텍처 설계 문서', 'DOCUMENT', 'APPROVED', '/docs/proj-001/architecture_v1.0.pdf', 'architecture_v1.0.pdf', 3072000, 'user-dev-001', 'user-pmo-001', '2026-02-08', 'READY', 1, 'deliverable:deliv-001-04', NOW(), NOW()),
+    ('deliv-001-05', 'proj-001', 'phase-001-02', '기술 스택 선정 보고서', '프레임워크 및 도구 선정 근거 문서', 'DOCUMENT', 'APPROVED', '/docs/proj-001/tech_stack.pdf', 'tech_stack.pdf', 1024000, 'user-dev-001', 'user-pm-001', '2026-02-10', 'READY', 1, 'deliverable:deliv-001-05', NOW(), NOW()),
+    ('deliv-001-06', 'proj-001', 'phase-001-02', 'ERD 설계 문서', '데이터베이스 ERD 및 스키마 설계', 'DIAGRAM', 'DRAFT', '/docs/proj-001/ERD_draft.pdf', 'ERD_draft.pdf', 2048000, 'user-dev-002', NULL, NULL, 'PENDING', 1, 'deliverable:deliv-001-06', NOW(), NOW()),
+    ('deliv-001-07', 'proj-001', 'phase-001-02', 'API 명세서 (OpenAPI)', 'RESTful API 명세서 OpenAPI 3.0 형식', 'SPECIFICATION', 'REVIEW', '/docs/proj-001/api_spec_draft.yaml', 'api_spec_draft.yaml', 256000, 'user-dev-001', NULL, NULL, 'PENDING', 1, 'deliverable:deliv-001-07', NOW(), NOW()),
 
     -- Project 2 Deliverables
-    ('deliv-002-01', 'proj-002', 'phase-002-01', '경쟁사 분석 보고서', '주요 경쟁 모바일 보험 앱 분석 리포트', 'DOCUMENT', 'DRAFT', '/docs/proj-002/competitor_analysis.pdf', 'competitor_analysis.pdf', 5120000, 'user-ba-001', NULL, NULL, NOW(), NOW()),
-    ('deliv-002-02', 'proj-002', 'phase-002-01', '사용자 페르소나', '목표 사용자 그룹 페르소나 정의서', 'DOCUMENT', 'DRAFT', '/docs/proj-002/user_personas.pdf', 'user_personas.pdf', 3584000, 'user-ba-001', NULL, NULL, NOW(), NOW())
+    ('deliv-002-01', 'proj-002', 'phase-002-01', '경쟁사 분석 보고서', '주요 경쟁 모바일 보험 앱 분석 리포트', 'DOCUMENT', 'DRAFT', '/docs/proj-002/competitor_analysis.pdf', 'competitor_analysis.pdf', 5120000, 'user-ba-001', NULL, NULL, 'PENDING', 1, 'deliverable:deliv-002-01', NOW(), NOW()),
+    ('deliv-002-02', 'proj-002', 'phase-002-01', '사용자 페르소나', '목표 사용자 그룹 페르소나 정의서', 'DOCUMENT', 'DRAFT', '/docs/proj-002/user_personas.pdf', 'user_personas.pdf', 3584000, 'user-ba-001', NULL, NULL, 'PENDING', 1, 'deliverable:deliv-002-02', NOW(), NOW())
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, status = EXCLUDED.status;
 
 -- ============================================
@@ -1099,33 +1102,32 @@ ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 -- (All 8 sprints are now defined in a single INSERT statement above)
 
 -- ============================================
--- Summary (Updated):
+-- Summary (v20260207):
 -- - 18 users (various roles)
 -- - 42 permissions (across 11 categories)
 -- - 150+ role-permission mappings (8 roles)
 -- - 2 projects (AI Claims Processing, Mobile Platform)
--- - 12 phases (6 per project)
+-- - 12 phases (6 per project, including child phases)
 -- - 10 kanban columns (5 per project)
 -- - 20 tasks
--- - 6 sprints (4 for proj-001, 2 for proj-002)
--- - 5 user stories
+-- - 8 sprints (4+2 for proj-001, 2 for proj-002)
+-- - 5 user stories (with neo4j_node_id)
 -- - 2 RFPs
 -- - 11 requirements
 -- - 6 parts (3 per project)
 -- - 25+ project members
 -- - 7 outbox events (lineage tracking)
--- NEW:
--- - 6 epics (4 for proj-001, 2 for proj-002)
--- - 10 features
--- - 14 WBS groups
--- - 15 WBS items
--- - 15 WBS tasks
+-- - 6 epics (with phase_id, color, progress, business_value, story_points)
+-- - 10 features (with part_id, wbs_group_id, order_num)
+-- - 14 WBS groups (with code, status, progress, weight, dates, linked_epic_id)
+-- - 15 WBS items (with estimated_hours, actual_hours, assignee_id)
+-- - 15 WBS tasks (with estimated_hours, actual_hours, assignee_id)
 -- - 10 WBS dependencies
 -- - 9 chat sessions
 -- - 14 chat messages
--- - 6 weekly reports
--- - 6 issues
--- - 9 deliverables
+-- - 6 weekly reports (with part_id, scope_type)
+-- - 6 issues (with resolution)
+-- - 9 deliverables (with rag_status, rag_version, rag_doc_id)
 -- - 9 KPIs
 -- - 8 meetings
 -- - 6 education courses

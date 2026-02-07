@@ -1,6 +1,7 @@
 package com.insuretech.pms.project.controller;
 
 import com.insuretech.pms.common.dto.ApiResponse;
+import com.insuretech.pms.project.dto.WbsFullTreeDto;
 import com.insuretech.pms.project.dto.WbsGroupDto;
 import com.insuretech.pms.project.dto.WbsItemDto;
 import com.insuretech.pms.project.dto.WbsTaskDto;
@@ -23,6 +24,15 @@ import java.util.List;
 public class ReactiveWbsController {
 
     private final ReactiveWbsService wbsService;
+
+    // ========== Full Tree (single-request optimization) ==========
+
+    @Operation(summary = "Get full WBS tree for a project (groups + items + tasks in 1 call)")
+    @GetMapping("/api/projects/{projectId}/wbs/full-tree")
+    public Mono<ResponseEntity<ApiResponse<WbsFullTreeDto>>> getFullTree(@PathVariable String projectId) {
+        return wbsService.getFullTree(projectId)
+                .map(tree -> ResponseEntity.ok(ApiResponse.success(tree)));
+    }
 
     // ========== WBS Group Endpoints ==========
 

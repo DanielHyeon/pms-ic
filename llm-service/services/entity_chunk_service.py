@@ -368,6 +368,83 @@ class EntityTextGenerator:
 
         return "\n".join(lines)
 
+    @staticmethod
+    def generate_wbs_group_status(group: Dict, project_name: str = "", phase_name: str = "") -> str:
+        """Generate WBS group status text for RAG search"""
+        lines = [
+            f"[WBS 그룹 현황] {group.get('name', 'Unknown')}",
+            "",
+        ]
+
+        if project_name:
+            lines.append(f"프로젝트: {project_name}")
+        if phase_name:
+            lines.append(f"단계: {phase_name}")
+
+        progress = group.get('progress')
+        progress_str = f"{progress}%" if progress is not None else "미설정"
+
+        lines.extend([
+            f"WBS 그룹명: {group.get('name', 'N/A')}",
+            f"코드: {group.get('code', 'N/A')}",
+            f"상태: {group.get('status', 'N/A')}",
+            f"진행률: {progress_str}",
+            f"가중치: {group.get('weight', 'N/A')}",
+            f"시작일: {group.get('planned_start_date', 'N/A')}",
+            f"종료일: {group.get('planned_end_date', 'N/A')}",
+        ])
+
+        if group.get('item_count') is not None:
+            lines.append(f"하위 항목 수: {group.get('item_count')}개")
+
+        if group.get('description'):
+            lines.append(f"설명: {group.get('description')[:300]}")
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def generate_wbs_item_status(
+        item: Dict, project_name: str = "",
+        group_name: str = "", phase_name: str = "",
+    ) -> str:
+        """Generate WBS item status text for RAG search"""
+        lines = [
+            f"[WBS 항목 현황] {item.get('name', 'Unknown')}",
+            "",
+        ]
+
+        if project_name:
+            lines.append(f"프로젝트: {project_name}")
+        if phase_name:
+            lines.append(f"단계: {phase_name}")
+        if group_name:
+            lines.append(f"WBS 그룹: {group_name}")
+
+        progress = item.get('progress')
+        progress_str = f"{progress}%" if progress is not None else "미설정"
+
+        lines.extend([
+            f"WBS 항목명: {item.get('name', 'N/A')}",
+            f"코드: {item.get('code', 'N/A')}",
+            f"상태: {item.get('status', 'N/A')}",
+            f"진행률: {progress_str}",
+            f"가중치: {item.get('weight', 'N/A')}",
+            f"시작일: {item.get('planned_start_date', 'N/A')}",
+            f"종료일: {item.get('planned_end_date', 'N/A')}",
+        ])
+
+        if item.get('estimated_hours') is not None:
+            lines.append(f"예상 공수: {item.get('estimated_hours')}시간")
+        if item.get('actual_hours') is not None:
+            lines.append(f"실제 공수: {item.get('actual_hours')}시간")
+        if item.get('task_count') is not None:
+            lines.append(f"하위 태스크 수: {item.get('task_count')}개")
+
+        if item.get('description'):
+            lines.append(f"설명: {item.get('description')[:300]}")
+
+        return "\n".join(lines)
+
 
 # =============================================================================
 # Entity Chunk Service
@@ -963,6 +1040,93 @@ class EntityChunkService:
         logger.info(f"Synced {count} epic status chunks for {project_id}")
         return count
 
+    def sync_wbs_statuses(self, project_id: str) -> int:
+        """Sync WBS group and item status chunks for a project"""
+        # Get project name
+        projects = self._fetch_query(
+            "SELECT name FROM project.projects WHERE id = %s", (project_id,)
+        )
+        project_name = projects[0]['name'] if projects else ""
+
+        # Delete old WBS chunks
+        self._delete_old_chunks(project_id, ChunkEntityType.WBS_STATUS.value)
+
+        count = 0
+
+        # --- WBS Groups ---
+        groups = self._fetch_query("""
+            SELECT wg.id, wg.code, wg.name, wg.description, wg.status,
+                   wg.progress, wg.weight,
+                   wg.planned_start_date, wg.planned_end_date,
+                   p.name AS phase_name,
+                   (SELECT COUNT(*) FROM project.wbs_items wi
+                    WHERE wi.group_id = wg.id) AS item_count
+            FROM project.wbs_groups wg
+            LEFT JOIN project.phases p ON wg.phase_id = p.id
+            WHERE p.project_id = %s
+            ORDER BY p.order_num, wg.order_num
+        """, (project_id,))
+
+        for group in groups:
+            content = self.text_generator.generate_wbs_group_status(
+                group, project_name, group.get('phase_name', '')
+            )
+
+            chunk = EntityChunk(
+                chunk_id=f"entity_wbs_group_{group['id']}",
+                content=content,
+                entity_type=ChunkEntityType.WBS_STATUS.value,
+                entity_id=group['id'],
+                project_id=project_id,
+                access_level=EntityAccessLevel.PROJECT_STATUS.value,
+                title=f"WBS 그룹: {group.get('name', 'Unknown')}",
+                embedding=self._generate_embedding(content),
+            )
+
+            if self._save_chunk(chunk):
+                count += 1
+
+        # --- WBS Items ---
+        items = self._fetch_query("""
+            SELECT wi.id, wi.code, wi.name, wi.description, wi.status,
+                   wi.progress, wi.weight,
+                   wi.planned_start_date, wi.planned_end_date,
+                   wi.estimated_hours, wi.actual_hours,
+                   wg.name AS group_name,
+                   p.name AS phase_name,
+                   (SELECT COUNT(*) FROM project.wbs_tasks wt
+                    WHERE wt.item_id = wi.id) AS task_count
+            FROM project.wbs_items wi
+            LEFT JOIN project.wbs_groups wg ON wi.group_id = wg.id
+            LEFT JOIN project.phases p ON wi.phase_id = p.id
+            WHERE p.project_id = %s
+            ORDER BY p.order_num, wg.order_num, wi.order_num
+        """, (project_id,))
+
+        for item in items:
+            content = self.text_generator.generate_wbs_item_status(
+                item, project_name,
+                item.get('group_name', ''),
+                item.get('phase_name', ''),
+            )
+
+            chunk = EntityChunk(
+                chunk_id=f"entity_wbs_item_{item['id']}",
+                content=content,
+                entity_type=ChunkEntityType.WBS_STATUS.value,
+                entity_id=item['id'],
+                project_id=project_id,
+                access_level=EntityAccessLevel.PROJECT_STATUS.value,
+                title=f"WBS 항목: {item.get('name', 'Unknown')}",
+                embedding=self._generate_embedding(content),
+            )
+
+            if self._save_chunk(chunk):
+                count += 1
+
+        logger.info(f"Synced {count} WBS status chunks ({len(groups)} groups, {len(items)} items) for {project_id}")
+        return count
+
     # =========================================================================
     # Orchestration Methods
     # =========================================================================
@@ -983,6 +1147,7 @@ class EntityChunkService:
         results['phase_statuses'] = self.sync_phase_statuses(project_id)
         results['issue_summary'] = self.sync_issue_summary(project_id)
         results['epic_statuses'] = self.sync_epic_statuses(project_id)
+        results['wbs_statuses'] = self.sync_wbs_statuses(project_id)
 
         total = sum(results.values())
         logger.info(f"Entity chunk sync completed for {project_id}: {total} chunks created")

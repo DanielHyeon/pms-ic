@@ -247,6 +247,61 @@ export function useDeleteWbsTask() {
 
 // ============ Aggregated Views ============
 
+/** Assemble groups → items → tasks tree from pre-indexed Maps */
+function assembleGroupsWithItems(
+  groups: WbsGroup[],
+  itemsByGroup: Map<string, WbsItem[]>,
+  tasksByItem: Map<string, WbsTask[]>,
+): WbsGroupWithItems[] {
+  const result: WbsGroupWithItems[] = [];
+
+  for (const group of groups) {
+    const groupItems = itemsByGroup.get(group.id) || [];
+    const itemsWithTasks: WbsItemWithTasks[] = [];
+
+    for (const item of groupItems) {
+      const itemTasks = tasksByItem.get(item.id) || [];
+      const completedTasks = itemTasks.filter((t) => t.status === 'COMPLETED').length;
+
+      const calculatedProgress =
+        itemTasks.length > 0
+          ? calculateWeightedProgress(itemTasks.map((t) => ({ weight: t.weight, progress: t.progress })))
+          : item.progress || 0;
+
+      itemsWithTasks.push({
+        ...item,
+        tasks: itemTasks,
+        totalTasks: itemTasks.length,
+        completedTasks,
+        calculatedProgress,
+      });
+    }
+
+    const totalTasks = itemsWithTasks.reduce((sum, i) => sum + i.totalTasks, 0);
+    const completedTasks = itemsWithTasks.reduce((sum, i) => sum + i.completedTasks, 0);
+    const completedItems = itemsWithTasks.filter((i) => i.status === 'COMPLETED').length;
+
+    const calculatedProgress =
+      itemsWithTasks.length > 0
+        ? calculateWeightedProgress(
+            itemsWithTasks.map((i) => ({ weight: i.weight, progress: i.calculatedProgress }))
+          )
+        : group.progress || 0;
+
+    result.push({
+      ...group,
+      items: itemsWithTasks,
+      totalItems: itemsWithTasks.length,
+      completedItems,
+      totalTasks,
+      completedTasks,
+      calculatedProgress,
+    });
+  }
+
+  return result;
+}
+
 export function usePhaseWbs(phaseId: string) {
   const { data: groups = [], isLoading: isGroupsLoading, isFetching: isGroupsFetching } = useWbsGroups(phaseId);
 
@@ -258,53 +313,35 @@ export function usePhaseWbs(phaseId: string) {
     queryFn: async (): Promise<WbsGroupWithItems[]> => {
       if (!groups || groups.length === 0) return [];
 
-      const result: WbsGroupWithItems[] = [];
+      // Parallel batch 1: fetch all items (one call per group, concurrent)
+      const itemArrays = await Promise.all(
+        groups.map((g: WbsGroup) => apiService.getWbsItems(g.id))
+      );
+      const allItems = itemArrays.flat();
 
-      for (const group of groups) {
-        const items = await apiService.getWbsItems(group.id);
-        const itemsWithTasks: WbsItemWithTasks[] = [];
+      // Parallel batch 2: fetch all tasks (one call per item, concurrent)
+      const taskArrays = await Promise.all(
+        allItems.map((i: WbsItem) => apiService.getWbsTasks(i.id))
+      );
+      const allTasks = taskArrays.flat();
 
-        for (const item of items || []) {
-          const tasks = await apiService.getWbsTasks(item.id);
-          const completedTasks = (tasks || []).filter((t: WbsTask) => t.status === 'COMPLETED').length;
-
-          const calculatedProgress =
-            tasks && tasks.length > 0
-              ? calculateWeightedProgress(tasks.map((t: WbsTask) => ({ weight: t.weight, progress: t.progress })))
-              : item.progress || 0;
-
-          itemsWithTasks.push({
-            ...item,
-            tasks: tasks || [],
-            totalTasks: (tasks || []).length,
-            completedTasks,
-            calculatedProgress,
-          });
-        }
-
-        const totalTasks = itemsWithTasks.reduce((sum, i) => sum + i.totalTasks, 0);
-        const completedTasks = itemsWithTasks.reduce((sum, i) => sum + i.completedTasks, 0);
-        const completedItems = itemsWithTasks.filter((i) => i.status === 'COMPLETED').length;
-
-        const calculatedProgress =
-          itemsWithTasks.length > 0
-            ? calculateWeightedProgress(
-                itemsWithTasks.map((i) => ({ weight: i.weight, progress: i.calculatedProgress }))
-              )
-            : group.progress || 0;
-
-        result.push({
-          ...group,
-          items: itemsWithTasks,
-          totalItems: itemsWithTasks.length,
-          completedItems,
-          totalTasks,
-          completedTasks,
-          calculatedProgress,
-        });
+      // Index tasks by itemId
+      const tasksByItem = new Map<string, WbsTask[]>();
+      for (const task of allTasks || []) {
+        const list = tasksByItem.get(task.itemId) || [];
+        list.push(task);
+        tasksByItem.set(task.itemId, list);
       }
 
-      return result;
+      // Index items by groupId
+      const itemsByGroup = new Map<string, WbsItem[]>();
+      for (const item of allItems || []) {
+        const list = itemsByGroup.get(item.groupId) || [];
+        list.push(item);
+        itemsByGroup.set(item.groupId, list);
+      }
+
+      return assembleGroupsWithItems(groups, itemsByGroup, tasksByItem);
     },
     enabled: !!phaseId && groups.length > 0,
   });
@@ -427,56 +464,40 @@ export function useProjectWbs(projectId: string, phases: PhaseInfo[]) {
     queryFn: async () => {
       if (!phases || phases.length === 0) return [];
 
+      // Single API call: fetches all groups, items, tasks for the project
+      const tree = await apiService.getWbsFullTree(projectId);
+      const { groups = [], items = [], tasks = [] } = tree || {};
+
+      // Index tasks by itemId
+      const tasksByItem = new Map<string, WbsTask[]>();
+      for (const task of tasks) {
+        const list = tasksByItem.get(task.itemId) || [];
+        list.push(task);
+        tasksByItem.set(task.itemId, list);
+      }
+
+      // Index items by groupId
+      const itemsByGroup = new Map<string, WbsItem[]>();
+      for (const item of items) {
+        const list = itemsByGroup.get(item.groupId) || [];
+        list.push(item);
+        itemsByGroup.set(item.groupId, list);
+      }
+
+      // Index groups by phaseId
+      const groupsByPhase = new Map<string, WbsGroup[]>();
+      for (const group of groups) {
+        const list = groupsByPhase.get(group.phaseId) || [];
+        list.push(group);
+        groupsByPhase.set(group.phaseId, list);
+      }
+
+      // Assemble the tree per phase
       const result = [];
 
       for (const phase of phases) {
-        // Get groups for this phase
-        const groups = await apiService.getWbsGroups(phase.id);
-        const groupsWithItems: WbsGroupWithItems[] = [];
-
-        for (const group of groups || []) {
-          const items = await apiService.getWbsItems(group.id);
-          const itemsWithTasks: WbsItemWithTasks[] = [];
-
-          for (const item of items || []) {
-            const tasks = await apiService.getWbsTasks(item.id);
-            const completedTasks = (tasks || []).filter((t: WbsTask) => t.status === 'COMPLETED').length;
-
-            const calculatedProgress =
-              tasks && tasks.length > 0
-                ? calculateWeightedProgress(tasks.map((t: WbsTask) => ({ weight: t.weight, progress: t.progress })))
-                : item.progress || 0;
-
-            itemsWithTasks.push({
-              ...item,
-              tasks: tasks || [],
-              totalTasks: (tasks || []).length,
-              completedTasks,
-              calculatedProgress,
-            });
-          }
-
-          const totalTasks = itemsWithTasks.reduce((sum, i) => sum + i.totalTasks, 0);
-          const completedTasks = itemsWithTasks.reduce((sum, i) => sum + i.completedTasks, 0);
-          const completedItems = itemsWithTasks.filter((i) => i.status === 'COMPLETED').length;
-
-          const calculatedProgress =
-            itemsWithTasks.length > 0
-              ? calculateWeightedProgress(
-                  itemsWithTasks.map((i) => ({ weight: i.weight, progress: i.calculatedProgress }))
-                )
-              : group.progress || 0;
-
-          groupsWithItems.push({
-            ...group,
-            items: itemsWithTasks,
-            totalItems: itemsWithTasks.length,
-            completedItems,
-            totalTasks,
-            completedTasks,
-            calculatedProgress,
-          });
-        }
+        const phaseGroups = groupsByPhase.get(phase.id) || [];
+        const groupsWithItems = assembleGroupsWithItems(phaseGroups, itemsByGroup, tasksByItem);
 
         const totalGroups = groupsWithItems.length;
         const completedGroups = groupsWithItems.filter((g) => g.status === 'COMPLETED').length;

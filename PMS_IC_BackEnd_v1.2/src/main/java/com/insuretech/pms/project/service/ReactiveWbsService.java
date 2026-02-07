@@ -1,6 +1,7 @@
 package com.insuretech.pms.project.service;
 
 import com.insuretech.pms.common.exception.CustomException;
+import com.insuretech.pms.project.dto.WbsFullTreeDto;
 import com.insuretech.pms.project.dto.WbsGroupDto;
 import com.insuretech.pms.project.dto.WbsItemDto;
 import com.insuretech.pms.project.dto.WbsTaskDto;
@@ -29,6 +30,37 @@ public class ReactiveWbsService {
     private final ReactiveWbsItemRepository itemRepository;
     private final ReactiveWbsTaskRepository taskRepository;
     private final ReactivePhaseRepository phaseRepository;
+
+    // ========== Full Tree (single-request optimization) ==========
+
+    /**
+     * Get the full WBS tree for a project in 3 parallel queries.
+     * Eliminates the N+1 problem where frontend makes sequential calls per group/item.
+     */
+    @Transactional(readOnly = true)
+    public Mono<WbsFullTreeDto> getFullTree(String projectId) {
+        Mono<java.util.List<WbsGroupDto>> groupsMono = groupRepository
+                .findByProjectIdOrdered(projectId)
+                .map(WbsGroupDto::from)
+                .collectList();
+
+        Mono<java.util.List<WbsItemDto>> itemsMono = itemRepository
+                .findByProjectIdOrdered(projectId)
+                .map(WbsItemDto::from)
+                .collectList();
+
+        Mono<java.util.List<WbsTaskDto>> tasksMono = taskRepository
+                .findByProjectIdOrdered(projectId)
+                .map(WbsTaskDto::from)
+                .collectList();
+
+        return Mono.zip(groupsMono, itemsMono, tasksMono)
+                .map(tuple -> WbsFullTreeDto.builder()
+                        .groups(tuple.getT1())
+                        .items(tuple.getT2())
+                        .tasks(tuple.getT3())
+                        .build());
+    }
 
     // ========== WBS Group Operations ==========
 

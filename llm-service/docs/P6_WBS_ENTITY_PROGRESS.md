@@ -1,7 +1,7 @@
 # P6: WBS 엔티티 진행률 조회 구현 계획
 
-> **상태**: 설계 완료 (2차 리뷰 반영), 구현 대기
-> **작성일**: 2026-02-06 | **리뷰 반영**: 2026-02-07
+> **상태**: 설계 완료 (3차 리뷰 반영), 구현 대기
+> **작성일**: 2026-02-06 | **2차 리뷰 반영**: 2026-02-07 | **3차 리뷰 반영**: 2026-02-07
 > **선행 작업**: P0~P5 완료 (인텐트 라우팅, 데이터 조회, 품질 개선, 칸반 분류 등)
 > **핵심 문제**: "OCR 성능 평가 진행율은" → 프로젝트 전체 KPI 반환 (WBS 데이터 미연결)
 
@@ -19,7 +19,7 @@
 8. [회귀 테스트](#8-회귀-테스트)
 9. [수정 대상 파일](#9-수정-대상-파일)
 10. [WBS 스키마 레퍼런스](#10-wbs-스키마-레퍼런스)
-11. [2차 리뷰 반영 사항 요약](#11-2차-리뷰-반영-사항-요약)
+11. [리뷰 반영 사항 요약](#11-리뷰-반영-사항-요약)
 
 ---
 
@@ -492,6 +492,10 @@ Step 4: 라우팅 결정
 | "진행률 보여줘" | (없음) | 무효 (후보 없음) | `status_metric` |
 | "프로젝트 OCR 성능 평가 진행률" | "프로젝트 OCR 성능 평가" → "OCR 성능 평가" | 유효 (스코프 단어 제거 후) | `entity_progress` |
 | "UI 진행률" | "UI" | 무효 (2글자 이하) | `status_metric` |
+| "Sprint 1 진행률" | "Sprint 1" | 무효 (스프린트 패턴) | `sprint_progress` |
+| "이번 iteration 진행률" | "이번 iteration" → "iteration" | 무효 (스프린트 동의어) | `sprint_progress` |
+| "이번 주 진행률" | "이번 주" → (제거) | 무효 (시간 부사만 남음) | `status_metric` |
+| "금주 OCR 평가 진행률" | "금주 OCR 평가" → "OCR 평가" | 유효 (시간 부사 제거 후 3글자) | `entity_progress` |
 
 ### 4.3 POST-CLASSIFICATION에 추가 (priority loop 이후)
 
@@ -522,7 +526,17 @@ _entity_progress_patterns = [
     r"(.+?)\s*(진행률|진행율|진척률|완료율|몇\s*%|몇\s*퍼센트)",
     r"(.+?)\s*(어디까지|얼마나)\s*(진행|완료|됐|했)",
 ]
+
+# [3차 리뷰 반영: 2.1] 범위 단어 + 시간 부사 분리
+# 시간 부사는 스프린트/기간 KPI로 갈 가능성이 있으므로 별도 처리
 _scope_words = {"프로젝트", "전체", "overall", "project", "현재", "지금"}
+_time_adverbs = {"이번", "이번주", "이번 주", "오늘", "금주", "이달", "이번달"}
+
+# [3차 리뷰 반영: 2.2] 스프린트 동의어 (P1에서 놓친 경우 방어)
+# "Sprint 1", "이번 iteration" 등 영어/숫자 혼합 표현 방어
+_sprint_synonyms = {"스프린트", "sprint", "iteration", "이터레이션"}
+_sprint_pattern = re.compile(r"sprint\s*\d+", re.IGNORECASE)
+
 _josa_pattern = re.compile(r"[은는이가을를의에서도]$")
 
 for pattern in _entity_progress_patterns:
@@ -530,17 +544,31 @@ for pattern in _entity_progress_patterns:
     if m:
         raw_candidate = m.group(1).strip()
 
-        # 후보에서 스코프 단어 제거
+        # [3차 리뷰 반영: 2.1] (.+?)는 매우 넓으므로 다단계 필터링 필수
+        # Step A: 후보에서 스코프 단어 + 시간 부사 제거
         candidate_tokens = raw_candidate.split()
-        cleaned = [t for t in candidate_tokens if t not in _scope_words]
+        cleaned = [t for t in candidate_tokens
+                   if t not in _scope_words and t not in _time_adverbs]
         entity_candidate = " ".join(cleaned).strip()
 
         # 조사 제거
         entity_candidate = _josa_pattern.sub("", entity_candidate)
 
-        # 유효성 검증
+        # Step B: 유효성 검증 — 길이
         if len(entity_candidate) <= 2:
-            continue  # 너무 짧으면 무효
+            continue  # 너무 짧으면 무효 ("UI", "QA" 등)
+
+        # [3차 리뷰 반영: 2.2] Step C: 스프린트 동의어가 남아있으면 위임
+        # "Sprint 1 진행률" → P1에서 놓쳤더라도 entity_progress로 잡지 않음
+        candidate_lower = entity_candidate.lower()
+        if any(syn in candidate_lower for syn in _sprint_synonyms):
+            continue  # sprint_progress 또는 status_metric으로 위임
+        if _sprint_pattern.search(candidate_lower):
+            continue  # "Sprint 1" 같은 영어/숫자 혼합 방어
+
+        # Step D: 시간 부사만 제거하고 스코프 단어도 없으면 → 무효
+        # "이번 주 진행률" → cleaned=[], entity_candidate="" → 위에서 이미 걸림
+        # "이번 스프린트 진행률" → cleaned=["스프린트"] → Step C에서 걸림
 
         reasoning = f"Entity progress query: target='{entity_candidate}'"
         if was_corrected:
@@ -552,6 +580,16 @@ for pattern in _entity_progress_patterns:
             reasoning=reasoning,
         )
 ```
+
+> **[3차 리뷰 반영: 2.1] `(.+?)` 과매칭 방어 전략 요약**:
+> `(.+?)`는 의도적으로 넓은 범위를 잡되, 이후 **다단계 필터**로 무효 후보를 제거한다.
+> - 스코프 단어 제거 (`_scope_words`)
+> - 시간 부사 제거 (`_time_adverbs`)
+> - 스프린트 동의어 위임 (`_sprint_synonyms` + `_sprint_pattern`)
+> - 잔여 길이 검증 (2글자 이하 무효)
+> - 조사 제거 후 최종 판단
+>
+> "마지막 명사구 추출" 방식보다 "넓게 잡고 다단계 필터"가 한국어 조사/띄어쓰기 변이에 더 견고하다.
 
 ### 4.4 핸들러 등록
 
@@ -846,6 +884,11 @@ def resolve_entity(
 
 > **[리뷰 반영]** split 기반 토큰 제거 → 정규식 캡처 기반으로 변경.
 > "진행률은" 같은 붙임 표현, "몇퍼센트야" 같은 비분리 표현에도 대응.
+>
+> **[3차 리뷰 반영: 2.1, 2.2, 2.3]** 추가 개선:
+> - 시간 부사 분리 처리 (`_time_adverbs`)
+> - 스프린트 동의어 위임 (`_sprint_synonyms`, `_sprint_pattern`)
+> - 띄어쓰기 없는 입력("OCR성능평가") 한계 문서화
 
 ```python
 # 분류 단계에서 잡은 정규식 그룹을 그대로 후보로 사용
@@ -853,7 +896,15 @@ _entity_progress_patterns = [
     re.compile(r"(.+?)\s*(진행률|진행율|진척률|완료율|몇\s*%|몇\s*퍼센트)"),
     re.compile(r"(.+?)\s*(어디까지|얼마나)\s*(진행|완료|됐|했)"),
 ]
+
+# [3차 리뷰 반영: 2.1] 범위 단어 + 시간 부사 분리
 _scope_words = {"프로젝트", "전체", "overall", "project", "현재", "지금", "우리"}
+_time_adverbs = {"이번", "이번주", "이번 주", "오늘", "금주", "이달", "이번달"}
+
+# [3차 리뷰 반영: 2.2] 스프린트 동의어 방어
+_sprint_synonyms = {"스프린트", "sprint", "iteration", "이터레이션"}
+_sprint_pattern = re.compile(r"sprint\s*\d+", re.IGNORECASE)
+
 _josa_pattern = re.compile(r"[은는이가을를의에서도]$")
 
 
@@ -864,6 +915,8 @@ def extract_entity_name(query: str) -> str | None:
     "ocr 성능 평가 진행율은" → "ocr 성능 평가"
     "프로젝트 OCR 성능 평가 진행률" → "OCR 성능 평가"
     "진행률 보여줘" → None (no entity)
+    "Sprint 1 진행률" → None (sprint synonym delegation)
+    "금주 OCR 평가 진행률" → "OCR 평가" (time adverb stripped)
     """
     query_lower = query.lower().strip()
 
@@ -872,22 +925,38 @@ def extract_entity_name(query: str) -> str | None:
         if m:
             raw = m.group(1).strip()
 
-            # 스코프 단어 제거
+            # Step 1: 스코프 단어 + 시간 부사 제거
             tokens = raw.split()
-            cleaned = [t for t in tokens if t not in _scope_words]
+            cleaned = [t for t in tokens
+                       if t not in _scope_words and t not in _time_adverbs]
             candidate = " ".join(cleaned).strip()
 
-            # 조사 제거
+            # Step 2: 조사 제거
             candidate = _josa_pattern.sub("", candidate)
 
-            # 유효성: 2글자 이하면 무효
+            # Step 3: 유효성 — 길이
             if len(candidate) <= 2:
+                return None
+
+            # Step 4: 스프린트 동의어가 남아있으면 None (위임)
+            candidate_lower = candidate.lower()
+            if any(syn in candidate_lower for syn in _sprint_synonyms):
+                return None
+            if _sprint_pattern.search(candidate_lower):
                 return None
 
             return candidate
 
     return None
 ```
+
+> **[3차 리뷰 반영: 2.3] 띄어쓰기 없는 입력 한계**:
+> "OCR성능평가"처럼 띄어쓰기 없이 붙여 쓴 입력은 정규식 캡처 자체는 정상 동작하지만,
+> DB 검색(ILIKE) 단계에서 "OCR성능평가" vs "OCR 성능 평가" 불일치로 0건이 될 수 있다.
+> 현재 대응:
+> - ILIKE `%OCR성능평가%` → 공백 포함 데이터에서 매칭 실패
+> - 향후 검색 단계에서 공백 정규화(strip all spaces for comparison)를 추가하면 해결 가능
+> - 또는 L2 오타 사전에 "OCR성능평가" → "OCR 성능 평가" 매핑 추가로 대응
 
 ### 7.5 다중 매칭 처리 + Tie-Breaker
 
@@ -903,6 +972,10 @@ def extract_entity_name(query: str) -> str | None:
 
 #### Tie-Breaker 규칙 (자동 선택 조건)
 
+> **[3차 리뷰 반영: 3]** 운영에서 가장 자주 발생하는 경쟁은 "WBS item 1건 + user_story 1건(동명이인)"
+> 같은 **엔티티 타입 간 경쟁**이다. Rule 4에 phase/group 컨텍스트 + 활성 스프린트 연결 + 최근 업데이트
+> 기반 점수화를 추가하여 "불필요한 되묻기"를 최소화한다.
+
 ```python
 def _select_best_match(matches: list) -> dict | None:
     """
@@ -912,7 +985,7 @@ def _select_best_match(matches: list) -> dict | None:
     1. 정확 매칭(=)이 부분 매칭(ILIKE)보다 우선
     2. priority 숫자가 낮은 엔티티 타입 우선 (item > group > task > story)
     3. 활성 상태(IN_PROGRESS) 엔티티가 완료(COMPLETED)/미시작보다 우선
-    4. 최근 업데이트(updated_at) 엔티티 우선
+    4. 컨텍스트 점수화: phase/group 컨텍스트 + 활성 스프린트 연결 + 최근 업데이트
 
     Returns:
         best_match dict if auto-selection is confident, None if disambiguation needed
@@ -938,8 +1011,73 @@ def _select_best_match(matches: list) -> dict | None:
     if len(active) == 1:
         return active[0]
 
+    # Rule 4: [3차 리뷰 반영] 컨텍스트 점수화
+    # 여전히 동점이면 복합 점수로 최종 선택 시도
+    candidates = active if active else top_priority
+    if len(candidates) > 1:
+        scored = [(_context_score(m), m) for m in candidates]
+        scored.sort(key=lambda x: x[0], reverse=True)
+        # 최고 점수가 2위보다 2점 이상 높으면 자동 선택
+        if scored[0][0] - scored[1][0] >= 2:
+            return scored[0][1]
+
     # 자동 선택 불가 → disambiguation 필요
     return None
+
+
+def _context_score(match: dict) -> int:
+    """
+    Calculate context-based relevance score for tie-breaking.
+
+    Score components:
+    - WBS item with phase/group hierarchy info: +3
+    - Connected to active sprint: +2
+    - Recently updated (within 7 days): +2
+    - Has children (non-leaf): +1
+    - user_story with status DONE: -1 (likely stale)
+    """
+    score = 0
+
+    # WBS item with hierarchy context is more likely the intended target
+    if match.get("entity_type") == "wbs_item" and match.get("phase_name"):
+        score += 3
+
+    # Active sprint connection indicates current relevance
+    if match.get("active_sprint_connected"):
+        score += 2
+
+    # Recent activity suggests current relevance
+    if match.get("updated_at"):
+        from datetime import datetime, timedelta, timezone
+        try:
+            updated = match["updated_at"]
+            if isinstance(updated, str):
+                updated = datetime.fromisoformat(updated)
+            if updated > datetime.now(timezone.utc) - timedelta(days=7):
+                score += 2
+        except (ValueError, TypeError):
+            pass
+
+    # Non-leaf nodes are usually what users ask about for progress
+    if match.get("has_children"):
+        score += 1
+
+    # Completed user_stories are likely stale
+    if match.get("entity_type") == "user_story" and match.get("status") == "DONE":
+        score -= 1
+
+    return score
+```
+
+Tie-breaker 운영 예시:
+
+```
+"OCR 성능 평가" 검색 → 2건 매칭:
+  1. wbs_item (priority=1, IN_PROGRESS, phase="AI 모듈 개발", updated 2일 전)
+     → context_score = 3 (hierarchy) + 2 (recent) = 5
+  2. user_story (priority=4, DONE, updated 30일 전)
+     → context_score = 0 + (-1) (stale) = -1
+  → 차이 6점 ≥ 2 → wbs_item 자동 선택 ✅
 ```
 
 ---
@@ -1216,9 +1354,9 @@ weight 기본값: 100
 
 ---
 
-## 11. 2차 리뷰 반영 사항 요약
+## 11. 리뷰 반영 사항 요약
 
-### 11.1 반영된 피드백 Top 5
+### 11.1 2차 리뷰 반영 피드백 Top 5
 
 | # | 영역 | 문제 | 반영 위치 |
 | --- | --- | --- | --- |
@@ -1228,7 +1366,7 @@ weight 기본값: 100
 | 4 | **라우팅: POST-CLASSIFICATION** | PRE에서 실행 시 스프린트 전용 규칙보다 먼저 잡힘 | 4.3: priority loop 이후로 이동, 실행 순서 다이어그램 추가 |
 | 5 | **검색어 추출: 정규식 캡처** | split 기반 → 붙임/조사/비분리 표현에 취약 | 7.4: 정규식 캡처 + 조사 제거 + 유효성 검증 |
 
-### 11.2 추가 반영 사항
+### 11.2 2차 리뷰 추가 반영 사항
 
 | # | 영역 | 반영 내용 | 위치 |
 | --- | --- | --- | --- |
@@ -1242,3 +1380,14 @@ weight 기본값: 100
 | 13 | **테스트: escape 검증** | `%`, `_` 포함 검색어 안전성 검증 | 8.2 |
 | 14 | **유효성: 2글자 필터** | "UI 진행률" 같은 짧은 후보 무효 처리 | 4.2 Step 3, 8.1 |
 | 15 | **렌더링: NULL 표시** | NULL → "—(미설정)" + 경고, "0%"가 아님 | 3.3, 8.3 |
+
+### 11.3 3차 리뷰 반영 사항 (PDF: "WBS 데이터 연동 검토")
+
+| # | 영역 | 리뷰 지적 | 반영 내용 | 위치 |
+| --- | --- | --- | --- | --- |
+| 16 | **(.+?) 과매칭 방어** | `(.+?)`가 매우 넓어서 "프로젝트 OCR 성능 평가" 같은 과캡처 발생 | 다단계 필터 전략 문서화: scope 제거 → 시간 부사 제거 → sprint 위임 → 길이 검증 | 4.3 |
+| 17 | **시간 부사 분리 처리** | "이번/이번주/오늘" 같은 시간 부사가 scope word에 누락 | `_time_adverbs` 별도 세트 추가, 스프린트/기간 KPI 위임 가능성 반영 | 4.3, 7.4 |
+| 18 | **스프린트 동의어 방어** | "Sprint 1" 영어/숫자 혼합, "iteration" 동의어가 entity_progress로 뚫림 | `_sprint_synonyms` + `_sprint_pattern` (regex) 추가 | 4.3, 7.4 |
+| 19 | **Tie-Breaker 컨텍스트 점수화** | "WBS item 1건 + user_story 1건" 타입 간 경쟁에서 자동선택 규칙이 부족 | Rule 4에 `_context_score()` 함수 추가: phase/group 컨텍스트, 활성 스프린트, 최근 업데이트, 완료 user_story 감점 | 7.5 |
+| 20 | **띄어쓰기 없는 입력 한계** | "OCR성능평가" 같은 spaceless 입력 시 ILIKE 검색 불일치 | 한계 문서화 + 대응 방안 제시 (공백 정규화 또는 L2 사전 매핑) | 7.4 |
+| 21 | **라우팅 테이블 확장** | Sprint N, iteration, 시간 부사 케이스가 누락 | 4개 라우팅 케이스 추가 (Sprint 1, iteration, 이번 주, 금주+엔티티) | 4.2 |

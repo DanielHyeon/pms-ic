@@ -161,6 +161,21 @@ EMPTY_DATA_TIPS = {
         related_menu="칸반 보드 설정",
     ),
 
+    "entity_progress": DegradationPlan(
+        reason=DegradationReason.EMPTY_DATA,
+        message="해당 이름의 WBS 항목을 찾을 수 없습니다.",
+        tips=[
+            "WBS 항목 이름을 정확하게 입력해 주세요",
+            "WBS 구조가 아직 생성되지 않았을 수 있습니다",
+            "유사한 이름의 항목이 있는지 확인해 보세요",
+        ],
+        next_actions=[
+            "WBS 관리 화면에서 항목 확인",
+            "'WBS 현황 보여줘'로 전체 구조 조회",
+        ],
+        related_menu="WBS 관리",
+    ),
+
     "risk_analysis": DegradationPlan(
         reason=DegradationReason.NO_RISKS_EXPLICIT,
         message="등록된 활성 리스크가 없습니다.",

@@ -40,6 +40,9 @@ from query.query_templates import (
     KANBAN_OVERVIEW_QUERY, KANBAN_OVERVIEW_FALLBACK_QUERY,
     BACKLOG_TASKS_QUERY,
     SPRINT_TODO_TASKS_QUERY,
+    WBS_ENTITY_EXACT_SEARCH_QUERY, WBS_ENTITY_FUZZY_SEARCH_QUERY,
+    WBS_ITEM_CHILDREN_QUERY, WBS_GROUP_CHILDREN_QUERY, WBS_PHASE_CHILDREN_QUERY,
+    USER_STORY_SEARCH_QUERY,
     calculate_kst_week_boundaries, get_kst_reference_time,
 )
 from contracts.degradation_tips import (
@@ -851,6 +854,351 @@ def handle_kanban_overview(ctx: HandlerContext) -> ResponseContract:
 
 
 # =============================================================================
+# ENTITY_PROGRESS Handler (P6 Implementation)
+# =============================================================================
+
+def handle_entity_progress(ctx: HandlerContext) -> ResponseContract:
+    """
+    Handle entity-specific progress queries (WBS items, groups, tasks).
+
+    Flow:
+    1. Extract entity name from message (regex capture based)
+    2. 2-step search: exact match → fuzzy match (ILIKE with escape)
+    3. Single match → fetch children aggregate → detailed progress
+    4. Multiple matches → apply tie-breaker → best or disambiguation
+    5. No WBS match → fallback to user_stories title search
+    """
+    from utils.entity_resolver import (
+        extract_entity_name, select_best_match, calc_weighted_progress,
+    )
+
+    logger.info(f"[ENTITY_PROGRESS] project={ctx.project_id}, message={ctx.message}")
+
+    entity_name = extract_entity_name(ctx.message)
+    if not entity_name:
+        entity_name = ctx.message.strip()
+
+    matches = []
+    query_mode = "exact"
+    db_failed = False
+
+    try:
+        # Step 1: Exact match
+        result = execute_query(
+            WBS_ENTITY_EXACT_SEARCH_QUERY,
+            {"project_id": ctx.project_id, "term": entity_name, "limit": 10},
+            limit=10,
+        )
+
+        if not result.success:
+            db_failed = True
+            logger.error(f"WBS exact search failed: {result.error}")
+        else:
+            matches = [dict(r, match_mode="exact") for r in result.data]
+
+            # Step 2: Fuzzy match if exact returns 0
+            if not matches:
+                query_mode = "ilike"
+                escaped = entity_name.replace("%", "\\%").replace("_", "\\_")
+                pattern = f"%{escaped}%"
+                fuzzy_result = execute_query(
+                    WBS_ENTITY_FUZZY_SEARCH_QUERY,
+                    {"project_id": ctx.project_id, "pattern": pattern, "limit": 10},
+                    limit=10,
+                )
+                if fuzzy_result.success:
+                    matches = [dict(r, match_mode="ilike") for r in fuzzy_result.data]
+
+            # Step 3: Fallback to user_stories if still 0
+            if not matches:
+                query_mode = "fallback_story"
+                pattern = f"%{entity_name}%"
+                story_result = execute_query(
+                    USER_STORY_SEARCH_QUERY,
+                    {"project_id": ctx.project_id, "pattern": pattern, "limit": 10},
+                    limit=10,
+                )
+                if story_result.success:
+                    matches = [dict(r, match_mode="ilike") for r in story_result.data]
+
+    except Exception as e:
+        logger.exception(f"Unexpected error in handle_entity_progress: {e}")
+        db_failed = True
+
+    # Build response based on match count
+    if db_failed:
+        plan = DB_FAILURE_TIPS.get("default")
+        return ResponseContract(
+            intent="entity_progress",
+            reference_time=get_kst_reference_time(),
+            scope=f"Project: {ctx.project_id}",
+            data={},
+            warnings=[plan.message],
+            tips=plan.tips + plan.next_actions,
+            error_code=ErrorCode.DB_QUERY_FAILED,
+            provenance="Unavailable",
+        )
+
+    if not matches:
+        plan = EMPTY_DATA_TIPS.get("entity_progress")
+        return ResponseContract(
+            intent="entity_progress",
+            reference_time=get_kst_reference_time(),
+            scope=f"Project: {ctx.project_id}",
+            data={"search_term": entity_name, "match_count": 0},
+            warnings=[plan.message] if plan else ["해당 이름의 WBS 항목을 찾을 수 없습니다."],
+            tips=(plan.tips + plan.next_actions) if plan else [],
+            provenance="realtime",
+        )
+
+    if len(matches) > 5:
+        return ResponseContract(
+            intent="entity_progress",
+            reference_time=get_kst_reference_time(),
+            scope=f"Project: {ctx.project_id}",
+            data={
+                "search_term": entity_name,
+                "match_count": len(matches),
+                "disambiguation": [
+                    {"name": m.get("name"), "type": m.get("entity_type"),
+                     "code": m.get("code"), "status": m.get("status")}
+                    for m in matches[:10]
+                ],
+            },
+            warnings=["검색 결과가 너무 많습니다. 더 구체적으로 입력해 주세요."],
+            tips=[],
+            provenance="realtime",
+        )
+
+    # Single or few matches → apply tie-breaker
+    if len(matches) == 1:
+        best = matches[0]
+    else:
+        best = select_best_match(matches)
+
+    if best is None:
+        # Disambiguation needed
+        return ResponseContract(
+            intent="entity_progress",
+            reference_time=get_kst_reference_time(),
+            scope=f"Project: {ctx.project_id}",
+            data={
+                "search_term": entity_name,
+                "match_count": len(matches),
+                "disambiguation": [
+                    {"name": m.get("name"), "type": m.get("entity_type"),
+                     "code": m.get("code"), "status": m.get("status"),
+                     "progress": m.get("progress"), "phase_name": m.get("phase_name")}
+                    for m in matches
+                ],
+            },
+            warnings=[],
+            tips=["원하시는 항목의 전체 이름을 입력해 주세요."],
+            provenance="realtime",
+        )
+
+    # Fetch children aggregate for the best match
+    children_data = {}
+    completeness = {}
+
+    try:
+        entity_type = best.get("entity_type")
+        pid = ctx.project_id
+        if entity_type == "phase":
+            children_result = execute_query(
+                WBS_PHASE_CHILDREN_QUERY,
+                {"phase_id": best["id"], "project_id": pid},
+            )
+            if children_result.success and children_result.data:
+                children_data = _build_children_summary(children_result.data)
+                completeness = calc_weighted_progress(children_result.data)
+        elif entity_type == "wbs_item":
+            children_result = execute_query(
+                WBS_ITEM_CHILDREN_QUERY,
+                {"item_id": best["id"], "project_id": pid},
+            )
+            if children_result.success and children_result.data:
+                children_data = _build_children_summary(children_result.data)
+                completeness = calc_weighted_progress(children_result.data)
+        elif entity_type == "wbs_group":
+            children_result = execute_query(
+                WBS_GROUP_CHILDREN_QUERY,
+                {"group_id": best["id"], "project_id": pid},
+            )
+            if children_result.success and children_result.data:
+                children_data = _build_children_summary(children_result.data)
+                completeness = calc_weighted_progress(children_result.data)
+    except Exception as e:
+        logger.warning(f"Children aggregate failed for {best.get('id')}: {e}")
+
+    # Build entity data
+    progress_val = best.get("progress")
+    progress_is_null = best.get("progress_is_null", progress_val is None)
+
+    # Determine calculation method
+    if not completeness:
+        if progress_is_null:
+            completeness = {
+                "calculation": "status_based",
+                "null_count": 0,
+                "null_ratio": 1.0,
+                "confidence": "low",
+            }
+        else:
+            completeness = {
+                "calculation": "direct",
+                "null_count": 0,
+                "null_ratio": 0.0,
+                "confidence": "medium",
+            }
+
+    # Schedule info
+    schedule = _build_schedule(best)
+
+    # Effort info
+    effort = _build_effort(best)
+
+    data = {
+        "entity": {
+            "type": best.get("entity_type"),
+            "id": best.get("id"),
+            "code": best.get("code"),
+            "name": best.get("name"),
+            "status": best.get("status"),
+            "progress": progress_val,
+            "progress_is_null": progress_is_null,
+        },
+        "hierarchy": {
+            "phase": best.get("phase_name"),
+            "group": best.get("parent_group_name"),
+        },
+        "schedule": schedule,
+        "effort": effort,
+        "children": children_data,
+        "completeness": {
+            "as_of": get_kst_reference_time(),
+            "scope": best.get("entity_type"),
+            **completeness,
+        },
+        "provenance": {
+            "source": {
+                "primary": "project.phases" if best.get("entity_type") == "phase"
+                    else f"project.{best.get('entity_type', 'wbs_items')}s"
+                    if best.get("entity_type", "").startswith("wbs_")
+                    else "task.user_stories",
+                "joins": ["project.wbs_groups"]
+                    if best.get("entity_type") == "phase"
+                    else ["project.wbs_groups", "project.phases"]
+                    if best.get("entity_type", "").startswith("wbs_")
+                    else [],
+            },
+            "query_mode": query_mode,
+        },
+        "disambiguation": None,
+    }
+
+    warnings = []
+    if progress_is_null and not children_data:
+        warnings.append("이 항목의 progress 값이 설정되지 않았습니다.")
+    null_count = completeness.get("null_count", 0)
+    if null_count > 0 and completeness.get("calculation") != "status_based":
+        warnings.append(f"progress 미설정 하위 항목 {null_count}건 (가중 평균에서 제외)")
+
+    return ResponseContract(
+        intent="entity_progress",
+        reference_time=get_kst_reference_time(),
+        scope=f"Project: {ctx.project_id}",
+        data=data,
+        warnings=warnings,
+        tips=[],
+        provenance="realtime",
+    )
+
+
+def _build_children_summary(rows: list) -> dict:
+    """Build children status summary from aggregate query rows."""
+    total = sum(int(r.get("task_count") or r.get("item_count") or 0) for r in rows)
+    by_status = {}
+    total_estimated = 0
+    total_actual = 0
+
+    for r in rows:
+        status = r.get("status", "UNKNOWN")
+        count = int(r.get("task_count") or r.get("item_count") or 0)
+        by_status[status] = count
+        total_estimated += int(r.get("total_estimated_hours") or 0)
+        total_actual += int(r.get("total_actual_hours") or 0)
+
+    completed = by_status.get("COMPLETED", 0)
+    completion_rate = round(completed / total * 100, 1) if total > 0 else 0.0
+
+    result = {
+        "total": total,
+        "by_status": by_status,
+        "completion_rate": completion_rate,
+    }
+
+    if total_estimated > 0 or total_actual > 0:
+        result["total_estimated_hours"] = total_estimated
+        result["total_actual_hours"] = total_actual
+
+    return result
+
+
+def _build_schedule(entity: dict) -> dict:
+    """Build schedule info from entity data."""
+    planned_start = entity.get("planned_start_date")
+    planned_end = entity.get("planned_end_date")
+    actual_start = entity.get("actual_start_date")
+    actual_end = entity.get("actual_end_date")
+
+    days_remaining = None
+    is_overdue = False
+
+    if planned_end:
+        try:
+            end_date = planned_end
+            if isinstance(end_date, str):
+                from datetime import date
+                end_date = date.fromisoformat(end_date)
+            from datetime import date as date_type
+            today = date_type.today()
+            delta = (end_date - today).days
+            days_remaining = max(0, delta)
+            is_overdue = delta < 0
+        except (ValueError, TypeError):
+            pass
+
+    return {
+        "planned_start": str(planned_start) if planned_start else None,
+        "planned_end": str(planned_end) if planned_end else None,
+        "actual_start": str(actual_start) if actual_start else None,
+        "actual_end": str(actual_end) if actual_end else None,
+        "days_remaining": days_remaining,
+        "is_overdue": is_overdue,
+    }
+
+
+def _build_effort(entity: dict) -> dict:
+    """Build effort info from entity data."""
+    estimated = entity.get("estimated_hours")
+    actual = entity.get("actual_hours")
+
+    estimated_val = int(estimated) if estimated is not None else None
+    actual_val = int(actual) if actual is not None else None
+
+    effort_rate = None
+    if estimated_val and estimated_val > 0 and actual_val is not None:
+        effort_rate = round(actual_val / estimated_val * 100, 1)
+
+    return {
+        "estimated_hours": estimated_val,
+        "actual_hours": actual_val,
+        "effort_rate": effort_rate,
+    }
+
+
+# =============================================================================
 # CASUAL Handler
 # =============================================================================
 
@@ -900,6 +1248,7 @@ INTENT_HANDLERS = {
     "completed_tasks": handle_completed_tasks,
     "tasks_by_status": handle_tasks_by_status,
     "kanban_overview": handle_kanban_overview,
+    "entity_progress": handle_entity_progress,
     "casual": handle_casual,
     "unknown": handle_unknown,
     # STATUS_* intents are NOT in this registry

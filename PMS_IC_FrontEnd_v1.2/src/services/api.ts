@@ -2206,6 +2206,15 @@ export class ApiService {
     }, { message: 'WBS Task deleted' });
   }
 
+  // ========== WBS Full Tree (single-request optimization) ==========
+  async getWbsFullTree(projectId: string) {
+    const response = await this.fetchWithFallback(
+      `/projects/${projectId}/wbs/full-tree`, {},
+      { data: { groups: [], items: [], tasks: [] } }
+    );
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
   // ========== WBS Dependency API ==========
   async getWbsDependencies(projectId: string) {
     const response = await this.fetchWithFallback(`/projects/${projectId}/wbs/dependencies`, {}, { data: [] });

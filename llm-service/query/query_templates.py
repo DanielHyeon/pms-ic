@@ -866,3 +866,272 @@ ORDER BY
     END
 LIMIT %(limit)s
 """
+
+
+# =============================================================================
+# WBS Entity Progress Queries (P6 Implementation)
+# =============================================================================
+
+# Step 1: Exact name match across WBS hierarchy (priority-ordered UNION ALL)
+# NULL preservation: progress returned as-is, progress_is_null flag separate
+# Priority 0 = phase, 1 = item, 2 = group, 3 = task
+WBS_ENTITY_EXACT_SEARCH_QUERY = """
+SELECT
+    0 AS priority,
+    'phase' AS entity_type,
+    p.id, NULL AS code, p.name, p.status,
+    p.progress,
+    NULL AS planned_start_date, NULL AS planned_end_date,
+    NULL AS actual_start_date, NULL AS actual_end_date,
+    NULL AS estimated_hours, NULL AS actual_hours,
+    NULL AS parent_group_name,
+    p.name AS phase_name,
+    (p.progress IS NULL) AS progress_is_null
+FROM project.phases p
+WHERE p.project_id = %(project_id)s
+  AND LOWER(p.name) = LOWER(%(term)s)
+
+UNION ALL
+
+SELECT
+    1 AS priority,
+    'wbs_item' AS entity_type,
+    wi.id, wi.code, wi.name, wi.status,
+    wi.progress,
+    wi.planned_start_date, wi.planned_end_date,
+    wi.actual_start_date, wi.actual_end_date,
+    wi.estimated_hours, wi.actual_hours,
+    wg.name AS parent_group_name,
+    p.name AS phase_name,
+    (wi.progress IS NULL) AS progress_is_null
+FROM project.wbs_items wi
+JOIN project.wbs_groups wg ON wi.group_id = wg.id
+JOIN project.phases p ON wg.phase_id = p.id
+WHERE p.project_id = %(project_id)s
+  AND LOWER(wi.name) = LOWER(%(term)s)
+
+UNION ALL
+
+SELECT
+    2 AS priority,
+    'wbs_group' AS entity_type,
+    wg.id, wg.code, wg.name, wg.status,
+    wg.progress,
+    wg.planned_start_date, wg.planned_end_date,
+    wg.actual_start_date, wg.actual_end_date,
+    NULL AS estimated_hours, NULL AS actual_hours,
+    NULL AS parent_group_name,
+    p.name AS phase_name,
+    (wg.progress IS NULL) AS progress_is_null
+FROM project.wbs_groups wg
+JOIN project.phases p ON wg.phase_id = p.id
+WHERE p.project_id = %(project_id)s
+  AND LOWER(wg.name) = LOWER(%(term)s)
+
+UNION ALL
+
+SELECT
+    3 AS priority,
+    'wbs_task' AS entity_type,
+    wt.id, wt.code, wt.name, wt.status,
+    wt.progress,
+    wt.planned_start_date, wt.planned_end_date,
+    wt.actual_start_date, wt.actual_end_date,
+    wt.estimated_hours, wt.actual_hours,
+    wi.name AS parent_group_name,
+    p.name AS phase_name,
+    (wt.progress IS NULL) AS progress_is_null
+FROM project.wbs_tasks wt
+JOIN project.wbs_items wi ON wt.item_id = wi.id
+JOIN project.wbs_groups wg ON wt.group_id = wg.id
+JOIN project.phases p ON wg.phase_id = p.id
+WHERE p.project_id = %(project_id)s
+  AND LOWER(wt.name) = LOWER(%(term)s)
+
+ORDER BY priority, name
+LIMIT %(limit)s
+"""
+
+# Step 2: Fuzzy match (ILIKE with escape) - only when exact returns 0 rows
+# Pattern generation: f"%{term.replace('%','\\%').replace('_','\\_')}%"
+WBS_ENTITY_FUZZY_SEARCH_QUERY = """
+SELECT
+    0 AS priority,
+    'phase' AS entity_type,
+    p.id, NULL AS code, p.name, p.status,
+    p.progress,
+    NULL AS planned_start_date, NULL AS planned_end_date,
+    NULL AS actual_start_date, NULL AS actual_end_date,
+    NULL AS estimated_hours, NULL AS actual_hours,
+    NULL AS parent_group_name,
+    p.name AS phase_name,
+    (p.progress IS NULL) AS progress_is_null
+FROM project.phases p
+WHERE p.project_id = %(project_id)s
+  AND p.name ILIKE %(pattern)s ESCAPE '\\'
+
+UNION ALL
+
+SELECT
+    1 AS priority,
+    'wbs_item' AS entity_type,
+    wi.id, wi.code, wi.name, wi.status,
+    wi.progress,
+    wi.planned_start_date, wi.planned_end_date,
+    wi.actual_start_date, wi.actual_end_date,
+    wi.estimated_hours, wi.actual_hours,
+    wg.name AS parent_group_name,
+    p.name AS phase_name,
+    (wi.progress IS NULL) AS progress_is_null
+FROM project.wbs_items wi
+JOIN project.wbs_groups wg ON wi.group_id = wg.id
+JOIN project.phases p ON wg.phase_id = p.id
+WHERE p.project_id = %(project_id)s
+  AND wi.name ILIKE %(pattern)s ESCAPE '\\'
+
+UNION ALL
+
+SELECT
+    2 AS priority,
+    'wbs_group' AS entity_type,
+    wg.id, wg.code, wg.name, wg.status,
+    wg.progress,
+    wg.planned_start_date, wg.planned_end_date,
+    wg.actual_start_date, wg.actual_end_date,
+    NULL AS estimated_hours, NULL AS actual_hours,
+    NULL AS parent_group_name,
+    p.name AS phase_name,
+    (wg.progress IS NULL) AS progress_is_null
+FROM project.wbs_groups wg
+JOIN project.phases p ON wg.phase_id = p.id
+WHERE p.project_id = %(project_id)s
+  AND wg.name ILIKE %(pattern)s ESCAPE '\\'
+
+UNION ALL
+
+SELECT
+    3 AS priority,
+    'wbs_task' AS entity_type,
+    wt.id, wt.code, wt.name, wt.status,
+    wt.progress,
+    wt.planned_start_date, wt.planned_end_date,
+    wt.actual_start_date, wt.actual_end_date,
+    wt.estimated_hours, wt.actual_hours,
+    wi.name AS parent_group_name,
+    p.name AS phase_name,
+    (wt.progress IS NULL) AS progress_is_null
+FROM project.wbs_tasks wt
+JOIN project.wbs_items wi ON wt.item_id = wi.id
+JOIN project.wbs_groups wg ON wt.group_id = wg.id
+JOIN project.phases p ON wg.phase_id = p.id
+WHERE p.project_id = %(project_id)s
+  AND wt.name ILIKE %(pattern)s ESCAPE '\\'
+
+ORDER BY priority, name
+LIMIT %(limit)s
+"""
+
+# WBS item children (tasks) aggregate - NULL-safe weighted progress
+# COALESCE(weight, 100): treat NULL weight as default 100 to prevent
+# silent exclusion from weighted average when weight column is unset
+WBS_ITEM_CHILDREN_QUERY = """
+SELECT
+    wt.status,
+    COUNT(*) AS task_count,
+    SUM(wt.progress * COALESCE(wt.weight, 100))
+        FILTER (WHERE wt.progress IS NOT NULL) AS weighted_progress_nonnull,
+    SUM(COALESCE(wt.weight, 100))
+        FILTER (WHERE wt.progress IS NOT NULL) AS total_weight_nonnull,
+    COUNT(*) FILTER (WHERE wt.progress IS NULL) AS null_progress_count,
+    COUNT(*) AS total_count,
+    SUM(COALESCE(wt.estimated_hours, 0)) AS total_estimated_hours,
+    SUM(COALESCE(wt.actual_hours, 0)) AS total_actual_hours
+FROM project.wbs_tasks wt
+WHERE wt.item_id = %(item_id)s
+GROUP BY wt.status
+ORDER BY wt.status
+"""
+
+# WBS group children (items) aggregate - NULL-safe
+WBS_GROUP_CHILDREN_QUERY = """
+SELECT
+    wi.status,
+    COUNT(*) AS item_count,
+    SUM(wi.progress * COALESCE(wi.weight, 100))
+        FILTER (WHERE wi.progress IS NOT NULL) AS weighted_progress_nonnull,
+    SUM(COALESCE(wi.weight, 100))
+        FILTER (WHERE wi.progress IS NOT NULL) AS total_weight_nonnull,
+    COUNT(*) FILTER (WHERE wi.progress IS NULL) AS null_progress_count,
+    COUNT(*) AS total_count
+FROM project.wbs_items wi
+WHERE wi.group_id = %(group_id)s
+GROUP BY wi.status
+ORDER BY wi.status
+"""
+
+# WBS phase children (groups) aggregate - NULL-safe
+# Includes groups from child phases (parent_id) for hierarchical phases
+WBS_PHASE_CHILDREN_QUERY = """
+SELECT
+    wg.status,
+    COUNT(*) AS item_count,
+    SUM(wg.progress * COALESCE(wg.weight, 100))
+        FILTER (WHERE wg.progress IS NOT NULL) AS weighted_progress_nonnull,
+    SUM(COALESCE(wg.weight, 100))
+        FILTER (WHERE wg.progress IS NOT NULL) AS total_weight_nonnull,
+    COUNT(*) FILTER (WHERE wg.progress IS NULL) AS null_progress_count,
+    COUNT(*) AS total_count
+FROM project.wbs_groups wg
+WHERE wg.phase_id IN (
+    SELECT %(phase_id)s
+    UNION ALL
+    SELECT id FROM project.phases WHERE parent_id = %(phase_id)s
+)
+GROUP BY wg.status
+ORDER BY wg.status
+"""
+
+# WBS project overview - group-level progress summary
+WBS_PROJECT_OVERVIEW_QUERY = """
+SELECT
+    wg.id AS group_id,
+    wg.code,
+    wg.name,
+    wg.status,
+    wg.progress,
+    (wg.progress IS NULL) AS progress_is_null,
+    wg.planned_start_date,
+    wg.planned_end_date,
+    p.name AS phase_name,
+    COUNT(wi.id) AS item_count,
+    SUM(CASE WHEN wi.status = 'COMPLETED' THEN 1 ELSE 0 END) AS completed_items,
+    SUM(CASE WHEN wi.status = 'IN_PROGRESS' THEN 1 ELSE 0 END) AS in_progress_items
+FROM project.wbs_groups wg
+JOIN project.phases p ON wg.phase_id = p.id
+LEFT JOIN project.wbs_items wi ON wi.group_id = wg.id
+WHERE p.project_id = %(project_id)s
+GROUP BY wg.id, wg.code, wg.name, wg.status, wg.progress,
+         wg.planned_start_date, wg.planned_end_date, p.name
+ORDER BY p.name, wg.order_num
+"""
+
+# User story title search (fallback when no WBS match)
+USER_STORY_SEARCH_QUERY = """
+SELECT
+    4 AS priority,
+    'user_story' AS entity_type,
+    us.id, NULL AS code, us.title AS name, us.status,
+    NULL AS progress,
+    NULL AS planned_start_date, NULL AS planned_end_date,
+    NULL AS actual_start_date, NULL AS actual_end_date,
+    NULL AS estimated_hours, NULL AS actual_hours,
+    NULL AS parent_group_name,
+    NULL AS phase_name,
+    true AS progress_is_null
+FROM task.user_stories us
+WHERE us.project_id = %(project_id)s
+  AND LOWER(us.title) LIKE LOWER(%(pattern)s)
+  AND us.status NOT IN ('DONE', 'CANCELLED', 'ARCHIVED')
+ORDER BY us.updated_at DESC
+LIMIT %(limit)s
+"""
