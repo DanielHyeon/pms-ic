@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../../services/api';
+import { unwrapOrThrow } from '../../utils/toViewState';
 import { Rfp } from '../../types/project';
 
 export const rfpKeys = {
@@ -13,7 +14,10 @@ export const rfpKeys = {
 export function useRfps(projectId?: string) {
   return useQuery<Rfp[]>({
     queryKey: rfpKeys.list(projectId),
-    queryFn: () => apiService.getRfps(projectId!),
+    queryFn: async () => {
+      const result = await apiService.getRfpsResult(projectId!);
+      return unwrapOrThrow(result);
+    },
     enabled: !!projectId,
   });
 }

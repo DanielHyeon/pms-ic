@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../../services/api';
+import { unwrapOrThrow } from '../../utils/toViewState';
 import { WeeklyReport } from '../../types/project';
 
 export const weeklyReportKeys = {
@@ -14,8 +15,8 @@ export function useWeeklyReports(projectId?: string) {
   return useQuery<WeeklyReport[]>({
     queryKey: weeklyReportKeys.list(projectId),
     queryFn: async () => {
-      const data = await apiService.getWeeklyReports(projectId!);
-      return data || [];
+      const result = await apiService.getWeeklyReportsResult(projectId!);
+      return unwrapOrThrow(result);
     },
     enabled: !!projectId,
   });

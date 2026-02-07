@@ -207,7 +207,7 @@ function KpiCard({ kpi }: { kpi: any }) {
   );
 }
 
-function ScorePanel({ label, score, maxLabel }: { label: string; score: number; maxLabel: string }) {
+function ScorePanel({ label, score = 0, maxLabel }: { label: string; score?: number; maxLabel: string }) {
   const color = score >= 80 ? '#16a34a' : score >= 50 ? '#f59e0b' : '#dc2626';
   return (
     <div style={{

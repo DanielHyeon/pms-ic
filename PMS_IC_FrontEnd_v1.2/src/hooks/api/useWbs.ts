@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../../services/api';
+import { unwrapOrThrow } from '../../utils/toViewState';
 import {
   WbsGroup,
   WbsItem,
@@ -35,7 +36,10 @@ export const wbsKeys = {
 export function useWbsGroups(phaseId?: string) {
   return useQuery({
     queryKey: wbsKeys.groupsByPhase(phaseId || ''),
-    queryFn: () => apiService.getWbsGroups(phaseId!),
+    queryFn: async () => {
+      const result = await apiService.getWbsGroupsResult(phaseId!);
+      return unwrapOrThrow(result);
+    },
     enabled: !!phaseId,
   });
 }
@@ -43,7 +47,10 @@ export function useWbsGroups(phaseId?: string) {
 export function useWbsGroup(id: string) {
   return useQuery({
     queryKey: wbsKeys.group(id),
-    queryFn: () => apiService.getWbsGroup(id),
+    queryFn: async () => {
+      const result = await apiService.getWbsGroupResult(id);
+      return unwrapOrThrow(result);
+    },
     enabled: !!id,
   });
 }
@@ -104,7 +111,10 @@ export function useDeleteWbsGroup() {
 export function useWbsItems(groupId?: string) {
   return useQuery({
     queryKey: wbsKeys.itemsByGroup(groupId || ''),
-    queryFn: () => apiService.getWbsItems(groupId!),
+    queryFn: async () => {
+      const result = await apiService.getWbsItemsResult(groupId!);
+      return unwrapOrThrow(result);
+    },
     enabled: !!groupId,
   });
 }
@@ -116,9 +126,10 @@ export function useWbsItemsByPhase(phaseId?: string) {
     queryKey: [...wbsKeys.items(), 'byPhase', phaseId],
     queryFn: async () => {
       if (!groups || groups.length === 0) return [];
-      const itemPromises = groups.map((g: WbsGroup) => apiService.getWbsItems(g.id));
-      const results = await Promise.all(itemPromises);
-      return results.flat();
+      const itemResults = await Promise.all(
+        groups.map((g: WbsGroup) => apiService.getWbsItemsResult(g.id))
+      );
+      return itemResults.map(r => unwrapOrThrow(r)).flat();
     },
     enabled: !!phaseId && groups.length > 0,
   });
@@ -183,7 +194,10 @@ export function useDeleteWbsItem() {
 export function useWbsTasks(itemId?: string) {
   return useQuery({
     queryKey: wbsKeys.tasksByItem(itemId || ''),
-    queryFn: () => apiService.getWbsTasks(itemId!),
+    queryFn: async () => {
+      const result = await apiService.getWbsTasksResult(itemId!);
+      return unwrapOrThrow(result);
+    },
     enabled: !!itemId,
   });
 }
@@ -314,16 +328,16 @@ export function usePhaseWbs(phaseId: string) {
       if (!groups || groups.length === 0) return [];
 
       // Parallel batch 1: fetch all items (one call per group, concurrent)
-      const itemArrays = await Promise.all(
-        groups.map((g: WbsGroup) => apiService.getWbsItems(g.id))
+      const itemResults = await Promise.all(
+        groups.map((g: WbsGroup) => apiService.getWbsItemsResult(g.id))
       );
-      const allItems = itemArrays.flat();
+      const allItems = itemResults.map(r => unwrapOrThrow(r)).flat();
 
       // Parallel batch 2: fetch all tasks (one call per item, concurrent)
-      const taskArrays = await Promise.all(
-        allItems.map((i: WbsItem) => apiService.getWbsTasks(i.id))
+      const taskResults = await Promise.all(
+        allItems.map((i: WbsItem) => apiService.getWbsTasksResult(i.id))
       );
-      const allTasks = taskArrays.flat();
+      const allTasks = taskResults.map(r => unwrapOrThrow(r)).flat();
 
       // Index tasks by itemId
       const tasksByItem = new Map<string, WbsTask[]>();
@@ -465,7 +479,8 @@ export function useProjectWbs(projectId: string, phases: PhaseInfo[]) {
       if (!phases || phases.length === 0) return [];
 
       // Single API call: fetches all groups, items, tasks for the project
-      const tree = await apiService.getWbsFullTree(projectId);
+      const treeResult = await apiService.getWbsFullTreeResult(projectId);
+      const tree = unwrapOrThrow(treeResult);
       const { groups = [], items = [], tasks = [] } = tree || {};
 
       // Index tasks by itemId

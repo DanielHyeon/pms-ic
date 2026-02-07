@@ -1,5 +1,6 @@
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { apiService } from '../../services/api';
+import { unwrapOrThrow } from '../../utils/toViewState';
 import {
   LineageGraphDto,
   PageResponse,
@@ -21,7 +22,10 @@ export const lineageKeys = {
 export function useLineageGraph(projectId?: string) {
   return useQuery<LineageGraphDto>({
     queryKey: lineageKeys.graph(projectId!),
-    queryFn: () => apiService.getLineageGraph(projectId!),
+    queryFn: async () => {
+      const result = await apiService.getLineageGraphResult(projectId!);
+      return unwrapOrThrow(result);
+    },
     enabled: !!projectId,
   });
 }
@@ -32,7 +36,10 @@ export function useLineageTimeline(
 ) {
   return useQuery<PageResponse<LineageEventDto>>({
     queryKey: lineageKeys.timeline(projectId!, filters),
-    queryFn: () => apiService.getLineageTimeline(projectId!, filters),
+    queryFn: async () => {
+      const result = await apiService.getLineageTimelineResult(projectId!, filters);
+      return unwrapOrThrow(result);
+    },
     enabled: !!projectId,
   });
 }
@@ -40,7 +47,10 @@ export function useLineageTimeline(
 export function useImpactAnalysis(type?: string, id?: string) {
   return useQuery<ImpactAnalysisDto>({
     queryKey: lineageKeys.impact(type!, id!),
-    queryFn: () => apiService.getImpactAnalysis(type!, id!),
+    queryFn: async () => {
+      const result = await apiService.getImpactAnalysisResult(type!, id!);
+      return unwrapOrThrow(result);
+    },
     enabled: !!type && !!id,
   });
 }

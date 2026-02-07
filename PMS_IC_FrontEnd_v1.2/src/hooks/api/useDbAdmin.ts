@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../../services/api';
+import { unwrapOrThrow } from '../../utils/toViewState';
 
 // Types
 export interface SyncStatus {
@@ -80,8 +81,8 @@ export function useDbSyncStatus() {
   return useQuery<SyncStatus>({
     queryKey: dbAdminKeys.syncStatus(),
     queryFn: async () => {
-      const data = await apiService.getDbSyncStatus();
-      return data as SyncStatus;
+      const result = await apiService.getDbSyncStatusResult();
+      return unwrapOrThrow(result);
     },
     refetchInterval: (query) => {
       // Auto-refetch every 2 seconds when syncing
@@ -108,12 +109,8 @@ export function useDbSyncHistory(limit: number = 10) {
   return useQuery<SyncHistoryItem[]>({
     queryKey: dbAdminKeys.syncHistory(limit),
     queryFn: async () => {
-      const response = await apiService.getDbSyncHistory(limit);
-      // Handle both { data: [] } and [] response formats
-      if (response && typeof response === 'object' && 'data' in response) {
-        return (response as { data: SyncHistoryItem[] }).data;
-      }
-      return (response as SyncHistoryItem[]) || [];
+      const result = await apiService.getDbSyncHistoryResult(limit);
+      return unwrapOrThrow(result);
     },
   });
 }
@@ -124,8 +121,8 @@ export function useDbBackupStatus() {
   return useQuery<BackupStatus>({
     queryKey: dbAdminKeys.backupStatus(),
     queryFn: async () => {
-      const data = await apiService.getDbBackupStatus();
-      return data as BackupStatus;
+      const result = await apiService.getDbBackupStatusResult();
+      return unwrapOrThrow(result);
     },
     refetchInterval: (query) => {
       // Auto-refetch every 2 seconds when backup is running
@@ -152,12 +149,8 @@ export function useDbBackups(limit: number = 20) {
   return useQuery<BackupHistoryItem[]>({
     queryKey: dbAdminKeys.backups(limit),
     queryFn: async () => {
-      const response = await apiService.getDbBackups(limit);
-      // Handle both { data: [] } and [] response formats
-      if (response && typeof response === 'object' && 'data' in response) {
-        return (response as { data: BackupHistoryItem[] }).data;
-      }
-      return (response as BackupHistoryItem[]) || [];
+      const result = await apiService.getDbBackupsResult(limit);
+      return unwrapOrThrow(result);
     },
   });
 }
@@ -192,8 +185,8 @@ export function useDbStats() {
   return useQuery<DbStats>({
     queryKey: dbAdminKeys.stats(),
     queryFn: async () => {
-      const data = await apiService.getDbStats();
-      return data as DbStats;
+      const result = await apiService.getDbStatsResult();
+      return unwrapOrThrow(result);
     },
     staleTime: 30000, // 30 seconds - stats don't change frequently
   });

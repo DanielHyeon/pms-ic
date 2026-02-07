@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../../services/api';
 import { Project } from '../../types/project';
+import { unwrapOrThrow } from '../../utils/toViewState';
 
 // Query keys factory
 export const projectKeys = {
@@ -12,63 +13,14 @@ export const projectKeys = {
   fullList: () => [...projectKeys.all, 'full-list'] as const,
 };
 
-// Mock data for fallback
-const mockProjects: Project[] = [
-  {
-    id: '1',
-    name: 'AI 기반 손해보험 지급심사 자동화',
-    code: 'INS-AI-2025-001',
-    description: 'AI/ML 기술을 활용한 보험금 청구 자동 심사 시스템 구축',
-    status: 'IN_PROGRESS',
-    startDate: '2025-01-02',
-    endDate: '2025-12-31',
-    budget: 5000000000,
-    progress: 62,
-    managerId: 'user-001',
-    managerName: '김철수',
-    isDefault: true,
-    createdAt: '2025-01-02T00:00:00Z',
-    updatedAt: '2025-01-15T00:00:00Z',
-  },
-  {
-    id: '2',
-    name: '차세대 고객관리 시스템',
-    code: 'CRM-2025-001',
-    description: '통합 고객 관리 시스템 고도화',
-    status: 'PLANNING',
-    startDate: '2025-03-01',
-    endDate: '2025-09-30',
-    budget: 2000000000,
-    progress: 0,
-    managerId: 'user-002',
-    managerName: '이영희',
-    isDefault: false,
-    createdAt: '2025-01-10T00:00:00Z',
-    updatedAt: '2025-01-10T00:00:00Z',
-  },
-  {
-    id: '3',
-    name: '데이터 품질 고도화',
-    code: 'DQ-2024-001',
-    description: '전사 데이터 품질 관리 체계 구축',
-    status: 'COMPLETED',
-    startDate: '2024-01-01',
-    endDate: '2024-12-31',
-    budget: 1500000000,
-    progress: 100,
-    managerId: 'user-001',
-    managerName: '김철수',
-    isDefault: false,
-    createdAt: '2024-01-01T00:00:00Z',
-    updatedAt: '2024-12-31T00:00:00Z',
-  },
-];
-
 // Get all projects (basic list)
 export function useProjects() {
-  return useQuery({
+  return useQuery<Project[]>({
     queryKey: projectKeys.lists(),
-    queryFn: () => apiService.getProjects(),
+    queryFn: async () => {
+      const result = await apiService.getProjectsResult();
+      return unwrapOrThrow(result);
+    },
   });
 }
 
@@ -77,24 +29,26 @@ export function useProjectsWithDetails() {
   return useQuery<Project[]>({
     queryKey: projectKeys.fullList(),
     queryFn: async () => {
-      try {
-        const projectList = await apiService.getProjects();
-        const fullProjects = await Promise.all(
-          projectList.map((p: { id: string }) => apiService.getProject(p.id))
-        );
-        return fullProjects;
-      } catch {
-        return mockProjects;
-      }
+      const listResult = await apiService.getProjectsResult();
+      const projectList = unwrapOrThrow(listResult);
+      return Promise.all(
+        projectList.map(async (p: { id: string }) => {
+          const detailResult = await apiService.getProjectResult(p.id);
+          return unwrapOrThrow(detailResult);
+        })
+      );
     },
   });
 }
 
 // Get single project
 export function useProject(id: string) {
-  return useQuery({
+  return useQuery<Project>({
     queryKey: projectKeys.detail(id),
-    queryFn: () => apiService.getProject(id),
+    queryFn: async () => {
+      const result = await apiService.getProjectResult(id);
+      return unwrapOrThrow(result);
+    },
     enabled: !!id,
   });
 }

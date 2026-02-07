@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../../services/api';
+import { unwrapOrThrow } from '../../utils/toViewState';
 import { ProjectRole, SystemRole } from '../../types/auth';
 
 // Types
@@ -71,18 +72,15 @@ export function useUsers() {
   return useQuery<SystemUser[]>({
     queryKey: roleKeys.usersList(),
     queryFn: async () => {
-      try {
-        const data = await apiService.getUsers();
-        // Add mock project roles
-        return (data as SystemUser[]).map(user => ({
-          ...user,
-          projectRoles: user.legacyRole === 'pm' ? [
-            { projectId: '1', projectName: 'AI 기반 손해보험 지급심사', role: 'pm' as ProjectRole }
-          ] : []
-        }));
-      } catch {
-        return [];
-      }
+      const result = await apiService.getUsersResult();
+      const data = unwrapOrThrow(result) as SystemUser[];
+      // Add mock project roles
+      return data.map(user => ({
+        ...user,
+        projectRoles: user.legacyRole === 'pm' ? [
+          { projectId: '1', projectName: 'AI 기반 손해보험 지급심사', role: 'pm' as ProjectRole }
+        ] : []
+      }));
     },
   });
 }
@@ -129,17 +127,9 @@ export function usePermissions() {
   return useQuery<Permission[]>({
     queryKey: roleKeys.permissionsList(),
     queryFn: async () => {
-      try {
-        const response = await apiService.getPermissions() as any;
-        if (Array.isArray(response)) {
-          return response;
-        } else if (response?.data && Array.isArray(response.data)) {
-          return response.data;
-        }
-        return [];
-      } catch {
-        return [];
-      }
+      const result = await apiService.getPermissionsResult();
+      const data = unwrapOrThrow(result);
+      return Array.isArray(data) ? data : [];
     },
   });
 }
@@ -169,12 +159,8 @@ export function useProjectMembers(projectId?: string) {
   return useQuery<ProjectMember[]>({
     queryKey: roleKeys.projectMembersList(projectId!),
     queryFn: async () => {
-      try {
-        const data = await apiService.getProjectMembers(projectId!);
-        return data;
-      } catch {
-        return mockProjectMembers;
-      }
+      const result = await apiService.getProjectMembersResult(projectId!);
+      return unwrapOrThrow(result) as ProjectMember[];
     },
     enabled: !!projectId,
   });

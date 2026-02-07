@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../../services/api';
+import { unwrapOrThrow } from '../../utils/toViewState';
 import { WbsSnapshot, CreateSnapshotRequest } from '../../types/wbsSnapshot';
 
 /**
@@ -16,11 +17,11 @@ export const snapshotKeys = {
  * Hook to get all snapshots for a phase
  */
 export function useWbsSnapshotsByPhase(phaseId: string) {
-  return useQuery({
+  return useQuery<WbsSnapshot[]>({
     queryKey: snapshotKeys.byPhase(phaseId),
-    queryFn: async (): Promise<WbsSnapshot[]> => {
-      const result = await apiService.getWbsSnapshotsByPhase(phaseId);
-      return result || [];
+    queryFn: async () => {
+      const result = await apiService.getWbsSnapshotsByPhaseResult(phaseId);
+      return unwrapOrThrow(result);
     },
     enabled: !!phaseId,
   });
@@ -30,11 +31,11 @@ export function useWbsSnapshotsByPhase(phaseId: string) {
  * Hook to get all snapshots for a project
  */
 export function useWbsSnapshotsByProject(projectId: string) {
-  return useQuery({
+  return useQuery<WbsSnapshot[]>({
     queryKey: snapshotKeys.byProject(projectId),
-    queryFn: async (): Promise<WbsSnapshot[]> => {
-      const result = await apiService.getWbsSnapshotsByProject(projectId);
-      return result || [];
+    queryFn: async () => {
+      const result = await apiService.getWbsSnapshotsByProjectResult(projectId);
+      return unwrapOrThrow(result);
     },
     enabled: !!projectId,
   });
@@ -44,10 +45,11 @@ export function useWbsSnapshotsByProject(projectId: string) {
  * Hook to get a specific snapshot
  */
 export function useWbsSnapshot(snapshotId: string) {
-  return useQuery({
+  return useQuery<WbsSnapshot>({
     queryKey: snapshotKeys.detail(snapshotId),
-    queryFn: async (): Promise<WbsSnapshot | null> => {
-      return apiService.getWbsSnapshot(snapshotId);
+    queryFn: async () => {
+      const result = await apiService.getWbsSnapshotResult(snapshotId);
+      return unwrapOrThrow(result);
     },
     enabled: !!snapshotId,
   });
@@ -61,16 +63,11 @@ export function useCreateWbsSnapshot() {
 
   return useMutation({
     mutationFn: async (request: CreateSnapshotRequest): Promise<WbsSnapshot> => {
-      const result = await apiService.createWbsSnapshot(request);
-      if (!result) {
-        throw new Error('Failed to create snapshot');
-      }
-      return result as unknown as WbsSnapshot;
+      const result = await apiService.createWbsSnapshotResult(request);
+      return unwrapOrThrow(result);
     },
     onSuccess: (data, variables) => {
-      // Invalidate snapshots for the phase
       queryClient.invalidateQueries({ queryKey: snapshotKeys.byPhase(variables.phaseId) });
-      // Also invalidate project-level snapshots if we have projectId
       if (data?.projectId) {
         queryClient.invalidateQueries({ queryKey: snapshotKeys.byProject(data.projectId) });
       }
@@ -89,12 +86,11 @@ export function useRestoreWbsSnapshot() {
 
   return useMutation({
     mutationFn: async (snapshotId: string): Promise<void> => {
-      await apiService.restoreWbsSnapshot(snapshotId);
+      const result = await apiService.restoreWbsSnapshotResult(snapshotId);
+      unwrapOrThrow(result);
     },
     onSuccess: () => {
-      // Invalidate all snapshot queries
       queryClient.invalidateQueries({ queryKey: snapshotKeys.all });
-      // Invalidate WBS data as it has been restored
       queryClient.invalidateQueries({ queryKey: ['wbs'] });
       queryClient.invalidateQueries({ queryKey: ['phases'] });
     },
@@ -112,10 +108,10 @@ export function useDeleteWbsSnapshot() {
 
   return useMutation({
     mutationFn: async (snapshotId: string): Promise<void> => {
-      await apiService.deleteWbsSnapshot(snapshotId);
+      const result = await apiService.deleteWbsSnapshotResult(snapshotId);
+      unwrapOrThrow(result);
     },
     onSuccess: () => {
-      // Invalidate all snapshot queries
       queryClient.invalidateQueries({ queryKey: snapshotKeys.all });
     },
     onError: (error) => {

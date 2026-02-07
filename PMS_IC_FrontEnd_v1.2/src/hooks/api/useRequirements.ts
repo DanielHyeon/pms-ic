@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../../services/api';
+import { unwrapOrThrow } from '../../utils/toViewState';
 import { Requirement } from '../../types/project';
 
 export const requirementKeys = {
@@ -13,7 +14,10 @@ export const requirementKeys = {
 export function useRequirements(projectId?: string) {
   return useQuery<Requirement[]>({
     queryKey: requirementKeys.list(projectId),
-    queryFn: () => apiService.getRequirements(projectId!),
+    queryFn: async () => {
+      const result = await apiService.getRequirementsResult(projectId!);
+      return unwrapOrThrow(result);
+    },
     enabled: !!projectId,
   });
 }
@@ -21,7 +25,10 @@ export function useRequirements(projectId?: string) {
 export function useRequirement(projectId: string, requirementId: string) {
   return useQuery({
     queryKey: requirementKeys.detail(requirementId),
-    queryFn: () => apiService.getRequirement(projectId, requirementId),
+    queryFn: async () => {
+      const result = await apiService.getRequirementResult(projectId, requirementId);
+      return unwrapOrThrow(result);
+    },
     enabled: !!projectId && !!requirementId,
   });
 }

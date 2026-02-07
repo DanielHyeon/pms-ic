@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiService } from '../../services/api';
+import { unwrapOrThrow } from '../../utils/toViewState';
 import type {
   ProjectDashboardDto,
   DashboardSection,
@@ -39,14 +40,20 @@ export const dashboardKeys = {
 export function usePortfolioDashboardStats() {
   return useQuery({
     queryKey: dashboardKeys.portfolioStats(),
-    queryFn: () => apiService.getPortfolioDashboardStats(),
+    queryFn: async () => {
+      const result = await apiService.getPortfolioDashboardStatsResult();
+      return unwrapOrThrow(result);
+    },
   });
 }
 
 export function usePortfolioActivities() {
   return useQuery({
     queryKey: dashboardKeys.portfolioActivities(),
-    queryFn: () => apiService.getPortfolioActivities(),
+    queryFn: async () => {
+      const result = await apiService.getPortfolioActivitiesResult();
+      return unwrapOrThrow(result);
+    },
   });
 }
 
@@ -55,7 +62,10 @@ export function usePortfolioActivities() {
 export function useProjectDashboardStats(projectId: string | null) {
   return useQuery({
     queryKey: dashboardKeys.projectStats(projectId!),
-    queryFn: () => apiService.getProjectDashboardStats(projectId!),
+    queryFn: async () => {
+      const result = await apiService.getProjectDashboardStatsResult(projectId!);
+      return unwrapOrThrow(result);
+    },
     enabled: !!projectId,
   });
 }
@@ -63,7 +73,10 @@ export function useProjectDashboardStats(projectId: string | null) {
 export function useProjectActivities(projectId: string | null) {
   return useQuery({
     queryKey: dashboardKeys.projectActivities(projectId!),
-    queryFn: () => apiService.getProjectActivities(projectId!),
+    queryFn: async () => {
+      const result = await apiService.getProjectActivitiesResult(projectId!);
+      return unwrapOrThrow(result);
+    },
     enabled: !!projectId,
   });
 }
@@ -121,7 +134,10 @@ export interface WeightedProgressDto {
 export function useWeightedProgress(projectId: string | null) {
   return useQuery<WeightedProgressDto>({
     queryKey: dashboardKeys.weightedProgress(projectId!),
-    queryFn: () => apiService.getWeightedProgress(projectId!),
+    queryFn: async () => {
+      const result = await apiService.getWeightedProgressResult(projectId!);
+      return unwrapOrThrow(result);
+    },
     enabled: !!projectId,
   });
 }
@@ -129,57 +145,78 @@ export function useWeightedProgress(projectId: string | null) {
 // ========== Section-based Hooks (DashboardSection contract) ==========
 
 export function useFullProjectDashboard(projectId: string | null) {
-  return useQuery<ProjectDashboardDto | null>({
+  return useQuery<ProjectDashboardDto>({
     queryKey: dashboardKeys.fullDashboard(projectId!),
-    queryFn: () => apiService.getFullProjectDashboard(projectId!),
+    queryFn: async () => {
+      const result = await apiService.getFullProjectDashboardResult(projectId!);
+      return unwrapOrThrow(result);
+    },
     enabled: !!projectId,
   });
 }
 
 export function usePhaseProgress(projectId: string | null) {
-  return useQuery<DashboardSection<PhaseProgressDto> | null>({
+  return useQuery<DashboardSection<PhaseProgressDto>>({
     queryKey: dashboardKeys.phaseProgress(projectId!),
-    queryFn: () => apiService.getPhaseProgress(projectId!),
+    queryFn: async () => {
+      const result = await apiService.getPhaseProgressResult(projectId!);
+      return unwrapOrThrow(result);
+    },
     enabled: !!projectId,
   });
 }
 
 export function usePartStats(projectId: string | null) {
-  return useQuery<DashboardSection<PartStatsDto> | null>({
+  return useQuery<DashboardSection<PartStatsDto>>({
     queryKey: dashboardKeys.partStats(projectId!),
-    queryFn: () => apiService.getPartStats(projectId!),
+    queryFn: async () => {
+      const result = await apiService.getPartStatsResult(projectId!);
+      return unwrapOrThrow(result);
+    },
     enabled: !!projectId,
   });
 }
 
 export function useWbsGroupStats(projectId: string | null) {
-  return useQuery<DashboardSection<WbsGroupStatsDto> | null>({
+  return useQuery<DashboardSection<WbsGroupStatsDto>>({
     queryKey: dashboardKeys.wbsGroupStats(projectId!),
-    queryFn: () => apiService.getWbsGroupStats(projectId!),
+    queryFn: async () => {
+      const result = await apiService.getWbsGroupStatsResult(projectId!);
+      return unwrapOrThrow(result);
+    },
     enabled: !!projectId,
   });
 }
 
 export function useSprintVelocity(projectId: string | null) {
-  return useQuery<DashboardSection<SprintVelocityDto> | null>({
+  return useQuery<DashboardSection<SprintVelocityDto>>({
     queryKey: dashboardKeys.sprintVelocity(projectId!),
-    queryFn: () => apiService.getSprintVelocity(projectId!),
+    queryFn: async () => {
+      const result = await apiService.getSprintVelocityResult(projectId!);
+      return unwrapOrThrow(result);
+    },
     enabled: !!projectId,
   });
 }
 
 export function useBurndown(projectId: string | null) {
-  return useQuery<DashboardSection<BurndownDto> | null>({
+  return useQuery<DashboardSection<BurndownDto>>({
     queryKey: dashboardKeys.burndown(projectId!),
-    queryFn: () => apiService.getBurndown(projectId!),
+    queryFn: async () => {
+      const result = await apiService.getBurndownResult(projectId!);
+      return unwrapOrThrow(result);
+    },
     enabled: !!projectId,
   });
 }
 
 export function useInsights(projectId: string | null) {
-  return useQuery<DashboardSection<InsightDto[]> | null>({
+  return useQuery<DashboardSection<InsightDto[]>>({
     queryKey: dashboardKeys.insights(projectId!),
-    queryFn: () => apiService.getInsights(projectId!),
+    queryFn: async () => {
+      const result = await apiService.getInsightsResult(projectId!);
+      return unwrapOrThrow(result);
+    },
     enabled: !!projectId,
   });
 }

@@ -5,6 +5,7 @@ import {
   EpicWithChildren,
 } from '../../types/backlog';
 import { apiService } from '../../services/api';
+import { unwrapOrThrow } from '../../utils/toViewState';
 
 export const epicKeys = {
   all: ['epics'] as const,
@@ -20,30 +21,30 @@ export function useEpics(projectId?: string) {
     queryKey: epicKeys.list({ projectId }),
     queryFn: async () => {
       if (!projectId) return [];
-      const response = await apiService.getEpicsForProject(projectId);
-      return response || [];
+      const result = await apiService.getEpicsForProjectResult(projectId);
+      return unwrapOrThrow(result);
     },
     enabled: !!projectId,
   });
 }
 
 export function useEpic(id: string) {
-  return useQuery<Epic | undefined>({
+  return useQuery<Epic>({
     queryKey: epicKeys.detail(id),
     queryFn: async () => {
-      const response = await apiService.getEpicById(id);
-      return response || undefined;
+      const result = await apiService.getEpicByIdResult(id);
+      return unwrapOrThrow(result);
     },
     enabled: !!id,
   });
 }
 
 export function useEpicWithChildren(id: string) {
-  return useQuery<EpicWithChildren | undefined>({
+  return useQuery<EpicWithChildren>({
     queryKey: epicKeys.withChildren(id),
     queryFn: async () => {
-      const epic = await apiService.getEpicById(id);
-      if (!epic) return undefined;
+      const result = await apiService.getEpicByIdResult(id);
+      const epic = unwrapOrThrow(result);
 
       return {
         ...epic,
@@ -64,7 +65,8 @@ export function useCreateEpic() {
   return useMutation({
     mutationFn: async (data: EpicFormData & { projectId: string }): Promise<Epic> => {
       const { projectId, ...epicData } = data;
-      return apiService.createEpic(projectId, epicData);
+      const result = await apiService.createEpicResult(projectId, epicData);
+      return unwrapOrThrow(result);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: epicKeys.all });
@@ -83,7 +85,8 @@ export function useUpdateEpic() {
       id: string;
       data: Partial<Epic>;
     }): Promise<Epic> => {
-      return apiService.updateEpic(id, data);
+      const result = await apiService.updateEpicResult(id, data);
+      return unwrapOrThrow(result);
     },
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: epicKeys.all });
@@ -97,7 +100,8 @@ export function useDeleteEpic() {
 
   return useMutation({
     mutationFn: async (id: string): Promise<void> => {
-      await apiService.deleteEpic(id);
+      const result = await apiService.deleteEpicResult(id);
+      unwrapOrThrow(result);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: epicKeys.all });
@@ -112,7 +116,7 @@ export function useReorderEpics() {
     mutationFn: async (orderedIds: string[]): Promise<void> => {
       await Promise.all(
         orderedIds.map((id, idx) =>
-          apiService.updateEpic(id, { orderNum: idx + 1 })
+          apiService.updateEpicResult(id, { orderNum: idx + 1 })
         )
       );
     },

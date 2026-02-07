@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../../services/api';
+import { unwrapOrThrow } from '../../utils/toViewState';
 
 // Types
 interface Education {
@@ -61,12 +62,8 @@ export function useEducations() {
   return useQuery<Education[]>({
     queryKey: educationKeys.list(),
     queryFn: async () => {
-      try {
-        const data = await apiService.getEducations();
-        return data || [];
-      } catch {
-        return [];
-      }
+      const result = await apiService.getEducationsResult();
+      return unwrapOrThrow(result);
     },
   });
 }
@@ -75,12 +72,8 @@ export function useEducationRoadmaps() {
   return useQuery<EducationRoadmap[]>({
     queryKey: educationKeys.roadmaps(),
     queryFn: async () => {
-      try {
-        const data = await apiService.getEducationRoadmaps();
-        return data || [];
-      } catch {
-        return [];
-      }
+      const result = await apiService.getEducationRoadmapsResult();
+      return unwrapOrThrow(result);
     },
   });
 }
@@ -89,12 +82,8 @@ export function useEducationSessions(educationId?: string) {
   return useQuery<EducationSession[]>({
     queryKey: educationKeys.sessions(educationId!),
     queryFn: async () => {
-      try {
-        const data = await apiService.getEducationSessions(educationId!);
-        return data || [];
-      } catch {
-        return [];
-      }
+      const result = await apiService.getEducationSessionsResult(educationId!);
+      return unwrapOrThrow(result);
     },
     enabled: !!educationId,
   });

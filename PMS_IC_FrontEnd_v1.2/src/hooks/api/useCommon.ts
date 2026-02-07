@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../../services/api';
+import { unwrapOrThrow } from '../../utils/toViewState';
 
 // Types
 interface Meeting {
@@ -45,102 +46,14 @@ export const commonKeys = {
   issueDetail: (projectId: string, issueId: string) => [...commonKeys.issues(), 'detail', { projectId, issueId }] as const,
 };
 
-// Initial mock data for fallback
-const initialMeetings: Meeting[] = [
-  {
-    id: '1',
-    title: '프로젝트 킥오프 미팅',
-    description: 'AI 자동심사 시스템 프로젝트 착수 회의',
-    meetingType: 'KICKOFF',
-    scheduledAt: '2025-01-15T10:00:00',
-    location: '본사 대회의실',
-    organizer: 'PMO 총괄',
-    attendees: ['프로젝트 스폰서', 'PMO 총괄', 'PM', '개발팀장', 'QA팀장'],
-    status: 'COMPLETED',
-    minutes: '프로젝트 목표 및 일정 확정, 역할 분담 완료',
-  },
-  {
-    id: '2',
-    title: '주간 진행 점검 회의',
-    description: '8월 3주차 진행 현황 점검',
-    meetingType: 'WEEKLY',
-    scheduledAt: '2025-08-18T14:00:00',
-    location: '온라인 (Zoom)',
-    organizer: 'PM',
-    attendees: ['PM', '개발팀', 'QA팀'],
-    status: 'SCHEDULED',
-  },
-  {
-    id: '3',
-    title: 'AI 모델 성능 리뷰',
-    description: 'OCR 모델 v2.0 성능 평가 및 개선 방안 논의',
-    meetingType: 'TECHNICAL',
-    scheduledAt: '2025-08-20T15:00:00',
-    location: '개발팀 회의실',
-    organizer: 'AI팀장',
-    attendees: ['AI팀장', 'ML 엔지니어', '데이터 사이언티스트'],
-    status: 'SCHEDULED',
-  },
-];
-
-const initialIssues: Issue[] = [
-  {
-    id: '1',
-    title: 'OCR 인식률 목표치 미달',
-    description: '현재 OCR 인식률 93.5%로 목표치 95% 대비 1.5%p 부족',
-    issueType: 'RISK',
-    priority: 'HIGH',
-    status: 'IN_PROGRESS',
-    assignee: 'AI팀장',
-    reporter: 'PM',
-    resolution: '추가 학습 데이터 확보 및 모델 튜닝 진행 중',
-    comments: [],
-    createdAt: '2025-08-10',
-  },
-  {
-    id: '2',
-    title: '레거시 시스템 연동 지연',
-    description: '기존 보험금 지급 시스템과의 API 연동 일정 지연 예상',
-    issueType: 'BLOCKER',
-    priority: 'CRITICAL',
-    status: 'OPEN',
-    assignee: 'SI팀장',
-    reporter: 'PM',
-    comments: [],
-    createdAt: '2025-08-15',
-  },
-  {
-    id: '3',
-    title: '개인정보 비식별화 검증 필요',
-    description: '학습 데이터 비식별화 처리 결과에 대한 정보보호팀 검증 요청',
-    issueType: 'CHANGE_REQUEST',
-    priority: 'MEDIUM',
-    status: 'RESOLVED',
-    assignee: '정보보호팀장',
-    reporter: 'PM',
-    resolution: '비식별화 검증 완료, 승인됨',
-    resolvedAt: '2025-08-01',
-    comments: [],
-    createdAt: '2025-07-20',
-  },
-];
-
 // ========== Meeting Hooks ==========
 
 export function useMeetings(projectId?: string) {
   return useQuery<Meeting[]>({
     queryKey: commonKeys.meetingsList(projectId!),
     queryFn: async () => {
-      try {
-        const data = await apiService.getMeetings(projectId!);
-        // Return actual data (even if empty) when projectId is provided
-        if (Array.isArray(data)) {
-          return data;
-        }
-        return []; // Return empty array if no data for this project
-      } catch {
-        return []; // Return empty array on error when projectId is provided
-      }
+      const result = await apiService.getMeetingsResult(projectId!);
+      return unwrapOrThrow(result);
     },
     enabled: !!projectId,
   });
@@ -195,16 +108,8 @@ export function useIssues(projectId?: string) {
   return useQuery<Issue[]>({
     queryKey: commonKeys.issuesList(projectId!),
     queryFn: async () => {
-      try {
-        const data = await apiService.getIssues(projectId!);
-        // Return actual data (even if empty) when projectId is provided
-        if (Array.isArray(data)) {
-          return data;
-        }
-        return []; // Return empty array if no data for this project
-      } catch {
-        return []; // Return empty array on error when projectId is provided
-      }
+      const result = await apiService.getIssuesResult(projectId!);
+      return unwrapOrThrow(result);
     },
     enabled: !!projectId,
   });

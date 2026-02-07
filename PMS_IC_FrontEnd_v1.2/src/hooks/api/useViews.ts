@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiService } from '../../services/api';
 import { useProjectAuth, CAPABILITIES } from './useProjectAuth';
+import { unwrapOrThrow } from '../../utils/toViewState';
+import type { PoBacklogViewDto, PmWorkboardViewDto, PmoPortfolioViewDto } from '../../types/views';
 
 export const viewKeys = {
   all: ['views'] as const,
@@ -11,27 +13,36 @@ export const viewKeys = {
 
 export function usePoBacklogView(projectId?: string) {
   const { hasCapability } = useProjectAuth();
-  return useQuery({
+  return useQuery<PoBacklogViewDto>({
     queryKey: viewKeys.poBacklog(projectId || ''),
-    queryFn: () => apiService.getPoBacklogView(projectId!),
+    queryFn: async () => {
+      const result = await apiService.getPoBacklogViewResult(projectId!);
+      return unwrapOrThrow(result);
+    },
     enabled: !!projectId && hasCapability(CAPABILITIES.VIEW_BACKLOG),
   });
 }
 
 export function usePmWorkboardView(projectId?: string) {
   const { hasCapability } = useProjectAuth();
-  return useQuery({
+  return useQuery<PmWorkboardViewDto>({
     queryKey: viewKeys.pmWorkboard(projectId || ''),
-    queryFn: () => apiService.getPmWorkboardView(projectId!),
+    queryFn: async () => {
+      const result = await apiService.getPmWorkboardViewResult(projectId!);
+      return unwrapOrThrow(result);
+    },
     enabled: !!projectId && hasCapability(CAPABILITIES.VIEW_STORY),
   });
 }
 
 export function usePmoPortfolioView(projectId?: string) {
   const { hasCapability } = useProjectAuth();
-  return useQuery({
+  return useQuery<PmoPortfolioViewDto>({
     queryKey: viewKeys.pmoPortfolio(projectId || ''),
-    queryFn: () => apiService.getPmoPortfolioView(projectId!),
+    queryFn: async () => {
+      const result = await apiService.getPmoPortfolioViewResult(projectId!);
+      return unwrapOrThrow(result);
+    },
     enabled: !!projectId && hasCapability(CAPABILITIES.VIEW_KPI),
   });
 }

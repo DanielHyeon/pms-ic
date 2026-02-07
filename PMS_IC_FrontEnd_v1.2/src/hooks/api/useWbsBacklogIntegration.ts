@@ -2,13 +2,14 @@
  * WBS-Backlog Integration Hooks
  *
  * Provides linking functionality between:
- * - Phase ↔ Epic
- * - WBS Group ↔ Feature
- * - WBS Item ↔ User Story
+ * - Phase <-> Epic
+ * - WBS Group <-> Feature
+ * - WBS Item <-> User Story
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../../services/api';
+import { unwrapOrThrow } from '../../utils/toViewState';
 import { Epic, Feature, UserStory } from '../../types/backlog';
 import { WbsGroup, WbsItem } from '../../types/wbs';
 
@@ -37,7 +38,10 @@ export interface PhaseEpicSummary {
 export function useEpicsByPhase(phaseId: string) {
   return useQuery({
     queryKey: integrationKeys.epicsByPhase(phaseId),
-    queryFn: () => apiService.getEpicsByPhase(phaseId),
+    queryFn: async () => {
+      const result = await apiService.getEpicsByPhaseResult(phaseId);
+      return unwrapOrThrow(result);
+    },
     enabled: !!phaseId,
   });
 }
@@ -45,7 +49,10 @@ export function useEpicsByPhase(phaseId: string) {
 export function useUnlinkedEpics(projectId: string) {
   return useQuery({
     queryKey: [...integrationKeys.all, 'unlinked-epics', projectId],
-    queryFn: () => apiService.getUnlinkedEpics(projectId),
+    queryFn: async () => {
+      const result = await apiService.getUnlinkedEpicsResult(projectId);
+      return unwrapOrThrow(result);
+    },
     enabled: !!projectId,
   });
 }
@@ -93,7 +100,10 @@ export interface GroupFeatureSummary {
 export function useFeaturesByWbsGroup(groupId: string) {
   return useQuery({
     queryKey: integrationKeys.featuresByGroup(groupId),
-    queryFn: () => apiService.getFeaturesByWbsGroupIntegration(groupId),
+    queryFn: async () => {
+      const result = await apiService.getFeaturesByWbsGroupIntegrationResult(groupId);
+      return unwrapOrThrow(result);
+    },
     enabled: !!groupId,
   });
 }
@@ -103,10 +113,12 @@ export function useWbsGroupsByFeature(featureId: string) {
     queryKey: integrationKeys.groupsByFeature(featureId),
     queryFn: async (): Promise<WbsGroup[]> => {
       // Get feature details to find linked group
-      const feature = await apiService.getFeature(featureId);
+      const featureResult = await apiService.getFeatureIntegrationResult(featureId);
+      const feature = unwrapOrThrow(featureResult);
       if (!feature?.wbsGroupId) return [];
 
-      const group = await apiService.getWbsGroup(feature.wbsGroupId);
+      const groupResult = await apiService.getWbsGroupResult(feature.wbsGroupId);
+      const group = unwrapOrThrow(groupResult);
       return group ? [group] : [];
     },
     enabled: !!featureId,
@@ -116,7 +128,11 @@ export function useWbsGroupsByFeature(featureId: string) {
 export function useUnlinkedFeatures(epicId?: string) {
   return useQuery({
     queryKey: [...integrationKeys.all, 'unlinked-features', epicId],
-    queryFn: () => epicId ? apiService.getUnlinkedFeatures(epicId) : Promise.resolve([]),
+    queryFn: async () => {
+      if (!epicId) return [];
+      const result = await apiService.getUnlinkedFeaturesResult(epicId);
+      return unwrapOrThrow(result);
+    },
     enabled: !!epicId,
   });
 }
@@ -168,7 +184,10 @@ export interface ItemStorySummary {
 export function useStoriesByWbsItem(itemId: string) {
   return useQuery({
     queryKey: integrationKeys.storiesByItem(itemId),
-    queryFn: () => apiService.getStoriesByWbsItem(itemId),
+    queryFn: async () => {
+      const result = await apiService.getStoriesByWbsItemResult(itemId);
+      return unwrapOrThrow(result);
+    },
     enabled: !!itemId,
   });
 }
@@ -199,7 +218,10 @@ export function useUnlinkedStories(featureId?: string, epicId?: string) {
 export function useUnlinkedStoriesByProject(projectId: string) {
   return useQuery({
     queryKey: [...integrationKeys.all, 'unlinked-stories-project', projectId],
-    queryFn: () => apiService.getUnlinkedStories(projectId),
+    queryFn: async () => {
+      const result = await apiService.getUnlinkedStoriesResult(projectId);
+      return unwrapOrThrow(result);
+    },
     enabled: !!projectId,
   });
 }
@@ -273,15 +295,19 @@ export function usePhaseIntegration(phaseId: string, projectId?: string) {
     queryKey: integrationKeys.phaseIntegration(phaseId),
     queryFn: async (): Promise<PhaseIntegrationSummary> => {
       // Get phase integration summary from API
-      const summary = projectId
-        ? await apiService.getPhaseIntegrationSummary(phaseId, projectId)
+      const summaryResult = projectId
+        ? await apiService.getPhaseIntegrationSummaryResult(phaseId, projectId)
         : null;
+      if (summaryResult) unwrapOrThrow(summaryResult);
 
       // Get epics for this phase
-      const linkedEpics = await apiService.getEpicsByPhase(phaseId);
-      const unlinkedEpics = projectId
-        ? await apiService.getUnlinkedEpics(projectId)
-        : [];
+      const linkedEpicsResult = await apiService.getEpicsByPhaseResult(phaseId);
+      const linkedEpics = unwrapOrThrow(linkedEpicsResult);
+
+      const unlinkedEpicsResult = projectId
+        ? await apiService.getUnlinkedEpicsResult(projectId)
+        : null;
+      const unlinkedEpics = unlinkedEpicsResult ? unwrapOrThrow(unlinkedEpicsResult) : [];
 
       // Get WBS groups for this phase
       const phaseGroups = await apiService.getWbsGroups(phaseId);
@@ -289,12 +315,16 @@ export function usePhaseIntegration(phaseId: string, projectId?: string) {
       // Build group details with features and items
       const groupDetails = await Promise.all(
         (phaseGroups || []).map(async (group: WbsGroup) => {
-          const groupFeatures = await apiService.getFeaturesByWbsGroupIntegration(group.id);
-          const groupItems = await apiService.getWbsItems(group.id);
+          const groupFeaturesResult = await apiService.getFeaturesByWbsGroupIntegrationResult(group.id);
+          const groupFeatures = unwrapOrThrow(groupFeaturesResult);
+
+          const groupItemsResult = await apiService.getWbsItemsResult(group.id);
+          const groupItems = unwrapOrThrow(groupItemsResult);
 
           const itemDetails = await Promise.all(
             (groupItems || []).map(async (item: WbsItem) => {
-              const itemStories = await apiService.getStoriesByWbsItem(item.id);
+              const itemStoriesResult = await apiService.getStoriesByWbsItemResult(item.id);
+              const itemStories = unwrapOrThrow(itemStoriesResult);
               return { item, stories: itemStories || [] };
             })
           );

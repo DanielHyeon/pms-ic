@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiService } from '../../services/api';
+import { unwrapOrThrow } from '../../utils/toViewState';
 
 export const wipKeys = {
   all: ['wip'] as const,
@@ -12,7 +13,10 @@ export const wipKeys = {
 export function useProjectWipStatus(projectId?: string) {
   return useQuery({
     queryKey: wipKeys.projectStatus(projectId!),
-    queryFn: () => apiService.getProjectWipStatus(projectId!),
+    queryFn: async () => {
+      const result = await apiService.getProjectWipStatusResult(projectId!);
+      return unwrapOrThrow(result);
+    },
     enabled: !!projectId,
   });
 }
@@ -20,7 +24,10 @@ export function useProjectWipStatus(projectId?: string) {
 export function useProjectProgress(projectId?: string) {
   return useQuery({
     queryKey: wipKeys.projectProgress(projectId!),
-    queryFn: () => apiService.getProjectProgress(projectId!),
+    queryFn: async () => {
+      const result = await apiService.getProjectProgressResult(projectId!);
+      return unwrapOrThrow(result);
+    },
     enabled: !!projectId,
   });
 }

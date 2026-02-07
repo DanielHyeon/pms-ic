@@ -1,5 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { apiService } from '../../services/api';
+import { unwrapOrThrow } from '../../utils/toViewState';
 
 export const authKeys = {
   all: ['auth'] as const,
@@ -19,7 +20,8 @@ interface LoginResponse {
 export function useLogin() {
   return useMutation<LoginResponse, Error, { email: string; password: string }>({
     mutationFn: async ({ email, password }) => {
-      const response = await apiService.login(email, password);
+      const result = await apiService.loginResult(email, password);
+      const response = unwrapOrThrow(result);
       if (response?.token) {
         apiService.setToken(response.token);
       }

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../../services/api';
+import { unwrapOrThrow } from '../../utils/toViewState';
 import {
   TemplateSet,
   TemplateSetFormData,
@@ -27,14 +28,20 @@ export const templateKeys = {
 export function useTemplateSets(category?: TemplateCategory) {
   return useQuery({
     queryKey: category ? templateKeys.setsByCategory(category) : templateKeys.sets(),
-    queryFn: () => apiService.getTemplateSets(category),
+    queryFn: async () => {
+      const result = await apiService.getTemplateSetsResult(category);
+      return unwrapOrThrow(result);
+    },
   });
 }
 
 export function useTemplateSet(id: string) {
   return useQuery({
     queryKey: templateKeys.set(id),
-    queryFn: () => apiService.getTemplateSet(id),
+    queryFn: async () => {
+      const result = await apiService.getTemplateSetResult(id);
+      return unwrapOrThrow(result);
+    },
     enabled: !!id,
   });
 }
@@ -43,7 +50,8 @@ export function useTemplatePreview(id: string) {
   return useQuery({
     queryKey: templateKeys.preview(id),
     queryFn: async (): Promise<TemplatePreview | null> => {
-      const template = await apiService.getTemplateSet(id);
+      const result = await apiService.getTemplateSetResult(id);
+      const template = unwrapOrThrow(result);
       if (!template) return null;
       return calculateTemplateStats(template);
     },
@@ -258,16 +266,16 @@ export function useApplyTemplate() {
           }
 
           // CORRECT MAPPING:
-          // PhaseTemplate → WBS Group (1단계~6단계가 그룹이 됨)
-          // WbsGroupTemplate → WBS Item
-          // WbsItemTemplate → WBS Task
+          // PhaseTemplate -> WBS Group
+          // WbsGroupTemplate -> WBS Item
+          // WbsItemTemplate -> WBS Task
 
           let groupOrder = 1;
           for (const phaseTemplate of selectedPhaseTemplates) {
             try {
               console.log(`[Template Apply] Creating WBS Group "${phaseTemplate.name}" (Phase Template) under phase ${options.targetPhaseId}`);
 
-              // PhaseTemplate → WBS Group
+              // PhaseTemplate -> WBS Group
               const group = await apiService.createWbsGroup(options.targetPhaseId, {
                 code: `${groupOrder}`,
                 name: phaseTemplate.name,
@@ -280,7 +288,7 @@ export function useApplyTemplate() {
               if (group?.id) {
                 createdWbsGroupIds.push(group.id);
 
-                // WbsGroupTemplate → WBS Item
+                // WbsGroupTemplate -> WBS Item
                 let itemOrder = 1;
                 for (const wbsGroupTemplate of phaseTemplate.wbsGroups || []) {
                   try {
@@ -298,11 +306,10 @@ export function useApplyTemplate() {
                     if (item?.id) {
                       createdWbsItemIds.push(item.id);
 
-                      // WbsItemTemplate → WBS Task
+                      // WbsItemTemplate -> WBS Task
                       let taskOrder = 1;
                       for (const wbsItemTemplate of wbsGroupTemplate.items || []) {
                         try {
-                          // Combine WbsItemTemplate info with its tasks for description
                           const taskDescription = wbsItemTemplate.description || '';
                           const task = await apiService.createWbsTask(item.id, {
                             code: `${item.code}.${taskOrder}`,
@@ -373,7 +380,7 @@ export function useApplyTemplate() {
               continue;
             }
 
-            console.log(`[Template Apply] Applying phase "${phaseTemplate.name}" → "${methodologyPhase.name}" (${methodologyPhase.id})`);
+            console.log(`[Template Apply] Applying phase "${phaseTemplate.name}" -> "${methodologyPhase.name}" (${methodologyPhase.id})`);
 
             // If replaceExisting is true, delete existing WBS for this phase
             if (options.replaceExisting) {
@@ -419,15 +426,15 @@ export function useApplyTemplate() {
             }
 
             // CORRECT MAPPING (for methodology phases):
-            // PhaseTemplate → WBS Group (1단계~6단계가 그룹이 됨)
-            // WbsGroupTemplate → WBS Item
-            // WbsItemTemplate → WBS Task
+            // PhaseTemplate -> WBS Group
+            // WbsGroupTemplate -> WBS Item
+            // WbsItemTemplate -> WBS Task
 
             // Create a single WBS Group from the PhaseTemplate
             try {
               console.log(`[Template Apply] Creating WBS Group "${phaseTemplate.name}" (Phase Template) under phase ${methodologyPhase.id}`);
 
-              // PhaseTemplate → WBS Group
+              // PhaseTemplate -> WBS Group
               const group = await apiService.createWbsGroup(methodologyPhase.id, {
                 code: `1`,
                 name: phaseTemplate.name,
@@ -440,7 +447,7 @@ export function useApplyTemplate() {
               if (group?.id) {
                 createdWbsGroupIds.push(group.id);
 
-                // WbsGroupTemplate → WBS Item
+                // WbsGroupTemplate -> WBS Item
                 let itemOrder = 1;
                 for (const wbsGroupTemplate of phaseTemplate.wbsGroups || []) {
                   try {
@@ -458,7 +465,7 @@ export function useApplyTemplate() {
                     if (item?.id) {
                       createdWbsItemIds.push(item.id);
 
-                      // WbsItemTemplate → WBS Task
+                      // WbsItemTemplate -> WBS Task
                       let taskOrder = 1;
                       for (const wbsItemTemplate of wbsGroupTemplate.items || []) {
                         try {

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../../services/api';
+import { unwrapOrThrow } from '../../utils/toViewState';
 
 export const phaseKeys = {
   all: ['phases'] as const,
@@ -14,7 +15,10 @@ export const phaseKeys = {
 export function usePhases(projectId?: string) {
   return useQuery({
     queryKey: phaseKeys.list(projectId),
-    queryFn: () => apiService.getPhases(projectId),
+    queryFn: async () => {
+      const result = await apiService.getPhasesResult(projectId);
+      return unwrapOrThrow(result);
+    },
     enabled: !!projectId,
   });
 }
@@ -22,7 +26,10 @@ export function usePhases(projectId?: string) {
 export function usePhase(id: string) {
   return useQuery({
     queryKey: phaseKeys.detail(id),
-    queryFn: () => apiService.getPhase(id),
+    queryFn: async () => {
+      const result = await apiService.getPhaseResult(id);
+      return unwrapOrThrow(result);
+    },
     enabled: !!id,
   });
 }
@@ -66,7 +73,10 @@ export function useDeletePhase() {
 export function usePhaseDeliverables(phaseId: string) {
   return useQuery({
     queryKey: phaseKeys.deliverables(phaseId),
-    queryFn: () => apiService.getPhaseDeliverables(phaseId),
+    queryFn: async () => {
+      const result = await apiService.getPhaseDeliverablesResult(phaseId);
+      return unwrapOrThrow(result);
+    },
     enabled: !!phaseId,
   });
 }
@@ -86,7 +96,10 @@ export function useUploadDeliverable() {
 export function usePhaseKpis(phaseId: string) {
   return useQuery({
     queryKey: phaseKeys.kpis(phaseId),
-    queryFn: () => apiService.getPhaseKpis(phaseId),
+    queryFn: async () => {
+      const result = await apiService.getPhaseKpisResult(phaseId);
+      return unwrapOrThrow(result);
+    },
     enabled: !!phaseId,
   });
 }
@@ -94,7 +107,10 @@ export function usePhaseKpis(phaseId: string) {
 export function useAllPhases() {
   return useQuery({
     queryKey: phaseKeys.lists(),
-    queryFn: () => apiService.getPhases(),
+    queryFn: async () => {
+      const result = await apiService.getPhasesResult();
+      return unwrapOrThrow(result);
+    },
   });
 }
 
@@ -204,9 +220,10 @@ export function useProjectDeliverables(projectId?: string) {
       if (!typedPhases || typedPhases.length === 0) return [];
 
       const phaseIds = typedPhases.map((p) => p.id);
-      const deliverablePromises = phaseIds.map((phaseId: string) =>
-        apiService.getPhaseDeliverables(phaseId).catch(() => [])
-      );
+      const deliverablePromises = phaseIds.map(async (phaseId: string) => {
+        const result = await apiService.getPhaseDeliverablesResult(phaseId);
+        return unwrapOrThrow(result);
+      });
 
       const results = await Promise.all(deliverablePromises);
 

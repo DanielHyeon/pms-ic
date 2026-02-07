@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../../services/api';
+import { unwrapOrThrow } from '../../utils/toViewState';
 import { UserStory, StoryStatus } from '../../utils/storyTypes';
 
 export type { UserStory };
@@ -139,40 +140,36 @@ export function useStories(projectId?: string) {
       if (!projectId) {
         return initialStories;
       }
-      try {
-        // Check localStorage first for this project
-        const storageKey = `backlog_stories_${projectId}`;
-        const savedStories = localStorage.getItem(storageKey);
-        if (savedStories) {
-          const parsed = JSON.parse(savedStories);
-          if (parsed && parsed.length > 0) {
-            return parsed;
-          }
+      // Check localStorage first for this project
+      const storageKey = `backlog_stories_${projectId}`;
+      const savedStories = localStorage.getItem(storageKey);
+      if (savedStories) {
+        const parsed = JSON.parse(savedStories);
+        if (parsed && parsed.length > 0) {
+          return parsed;
         }
-        // Call the correct API endpoint
-        const data = await apiService.getStories(projectId);
-        // Return actual data (even if empty) when projectId is provided
-        if (data && Array.isArray(data)) {
-          // Transform API response to match frontend UserStory type
-          return data.map((story: any) => ({
-            id: story.id,
-            title: story.title,
-            description: story.description,
-            priority: story.priorityOrder || story.priority,
-            storyPoints: story.storyPoints,
-            status: story.status,
-            assignee: story.assigneeId,
-            epic: story.epic,
-            featureId: story.featureId,
-            sprintId: story.sprintId,
-            acceptanceCriteria: story.acceptanceCriteriaList || [],
-          }));
-        }
-        return []; // Return empty array if no data for this project
-      } catch (error) {
-        console.error('Failed to fetch stories:', error);
-        return []; // Return empty array on error when projectId is provided
       }
+      // Call the correct API endpoint via Result pattern
+      const result = await apiService.getStoriesResult(projectId);
+      const data = unwrapOrThrow(result);
+      // Return actual data (even if empty) when projectId is provided
+      if (data && Array.isArray(data)) {
+        // Transform API response to match frontend UserStory type
+        return data.map((story: any) => ({
+          id: story.id,
+          title: story.title,
+          description: story.description,
+          priority: story.priorityOrder || story.priority,
+          storyPoints: story.storyPoints,
+          status: story.status,
+          assignee: story.assigneeId,
+          epic: story.epic,
+          featureId: story.featureId,
+          sprintId: story.sprintId,
+          acceptanceCriteria: story.acceptanceCriteriaList || [],
+        }));
+      }
+      return []; // Return empty array if no data for this project
     },
     enabled: true,
   });
@@ -183,12 +180,15 @@ export function useCreateStory(projectId?: string) {
   const storageKey = projectId ? `backlog_stories_${projectId}` : 'backlog_stories';
 
   return useMutation({
-    mutationFn: (data: {
+    mutationFn: async (data: {
       title: string;
       description: string;
       epic: string;
       acceptanceCriteria: string[];
-    }) => apiService.createStory(data),
+    }) => {
+      const result = await apiService.createStoryResult(data);
+      return unwrapOrThrow(result);
+    },
     onSuccess: (newStory) => {
       queryClient.setQueryData<UserStory[]>(storyKeys.list(projectId), (old = []) => {
         const updated = [...old, newStory];
@@ -204,8 +204,10 @@ export function useUpdateStory(projectId?: string) {
   const storageKey = projectId ? `backlog_stories_${projectId}` : 'backlog_stories';
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: number | string; data: Partial<UserStory> }) =>
-      apiService.updateStory(id, data),
+    mutationFn: async ({ id, data }: { id: number | string; data: Partial<UserStory> }) => {
+      const result = await apiService.updateStoryResult(id, data);
+      return unwrapOrThrow(result);
+    },
     onSuccess: (_, { id, data }) => {
       queryClient.setQueryData<UserStory[]>(storyKeys.list(projectId), (old = []) => {
         const updated = old.map((s) => (s.id === id ? { ...s, ...data } : s));
@@ -221,8 +223,10 @@ export function useUpdateStoryPriority(projectId?: string) {
   const storageKey = projectId ? `backlog_stories_${projectId}` : 'backlog_stories';
 
   return useMutation({
-    mutationFn: ({ id, direction }: { id: number | string; direction: 'up' | 'down' }) =>
-      apiService.updateStoryPriority(id, direction),
+    mutationFn: async ({ id, direction }: { id: number | string; direction: 'up' | 'down' }) => {
+      const result = await apiService.updateStoryPriorityResult(id, direction);
+      return unwrapOrThrow(result);
+    },
     onSuccess: (updatedStories, { id, direction }) => {
       if (updatedStories && updatedStories.length > 0) {
         queryClient.setQueryData<UserStory[]>(storyKeys.list(projectId), updatedStories);
@@ -258,7 +262,10 @@ export function useDeleteStory(projectId?: string) {
   const storageKey = projectId ? `backlog_stories_${projectId}` : 'backlog_stories';
 
   return useMutation({
-    mutationFn: (id: string) => apiService.deleteStory(id),
+    mutationFn: async (id: string) => {
+      const result = await apiService.deleteStoryResult(id);
+      return unwrapOrThrow(result);
+    },
     onSuccess: (_, id) => {
       queryClient.setQueryData<UserStory[]>(storyKeys.list(projectId), (old = []) => {
         const updated = old.filter((s) => String(s.id) !== id);

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Sprint, SprintFormData, SprintWithItems, UserStory } from '../../types/backlog';
 import { apiService } from '../../services/api';
+import { unwrapOrThrow } from '../../utils/toViewState';
 
 export const sprintKeys = {
   all: ['sprints'] as const,
@@ -12,64 +13,41 @@ export const sprintKeys = {
   withItems: (id: string) => [...sprintKeys.detail(id), 'items'] as const,
 };
 
+// Normalize backend Sprint shape (e.g., PLANNED -> PLANNING, fallback defaults)
+function mapRawSprint(s: any): Sprint {
+  return {
+    id: s.id,
+    projectId: s.projectId,
+    name: s.name,
+    goal: s.goal,
+    startDate: s.startDate,
+    endDate: s.endDate,
+    status: s.status === 'PLANNED' ? 'PLANNING' : s.status,
+    velocity: s.velocity || 0,
+    plannedPoints: s.plannedPoints || s.conwipLimit || 0,
+    createdAt: s.createdAt || `${s.startDate}T00:00:00Z`,
+    updatedAt: s.updatedAt || `${s.startDate}T00:00:00Z`,
+  };
+}
+
 export function useSprints(projectId?: string) {
   return useQuery<Sprint[]>({
     queryKey: sprintKeys.list(projectId),
     queryFn: async () => {
-      if (!projectId) {
-        return []; // No project selected, return empty
-      }
-      try {
-        const data = await apiService.getSprints(projectId);
-        if (Array.isArray(data)) {
-          return data.map((s: any): Sprint => ({
-            id: s.id,
-            projectId: s.projectId,
-            name: s.name,
-            goal: s.goal,
-            startDate: s.startDate,
-            endDate: s.endDate,
-            status: s.status === 'PLANNED' ? 'PLANNING' : s.status,
-            velocity: s.velocity || 0,
-            plannedPoints: s.plannedPoints || s.conwipLimit || 0,
-            createdAt: s.createdAt || `${s.startDate}T00:00:00Z`,
-            updatedAt: s.updatedAt || `${s.startDate}T00:00:00Z`,
-          }));
-        }
-        return [];
-      } catch {
-        return []; // Return empty array on error
-      }
+      const result = await apiService.getSprintsResult(projectId!);
+      const data = unwrapOrThrow(result);
+      return Array.isArray(data) ? data.map(mapRawSprint) : [];
     },
     enabled: !!projectId,
   });
 }
 
 export function useSprint(id: string) {
-  return useQuery<Sprint | undefined>({
+  return useQuery<Sprint>({
     queryKey: sprintKeys.detail(id),
     queryFn: async () => {
-      try {
-        const data = await apiService.getSprint(id);
-        if (data) {
-          return {
-            id: data.id,
-            projectId: data.projectId,
-            name: data.name,
-            goal: data.goal,
-            startDate: data.startDate,
-            endDate: data.endDate,
-            status: data.status === 'PLANNED' ? 'PLANNING' : data.status,
-            velocity: data.velocity || 0,
-            plannedPoints: data.plannedPoints || data.conwipLimit || 0,
-            createdAt: data.createdAt || `${data.startDate}T00:00:00Z`,
-            updatedAt: data.updatedAt || `${data.startDate}T00:00:00Z`,
-          } as Sprint;
-        }
-        return undefined;
-      } catch {
-        return undefined;
-      }
+      const result = await apiService.getSprintResult(id);
+      return mapRawSprint(unwrapOrThrow(result));
     },
     enabled: !!id,
   });
@@ -79,79 +57,47 @@ export function useActiveSprint(projectId: string) {
   return useQuery<Sprint | undefined>({
     queryKey: sprintKeys.active(projectId),
     queryFn: async () => {
-      try {
-        const data = await apiService.getSprints(projectId);
-        if (Array.isArray(data)) {
-          const activeSprint = data.find((s: any) => s.status === 'ACTIVE');
-          if (activeSprint) {
-            return {
-              id: activeSprint.id,
-              projectId: activeSprint.projectId,
-              name: activeSprint.name,
-              goal: activeSprint.goal,
-              startDate: activeSprint.startDate,
-              endDate: activeSprint.endDate,
-              status: 'ACTIVE',
-              velocity: activeSprint.velocity || 0,
-              plannedPoints: activeSprint.plannedPoints || activeSprint.conwipLimit || 0,
-              createdAt: activeSprint.createdAt || `${activeSprint.startDate}T00:00:00Z`,
-              updatedAt: activeSprint.updatedAt || `${activeSprint.startDate}T00:00:00Z`,
-            } as Sprint;
-          }
+      const result = await apiService.getSprintsResult(projectId);
+      const data = unwrapOrThrow(result);
+      if (Array.isArray(data)) {
+        const activeSprint = data.find((s: any) => s.status === 'ACTIVE');
+        if (activeSprint) {
+          return mapRawSprint(activeSprint);
         }
-        return undefined;
-      } catch {
-        return undefined;
       }
+      return undefined;
     },
     enabled: !!projectId,
   });
 }
 
 export function useSprintWithItems(id: string) {
-  return useQuery<SprintWithItems | undefined>({
+  return useQuery<SprintWithItems>({
     queryKey: sprintKeys.withItems(id),
     queryFn: async () => {
-      try {
-        const data = await apiService.getSprint(id);
-        if (!data) return undefined;
+      const result = await apiService.getSprintResult(id);
+      const data = unwrapOrThrow(result);
+      const sprint = mapRawSprint(data);
 
-        const sprint: Sprint = {
-          id: data.id,
-          projectId: data.projectId,
-          name: data.name,
-          goal: data.goal,
-          startDate: data.startDate,
-          endDate: data.endDate,
-          status: data.status === 'PLANNED' ? 'PLANNING' : data.status,
-          velocity: data.velocity || 0,
-          plannedPoints: data.plannedPoints || data.conwipLimit || 0,
-          createdAt: data.createdAt || `${data.startDate}T00:00:00Z`,
-          updatedAt: data.updatedAt || `${data.startDate}T00:00:00Z`,
-        };
+      // TODO: Fetch stories for this sprint from API when endpoint is available
+      const sprintStories: UserStory[] = [];
+      const totalPoints = sprintStories.reduce((sum, s) => sum + (s.storyPoints || 0), 0);
+      const completedPoints = sprintStories
+        .filter((s) => s.status === 'DONE')
+        .reduce((sum, s) => sum + (s.storyPoints || 0), 0);
 
-        // TODO: Fetch stories for this sprint from API when endpoint is available
-        const sprintStories: UserStory[] = [];
-        const totalPoints = sprintStories.reduce((sum, s) => sum + (s.storyPoints || 0), 0);
-        const completedPoints = sprintStories
-          .filter((s) => s.status === 'DONE')
-          .reduce((sum, s) => sum + (s.storyPoints || 0), 0);
-
-        return {
-          ...sprint,
-          stories: sprintStories.map((story) => ({
-            ...story,
-            tasks: [],
-            totalTasks: 0,
-            completedTasks: 0,
-          })),
-          totalPoints,
-          completedPoints,
-          burndownData: generateBurndownData(sprint, totalPoints, completedPoints),
-        };
-      } catch {
-        return undefined;
-      }
+      return {
+        ...sprint,
+        stories: sprintStories.map((story) => ({
+          ...story,
+          tasks: [],
+          totalTasks: 0,
+          completedTasks: 0,
+        })),
+        totalPoints,
+        completedPoints,
+        burndownData: generateBurndownData(sprint, totalPoints, completedPoints),
+      };
     },
     enabled: !!id,
   });

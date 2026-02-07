@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../../services/api';
+import { unwrapOrThrow } from '../../utils/toViewState';
 import { Feature, FeatureFormData, FeatureWithChildren } from '../../types/backlog';
 
 export const featureKeys = {
@@ -17,7 +18,8 @@ export function useFeatures(epicId?: string) {
     queryKey: epicId ? featureKeys.byEpic(epicId) : featureKeys.lists(),
     queryFn: async () => {
       if (epicId) {
-        return apiService.getFeatures(epicId);
+        const result = await apiService.getFeaturesResult(epicId);
+        return unwrapOrThrow(result);
       }
       // If no epicId, return empty array as features are always under an epic
       return [];
@@ -29,7 +31,10 @@ export function useFeatures(epicId?: string) {
 export function useFeaturesByWbsGroup(wbsGroupId: string) {
   return useQuery<Feature[]>({
     queryKey: featureKeys.byWbsGroup(wbsGroupId),
-    queryFn: () => apiService.getFeaturesByWbsGroup(wbsGroupId),
+    queryFn: async () => {
+      const result = await apiService.getFeaturesByWbsGroupResult(wbsGroupId);
+      return unwrapOrThrow(result);
+    },
     enabled: !!wbsGroupId,
   });
 }
@@ -37,7 +42,10 @@ export function useFeaturesByWbsGroup(wbsGroupId: string) {
 export function useFeature(id: string) {
   return useQuery<Feature | null>({
     queryKey: featureKeys.detail(id),
-    queryFn: () => apiService.getFeature(id),
+    queryFn: async () => {
+      const result = await apiService.getFeatureResult(id);
+      return unwrapOrThrow(result);
+    },
     enabled: !!id,
   });
 }
@@ -46,7 +54,8 @@ export function useFeatureWithChildren(id: string) {
   return useQuery<FeatureWithChildren | null>({
     queryKey: [...featureKeys.detail(id), 'children'],
     queryFn: async (): Promise<FeatureWithChildren | null> => {
-      const feature = await apiService.getFeature(id);
+      const result = await apiService.getFeatureResult(id);
+      const feature = unwrapOrThrow(result);
       if (!feature) return null;
 
       // Stories for this feature would be fetched via stories API

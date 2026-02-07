@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../../services/api';
 import { Part, PartMember, CreatePartDto, PartDashboard, PartMetrics } from '../../types/part';
+import { unwrapOrThrow } from '../../utils/toViewState';
 
 export const partKeys = {
   all: ['parts'] as const,
@@ -13,81 +14,12 @@ export const partKeys = {
   metrics: (projectId: string, partId: string) => [...partKeys.detail(partId), 'metrics', { projectId }] as const,
 };
 
-// Mock data for fallback
-const mockParts: Part[] = [
-  {
-    id: 'part-1',
-    projectId: '',
-    name: 'UI/UX 파트',
-    description: '사용자 인터페이스 및 사용자 경험 설계',
-    leaderId: 'user-003',
-    leaderName: '박민수',
-    status: 'ACTIVE',
-    startDate: '2025-01-02',
-    endDate: '2025-06-30',
-    progress: 45,
-    memberCount: 4,
-    createdAt: '2025-01-02T00:00:00Z',
-    updatedAt: '2025-01-15T00:00:00Z',
-  },
-  {
-    id: 'part-2',
-    projectId: '',
-    name: '백엔드 파트',
-    description: '서버 및 API 개발',
-    leaderId: 'user-004',
-    leaderName: '최영수',
-    status: 'ACTIVE',
-    startDate: '2025-01-02',
-    endDate: '2025-09-30',
-    progress: 62,
-    memberCount: 6,
-    createdAt: '2025-01-02T00:00:00Z',
-    updatedAt: '2025-01-15T00:00:00Z',
-  },
-  {
-    id: 'part-3',
-    projectId: '',
-    name: 'AI/ML 파트',
-    description: 'AI 모델 개발 및 학습',
-    leaderId: 'user-005',
-    leaderName: '정수진',
-    status: 'ACTIVE',
-    startDate: '2025-01-02',
-    endDate: '2025-12-31',
-    progress: 35,
-    memberCount: 5,
-    createdAt: '2025-01-02T00:00:00Z',
-    updatedAt: '2025-01-15T00:00:00Z',
-  },
-];
-
-const mockPartMembers: Record<string, PartMember[]> = {
-  'part-1': [
-    { id: 'm1', partId: 'part-1', userId: 'user-003', userName: '박민수', userEmail: 'minsu@example.com', role: 'leader', joinedAt: '2025-01-02' },
-    { id: 'm2', partId: 'part-1', userId: 'user-011', userName: '김지은', userEmail: 'jieun@example.com', role: 'member', joinedAt: '2025-01-02' },
-    { id: 'm3', partId: 'part-1', userId: 'user-012', userName: '이준호', userEmail: 'junho@example.com', role: 'member', joinedAt: '2025-01-05' },
-  ],
-  'part-2': [
-    { id: 'm4', partId: 'part-2', userId: 'user-004', userName: '최영수', userEmail: 'youngsu@example.com', role: 'leader', joinedAt: '2025-01-02' },
-    { id: 'm5', partId: 'part-2', userId: 'user-013', userName: '한상철', userEmail: 'sangchul@example.com', role: 'member', joinedAt: '2025-01-02' },
-  ],
-  'part-3': [
-    { id: 'm6', partId: 'part-3', userId: 'user-005', userName: '정수진', userEmail: 'sujin@example.com', role: 'leader', joinedAt: '2025-01-02' },
-  ],
-};
-
 export function useParts(projectId?: string) {
   return useQuery<Part[]>({
     queryKey: partKeys.list(projectId),
     queryFn: async () => {
-      try {
-        const data = await apiService.getParts(projectId!);
-        // Return actual data (even if empty) when projectId is provided
-        return Array.isArray(data) ? data : [];
-      } catch {
-        return []; // Return empty array on error when projectId is provided
-      }
+      const result = await apiService.getPartsResult(projectId!);
+      return unwrapOrThrow(result);
     },
     enabled: !!projectId,
   });
@@ -97,12 +29,8 @@ export function usePartMembers(partId: string) {
   return useQuery<PartMember[]>({
     queryKey: partKeys.members(partId),
     queryFn: async () => {
-      try {
-        const data = await apiService.getPartMembers(partId);
-        return Array.isArray(data) ? data : [];
-      } catch {
-        return []; // Return empty array on error
-      }
+      const result = await apiService.getPartMembersResult(partId);
+      return unwrapOrThrow(result);
     },
     enabled: !!partId,
   });
@@ -169,54 +97,12 @@ export function useRemovePartMember() {
   });
 }
 
-// Mock data for Part Dashboard fallback
-const mockPartDashboard: PartDashboard = {
-  partId: '',
-  partName: '',
-  plUserId: '',
-  plName: '',
-  totalStoryPoints: 150,
-  completedStoryPoints: 65,
-  inProgressStoryPoints: 35,
-  plannedStoryPoints: 50,
-  featureCount: 8,
-  storyCount: 24,
-  completedStoryCount: 10,
-  inProgressStoryCount: 6,
-  taskCount: 72,
-  completedTaskCount: 32,
-  blockedTaskCount: 3,
-  openIssueCount: 5,
-  highPriorityIssueCount: 2,
-};
-
-const mockPartMetrics: PartMetrics = {
-  partId: '',
-  completionRate: 43.3,
-  storyCompletionRate: 41.7,
-  taskCompletionRate: 44.4,
-  velocity: 18.5,
-  wipCount: 8,
-  blockerCount: 3,
-  avgCycleTime: 4.2,
-  avgLeadTime: 7.5,
-};
-
 export function usePartDashboard(projectId: string, partId: string) {
   return useQuery<PartDashboard>({
     queryKey: partKeys.dashboard(projectId, partId),
-    queryFn: async (): Promise<PartDashboard> => {
-      try {
-        const response = await apiService.getPartDashboard(projectId, partId);
-        if (response) {
-          return response as PartDashboard;
-        }
-        // Return mock data with part info if response is null
-        return { ...mockPartDashboard, partId };
-      } catch {
-        // Return mock data with part info
-        return { ...mockPartDashboard, partId };
-      }
+    queryFn: async () => {
+      const result = await apiService.getPartDashboardResult(projectId, partId);
+      return unwrapOrThrow(result);
     },
     enabled: !!projectId && !!partId,
   });
@@ -225,18 +111,9 @@ export function usePartDashboard(projectId: string, partId: string) {
 export function usePartMetrics(projectId: string, partId: string) {
   return useQuery<PartMetrics>({
     queryKey: partKeys.metrics(projectId, partId),
-    queryFn: async (): Promise<PartMetrics> => {
-      try {
-        const response = await apiService.getPartMetrics(projectId, partId);
-        if (response) {
-          return response as PartMetrics;
-        }
-        // Return mock data with part info if response is null
-        return { ...mockPartMetrics, partId };
-      } catch {
-        // Return mock data with part info
-        return { ...mockPartMetrics, partId };
-      }
+    queryFn: async () => {
+      const result = await apiService.getPartMetricsResult(projectId, partId);
+      return unwrapOrThrow(result);
     },
     enabled: !!projectId && !!partId,
   });

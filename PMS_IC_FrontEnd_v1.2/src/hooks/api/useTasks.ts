@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '../../services/api';
+import { unwrapOrThrow } from '../../utils/toViewState';
 
 export const taskKeys = {
   all: ['tasks'] as const,
@@ -12,7 +13,12 @@ export const taskKeys = {
 export function useTaskColumns(projectId?: string) {
   return useQuery({
     queryKey: taskKeys.columns(projectId),
-    queryFn: () => apiService.getTaskColumns(projectId),
+    queryFn: async () => {
+      if (!projectId) return [];
+      const result = await apiService.getTaskColumnsResult(projectId);
+      return unwrapOrThrow(result);
+    },
+    enabled: !!projectId,
   });
 }
 
@@ -89,11 +95,9 @@ export function useKanbanTasks(projectId?: string) {
   return useQuery({
     queryKey: taskKeys.kanban(projectId),
     queryFn: async () => {
-      const response = await apiService.getTasks(projectId) as unknown;
-      // Handle both wrapped { data: [...] } and direct array responses
-      const tasks = (response && typeof response === 'object' && 'data' in response
-        ? (response as { data: unknown[] }).data
-        : response) || [];
+      if (!projectId) return [];
+      const result = await apiService.getTasksResult(projectId);
+      const tasks = unwrapOrThrow(result);
 
       if (!Array.isArray(tasks)) return [];
 
@@ -121,6 +125,7 @@ export function useKanbanTasks(projectId?: string) {
         };
       });
     },
+    enabled: !!projectId,
   });
 }
 

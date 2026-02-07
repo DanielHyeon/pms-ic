@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiService } from '../../services/api';
 import { useProjectAuth, CAPABILITIES } from './useProjectAuth';
+import { unwrapOrThrow } from '../../utils/toViewState';
 
 export interface DataQualityMetric {
   id: string;
@@ -59,9 +60,9 @@ export function useDataQuality(projectId?: string) {
   const { hasCapability } = useProjectAuth();
   return useQuery<DataQualityResponse>({
     queryKey: dataQualityKeys.project(projectId || ''),
-    queryFn: async (): Promise<DataQualityResponse> => {
-      const result = await apiService.getDataQuality(projectId!);
-      return result as unknown as DataQualityResponse;
+    queryFn: async () => {
+      const result = await apiService.getDataQualityResult(projectId!);
+      return unwrapOrThrow(result);
     },
     enabled: !!projectId && hasCapability(CAPABILITIES.VIEW_DATA_QUALITY),
   });

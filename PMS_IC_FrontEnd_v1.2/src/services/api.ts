@@ -1,4 +1,20 @@
+import type { Result, ApiError, ResultMeta, ResultWarning } from '../types/result';
+import { ok, fail } from '../types/result';
+import type { PoBacklogViewDto, PmWorkboardViewDto, PmoPortfolioViewDto } from '../types/views';
+import type { DataQualityResponse } from '../hooks/api/useDataQuality';
+import type { WeightedProgressDto } from '../hooks/api/useDashboard';
+import type { WbsSnapshot } from '../types/wbsSnapshot';
+import type { Epic, EpicFormData, Feature, Sprint } from '../types/backlog';
+import type { Project, Requirement, Rfp, WeeklyReport } from '../types/project';
+import type {
+  LineageGraphDto,
+  PageResponse,
+  LineageEventDto,
+  ImpactAnalysisDto,
+} from '../types/lineage';
+import type { Part, PartMember, PartDashboard, PartMetrics } from '../types/part';
 import { DEFAULT_TEMPLATES, getDefaultTemplateById } from '../data/defaultTemplates';
+import type { WbsGroup, WbsItem, WbsTask } from '../types/wbs';
 import { getMockWbsGroups, getMockWbsItems, getMockWbsTasks } from '../mocks/wbs.mock';
 import {
   getMockPhases,
@@ -181,6 +197,103 @@ export class ApiService {
     }
 
     return json;
+  }
+
+  // Type-safe fetch returning Result<T> — replaces fetchWithFallback for new code.
+  // Rule A: no data shape transformation (extract handles that)
+  // Rule B: PARSE errors separated from HTTP errors
+  // Rule C: source/usedFallback set based on actually returned data
+  // Rule D: durationMs always measured
+  private async fetchResult<T>(
+    endpoint: string,
+    options?: RequestInit,
+    config?: {
+      fallbackData?: T | null;
+      timeoutMs?: number;
+      extract?: (json: unknown) => T;
+    }
+  ): Promise<Result<T>> {
+    const startMs = performance.now();
+    const timeoutMs = config?.timeoutMs ?? 10000;
+
+    const makeMeta = (source: 'api' | 'fallback'): ResultMeta => ({
+      source,
+      asOf: new Date().toISOString(),
+      endpoint,
+      durationMs: Math.round(performance.now() - startMs),
+      usedFallback: source === 'fallback',
+    });
+
+    const makeError = (
+      code: ApiError['code'],
+      message: string,
+      cause?: unknown,
+      status?: number,
+    ): ApiError => ({
+      code,
+      status,
+      message,
+      endpoint,
+      timestamp: new Date().toISOString(),
+      retryable: code === 'NETWORK' || code === 'TIMEOUT' || code === 'HTTP_5XX',
+      cause,
+    });
+
+    try {
+      const isFormData = typeof FormData !== 'undefined' && options?.body instanceof FormData;
+      const headers: HeadersInit = {
+        ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+        ...(this.token && { Authorization: `Bearer ${this.token}` }),
+        ...options?.headers,
+      };
+
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        ...options,
+        headers,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        const code = response.status >= 500 ? 'HTTP_5XX' : 'HTTP_4XX';
+        const apiError = makeError(code as ApiError['code'], errorText, undefined, response.status);
+        if (this.useMockData) this.useMockData = false;
+        return fail<T>(apiError, makeMeta('fallback'), config?.fallbackData);
+      }
+
+      if (this.useMockData) {
+        this.useMockData = false;
+      }
+
+      const json = await response.json();
+
+      // Auto-unwrap ApiResponse {data, success} wrapper (matches fetchWithFallback behavior)
+      const unwrapped = (json && typeof json === 'object' && 'data' in json && 'success' in json)
+        ? json.data
+        : json;
+
+      // Apply extract or return unwrapped json
+      try {
+        const data: T = config?.extract ? config.extract(unwrapped) : unwrapped as T;
+        return ok(data, makeMeta('api'));
+      } catch (extractError) {
+        const apiError = makeError('PARSE', `Response extraction failed: ${extractError}`, extractError);
+        const warnings: ResultWarning[] = [{ code: 'PARSE_ERROR', message: apiError.message }];
+        return fail<T>(apiError, makeMeta('fallback'), config?.fallbackData, warnings);
+      }
+    } catch (error) {
+      let code: ApiError['code'] = 'UNKNOWN';
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        code = 'NETWORK';
+      } else if (error instanceof Error && error.name === 'TimeoutError') {
+        code = 'TIMEOUT';
+      } else if (error instanceof DOMException && error.name === 'AbortError') {
+        code = 'ABORTED';
+      }
+      const apiError = makeError(code, error instanceof Error ? error.message : String(error), error);
+      this.useMockData = true;
+      return fail<T>(apiError, makeMeta('fallback'), config?.fallbackData);
+    }
   }
 
   async login(email: string, password: string) {
@@ -2897,6 +3010,668 @@ export class ApiService {
       null
     );
   }
+
+  // ==================== Result APIs (Phase 5) ====================
+
+  async getPoBacklogViewResult(projectId: string): Promise<Result<PoBacklogViewDto>> {
+    return this.fetchResult<PoBacklogViewDto>(
+      `/projects/${projectId}/views/po-backlog`,
+    );
+  }
+
+  async getPmWorkboardViewResult(projectId: string): Promise<Result<PmWorkboardViewDto>> {
+    return this.fetchResult<PmWorkboardViewDto>(
+      `/projects/${projectId}/views/pm-workboard`,
+    );
+  }
+
+  async getPmoPortfolioViewResult(projectId: string): Promise<Result<PmoPortfolioViewDto>> {
+    return this.fetchResult<PmoPortfolioViewDto>(
+      `/projects/${projectId}/views/pmo-portfolio`,
+    );
+  }
+
+  async getDataQualityResult(projectId: string): Promise<Result<DataQualityResponse>> {
+    return this.fetchResult<DataQualityResponse>(
+      `/projects/${projectId}/data-quality`,
+    );
+  }
+
+  // Dashboard Result methods (Phase 5 - Step 6)
+
+  async getFullProjectDashboardResult(projectId: string): Promise<Result<ProjectDashboardDto>> {
+    return this.fetchResult<ProjectDashboardDto>(
+      `${V2}/projects/${projectId}/dashboard`,
+    );
+  }
+
+  async getPhaseProgressResult(projectId: string): Promise<Result<DashboardSection<PhaseProgressDto>>> {
+    return this.fetchResult<DashboardSection<PhaseProgressDto>>(
+      `${V2}/projects/${projectId}/dashboard/phase-progress`,
+    );
+  }
+
+  async getPartStatsResult(projectId: string): Promise<Result<DashboardSection<PartStatsDto>>> {
+    return this.fetchResult<DashboardSection<PartStatsDto>>(
+      `${V2}/projects/${projectId}/dashboard/part-stats`,
+    );
+  }
+
+  async getWbsGroupStatsResult(projectId: string): Promise<Result<DashboardSection<WbsGroupStatsDto>>> {
+    return this.fetchResult<DashboardSection<WbsGroupStatsDto>>(
+      `${V2}/projects/${projectId}/dashboard/wbs-group-stats`,
+    );
+  }
+
+  async getSprintVelocityResult(projectId: string): Promise<Result<DashboardSection<SprintVelocityDto>>> {
+    return this.fetchResult<DashboardSection<SprintVelocityDto>>(
+      `${V2}/projects/${projectId}/dashboard/sprint-velocity`,
+    );
+  }
+
+  async getBurndownResult(projectId: string): Promise<Result<DashboardSection<BurndownDto>>> {
+    return this.fetchResult<DashboardSection<BurndownDto>>(
+      `${V2}/projects/${projectId}/dashboard/burndown`,
+    );
+  }
+
+  async getInsightsResult(projectId: string): Promise<Result<DashboardSection<InsightDto[]>>> {
+    return this.fetchResult<DashboardSection<InsightDto[]>>(
+      `${V2}/projects/${projectId}/dashboard/insights`,
+    );
+  }
+
+  // WBS Snapshot Result methods (Phase 5 - Step 7)
+
+  async createWbsSnapshotResult(request: {
+    phaseId: string;
+    snapshotName?: string;
+    description?: string;
+    snapshotType?: 'PRE_TEMPLATE' | 'MANUAL';
+  }): Promise<Result<WbsSnapshot>> {
+    return this.fetchResult<WbsSnapshot>('/wbs-snapshots', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  }
+
+  async getWbsSnapshotsByPhaseResult(phaseId: string): Promise<Result<WbsSnapshot[]>> {
+    return this.fetchResult<WbsSnapshot[]>(`/wbs-snapshots/phase/${phaseId}`);
+  }
+
+  async getWbsSnapshotsByProjectResult(projectId: string): Promise<Result<WbsSnapshot[]>> {
+    return this.fetchResult<WbsSnapshot[]>(`/wbs-snapshots/project/${projectId}`);
+  }
+
+  async getWbsSnapshotResult(snapshotId: string): Promise<Result<WbsSnapshot>> {
+    return this.fetchResult<WbsSnapshot>(`/wbs-snapshots/${snapshotId}`);
+  }
+
+  async restoreWbsSnapshotResult(snapshotId: string): Promise<Result<void>> {
+    return this.fetchResult<void>(`/wbs-snapshots/${snapshotId}/restore`, {
+      method: 'POST',
+    });
+  }
+
+  async deleteWbsSnapshotResult(snapshotId: string): Promise<Result<void>> {
+    return this.fetchResult<void>(`/wbs-snapshots/${snapshotId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Epic CRUD Result methods (Phase 5 - Step 7)
+
+  async getEpicsForProjectResult(projectId: string): Promise<Result<Epic[]>> {
+    return this.fetchResult<Epic[]>(`/projects/${projectId}/epics`);
+  }
+
+  async getEpicByIdResult(epicId: string): Promise<Result<Epic>> {
+    return this.fetchResult<Epic>(`/epics/${epicId}`);
+  }
+
+  async createEpicResult(projectId: string, data: EpicFormData): Promise<Result<Epic>> {
+    return this.fetchResult<Epic>(`/projects/${projectId}/epics`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateEpicResult(epicId: string, data: Partial<Epic>): Promise<Result<Epic>> {
+    return this.fetchResult<Epic>(`/epics/${epicId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteEpicResult(epicId: string): Promise<Result<void>> {
+    return this.fetchResult<void>(`/epics/${epicId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Project Result methods (Phase 5 - Step 8)
+
+  async getProjectsResult(): Promise<Result<Project[]>> {
+    return this.fetchResult<Project[]>(`${V2}/projects`);
+  }
+
+  async getProjectResult(projectId: string): Promise<Result<Project>> {
+    return this.fetchResult<Project>(`${V2}/projects/${projectId}`);
+  }
+
+  // Part Result methods (Phase 5 - Step 8)
+
+  async getPartsResult(projectId: string): Promise<Result<Part[]>> {
+    return this.fetchResult<Part[]>(`/projects/${projectId}/parts`);
+  }
+
+  async getPartMembersResult(partId: string): Promise<Result<PartMember[]>> {
+    return this.fetchResult<PartMember[]>(`/parts/${partId}/members`);
+  }
+
+  async getPartDashboardResult(projectId: string, partId: string): Promise<Result<PartDashboard>> {
+    return this.fetchResult<PartDashboard>(`/projects/${projectId}/parts/${partId}/dashboard`);
+  }
+
+  async getPartMetricsResult(projectId: string, partId: string): Promise<Result<PartMetrics>> {
+    return this.fetchResult<PartMetrics>(`/projects/${projectId}/parts/${partId}/metrics`);
+  }
+
+  // Sprint Result methods (Phase 5 - Step 8)
+
+  async getSprintsResult(projectId: string): Promise<Result<Sprint[]>> {
+    return this.fetchResult<Sprint[]>(`/projects/${projectId}/sprints`);
+  }
+
+  async getSprintResult(sprintId: string): Promise<Result<Sprint>> {
+    return this.fetchResult<Sprint>(`/sprints/${sprintId}`);
+  }
+
+  // Phase Result methods (Phase 5 - Step 8)
+
+  async getPhasesResult(projectId?: string): Promise<Result<any[]>> {
+    const params = projectId ? `?projectId=${projectId}` : '';
+    return this.fetchResult<any[]>(`/phases${params}`, undefined, {
+      fallbackData: getMockPhases(projectId),
+    });
+  }
+
+  async getPhaseResult(phaseId: string): Promise<Result<any>> {
+    return this.fetchResult<any>(`/phases/${phaseId}`, undefined, {
+      fallbackData: getMockPhaseById(phaseId) || null,
+    });
+  }
+
+  async getPhaseDeliverablesResult(phaseId: string): Promise<Result<any[]>> {
+    return this.fetchResult<any[]>(`/phases/${phaseId}/deliverables`, undefined, {
+      fallbackData: [],
+    });
+  }
+
+  async getPhaseKpisResult(phaseId: string): Promise<Result<any[]>> {
+    return this.fetchResult<any[]>(`/phases/${phaseId}/kpis`, undefined, {
+      fallbackData: [],
+    });
+  }
+
+  // Story Result methods (Phase 5 - Step 8)
+
+  async getStoriesResult(projectId: string, filters?: { status?: string; epic?: string }): Promise<Result<any[]>> {
+    const params = new URLSearchParams(filters as any);
+    return this.fetchResult<any[]>(`/projects/${projectId}/user-stories?${params}`, undefined, {
+      fallbackData: [],
+      extract: (json: unknown) => {
+        // Handle nested {data: [...]} wrapper from this endpoint
+        if (json && typeof json === 'object' && 'data' in json) {
+          return (json as any).data ?? [];
+        }
+        return (json as any[]) ?? [];
+      },
+    });
+  }
+
+  async createStoryResult(story: any): Promise<Result<any>> {
+    return this.fetchResult<any>('/stories', {
+      method: 'POST',
+      body: JSON.stringify(story),
+    });
+  }
+
+  async updateStoryResult(storyId: string | number, data: any): Promise<Result<any>> {
+    return this.fetchResult<any>(`/stories/${storyId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateStoryPriorityResult(storyId: string | number, direction: 'up' | 'down'): Promise<Result<any[]>> {
+    return this.fetchResult<any[]>(`/stories/${storyId}/priority`, {
+      method: 'PUT',
+      body: JSON.stringify({ direction }),
+    });
+  }
+
+  async deleteStoryResult(storyId: string): Promise<Result<any>> {
+    return this.fetchResult<any>(`/stories/${storyId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Feature Result methods (Phase 5 - Step 8)
+
+  async getFeaturesResult(epicId: string): Promise<Result<Feature[]>> {
+    return this.fetchResult<Feature[]>(`/epics/${epicId}/features`);
+  }
+
+  async getFeaturesByWbsGroupResult(wbsGroupId: string): Promise<Result<Feature[]>> {
+    return this.fetchResult<Feature[]>(`/wbs/groups/${wbsGroupId}/features`);
+  }
+
+  async getFeatureResult(featureId: string): Promise<Result<Feature | null>> {
+    return this.fetchResult<Feature | null>(`/features/${featureId}`);
+  }
+
+  // WBS Result methods (Phase 5 - Step 8)
+
+  async getWbsGroupsResult(phaseId: string): Promise<Result<WbsGroup[]>> {
+    return this.fetchResult<WbsGroup[]>(`/phases/${phaseId}/wbs-groups`, undefined, {
+      fallbackData: getMockWbsGroups(phaseId),
+    });
+  }
+
+  async getWbsGroupResult(groupId: string): Promise<Result<WbsGroup | null>> {
+    return this.fetchResult<WbsGroup | null>(`/wbs/groups/${groupId}`, undefined, {
+      fallbackData: null,
+    });
+  }
+
+  async getWbsItemsResult(groupId: string): Promise<Result<WbsItem[]>> {
+    return this.fetchResult<WbsItem[]>(`/wbs/groups/${groupId}/items`, undefined, {
+      fallbackData: getMockWbsItems(groupId),
+    });
+  }
+
+  async getWbsTasksResult(itemId: string): Promise<Result<WbsTask[]>> {
+    return this.fetchResult<WbsTask[]>(`/wbs/items/${itemId}/tasks`, undefined, {
+      fallbackData: getMockWbsTasks(itemId),
+    });
+  }
+
+  async getWbsFullTreeResult(projectId: string): Promise<Result<{ groups: WbsGroup[]; items: WbsItem[]; tasks: WbsTask[] }>> {
+    return this.fetchResult<{ groups: WbsGroup[]; items: WbsItem[]; tasks: WbsTask[] }>(
+      `/projects/${projectId}/wbs/full-tree`, undefined, {
+        fallbackData: { groups: [], items: [], tasks: [] },
+      },
+    );
+  }
+
+  // Task/Kanban Result methods (Phase 5 - Step 8)
+
+  async getKanbanBoardResult(projectId: string): Promise<Result<{ columns: any[] }>> {
+    return this.fetchResult<{ columns: any[] }>(`${V2}/projects/${projectId}/kanban`, undefined, {
+      fallbackData: { columns: [] },
+    });
+  }
+
+  async getTaskColumnsResult(projectId: string): Promise<Result<any[]>> {
+    return this.fetchResult<any[]>(`${V2}/projects/${projectId}/kanban`, undefined, {
+      fallbackData: [],
+      extract: (json: unknown) => {
+        const board = json as { columns?: any[] } | null;
+        return board?.columns ?? [];
+      },
+    });
+  }
+
+  async getTasksResult(projectId: string): Promise<Result<any[]>> {
+    return this.fetchResult<any[]>(`${V2}/projects/${projectId}/kanban`, undefined, {
+      fallbackData: [],
+      extract: (json: unknown) => {
+        const board = json as { columns?: any[] } | null;
+        return (board?.columns ?? []).flatMap((col: any) =>
+          (col.tasks || []).map((task: any) => ({ ...task, status: this.mapColumnToStatus(col.name) }))
+        );
+      },
+    });
+  }
+
+  // Roles/Users Result methods (Phase 5 - Step 8)
+
+  async getUsersResult(): Promise<Result<any[]>> {
+    return this.fetchResult<any[]>(`${V2}/users`, undefined, {
+      fallbackData: [],
+    });
+  }
+
+  async getPermissionsResult(): Promise<Result<any[]>> {
+    return this.fetchResult<any[]>(`${V2}/permissions`, undefined, {
+      fallbackData: [],
+    });
+  }
+
+  async getProjectMembersResult(projectId: string): Promise<Result<any[]>> {
+    return this.fetchResult<any[]>(`/projects/${projectId}/members`, undefined, {
+      fallbackData: [],
+    });
+  }
+
+  // Requirement Result methods (Phase 5 - Step 8)
+
+  async getRequirementsResult(projectId: string): Promise<Result<Requirement[]>> {
+    return this.fetchResult<Requirement[]>(`${V2}/projects/${projectId}/requirements`, undefined, {
+      fallbackData: [],
+    });
+  }
+
+  async getRequirementResult(projectId: string, requirementId: string): Promise<Result<Requirement | null>> {
+    return this.fetchResult<Requirement | null>(`${V2}/projects/${projectId}/requirements/${requirementId}`, undefined, {
+      fallbackData: null,
+    });
+  }
+
+  // RFP Result methods (Phase 5 - Step 8)
+
+  async getRfpsResult(projectId: string): Promise<Result<Rfp[]>> {
+    return this.fetchResult<Rfp[]>(`${V2}/projects/${projectId}/rfps`, undefined, {
+      fallbackData: [],
+    });
+  }
+
+  // Auth Result methods (Phase 5 - Step 8)
+
+  async loginResult(email: string, password: string): Promise<Result<{ token: string; user: { id: string; name: string; email: string; role: string; department: string } }>> {
+    return this.fetchResult<{ token: string; user: { id: string; name: string; email: string; role: string; department: string } }>(
+      '/auth/login',
+      {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      },
+      {
+        fallbackData: {
+          token: 'mock-jwt-token',
+          user: {
+            id: '1',
+            name: email.split('@')[0],
+            email,
+            role: 'pm',
+            department: 'PMO',
+          },
+        },
+      },
+    );
+  }
+
+  // Weekly Report Result methods (Phase 5 - Step 8)
+
+  async getWeeklyReportsResult(projectId: string): Promise<Result<WeeklyReport[]>> {
+    return this.fetchResult<WeeklyReport[]>(`/weekly-reports/project/${projectId}`, undefined, {
+      fallbackData: [],
+    });
+  }
+
+  // WIP Result methods (Phase 5 - Step 8)
+
+  async getProjectWipStatusResult(projectId: string): Promise<Result<any>> {
+    return this.fetchResult<any>(`/wip/status/project/${projectId}`, undefined, {
+      fallbackData: {
+        projectId,
+        totalWip: 0,
+        columnStatuses: [],
+        bottleneckCount: 0,
+      },
+    });
+  }
+
+  async getProjectProgressResult(projectId: string): Promise<Result<any[]>> {
+    return this.fetchResult<any[]>(`/projects/${projectId}/progress`, undefined, {
+      fallbackData: [],
+    });
+  }
+
+  // Lineage Result methods (Phase 5 - Step 8)
+
+  async getLineageGraphResult(projectId: string): Promise<Result<LineageGraphDto>> {
+    return this.fetchResult<LineageGraphDto>(`${V2}/projects/${projectId}/lineage/graph`, undefined, {
+      fallbackData: {
+        nodes: [],
+        edges: [],
+        statistics: {
+          requirements: 0,
+          stories: 0,
+          tasks: 0,
+          sprints: 0,
+          coverage: 0,
+          linkedRequirements: 0,
+          unlinkedRequirements: 0,
+        },
+      } as unknown as LineageGraphDto,
+    });
+  }
+
+  async getLineageTimelineResult(
+    projectId: string,
+    params?: {
+      aggregateType?: string;
+      since?: string;
+      until?: string;
+      userId?: string;
+      page?: number;
+      size?: number;
+    }
+  ): Promise<Result<PageResponse<LineageEventDto>>> {
+    const queryParams = new URLSearchParams();
+    if (params?.aggregateType) queryParams.append('aggregateType', params.aggregateType);
+    if (params?.since) queryParams.append('since', params.since);
+    if (params?.until) queryParams.append('until', params.until);
+    if (params?.userId) queryParams.append('userId', params.userId);
+    if (params?.page !== undefined) queryParams.append('page', params.page.toString());
+    if (params?.size !== undefined) queryParams.append('size', params.size.toString());
+
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+
+    return this.fetchResult<PageResponse<LineageEventDto>>(
+      `${V2}/projects/${projectId}/lineage/timeline${query}`,
+      undefined,
+      {
+        fallbackData: {
+          content: [],
+          totalElements: 0,
+          totalPages: 0,
+          number: 0,
+          size: 20,
+        } as unknown as PageResponse<LineageEventDto>,
+      },
+    );
+  }
+
+  async getImpactAnalysisResult(aggregateType: string, aggregateId: string): Promise<Result<ImpactAnalysisDto>> {
+    return this.fetchResult<ImpactAnalysisDto>(
+      `${V2}/lineage/impact/${aggregateType}/${aggregateId}`,
+      undefined,
+      {
+        fallbackData: {
+          sourceId: aggregateId,
+          sourceType: aggregateType,
+          sourceTitle: '',
+          impactedStories: 0,
+          impactedTasks: 0,
+          impactedSprints: 0,
+          directImpacts: [],
+          indirectImpacts: [],
+          affectedSprintNames: [],
+        } as unknown as ImpactAnalysisDto,
+      },
+    );
+  }
+
+  // DB Admin Result methods (Phase 5 - Step 8)
+
+  async getDbSyncStatusResult(): Promise<Result<any>> {
+    return this.fetchResult<any>('/admin/db/sync/status', undefined, {
+      fallbackData: { is_syncing: false, sync_type: null, current_entity: null, progress: 0, started_at: null, error: null },
+    });
+  }
+
+  async getDbSyncHistoryResult(limit: number = 10): Promise<Result<any[]>> {
+    return this.fetchResult<any[]>(`/admin/db/sync/history?limit=${limit}`, undefined, {
+      fallbackData: [],
+    });
+  }
+
+  async getDbBackupStatusResult(): Promise<Result<any>> {
+    return this.fetchResult<any>('/admin/db/backup/status', undefined, {
+      fallbackData: { is_running: false, backup_type: null, backup_name: null, progress: 0, started_at: null },
+    });
+  }
+
+  async getDbBackupsResult(limit: number = 20): Promise<Result<any[]>> {
+    return this.fetchResult<any[]>(`/admin/db/backups?limit=${limit}`, undefined, {
+      fallbackData: [],
+    });
+  }
+
+  async getDbStatsResult(): Promise<Result<any>> {
+    return this.fetchResult<any>('/admin/db/stats', undefined, {
+      fallbackData: {
+        postgres: { tables: 0, total_rows: 0, size_bytes: 0 },
+        neo4j: { nodes: 0, relationships: 0, labels: [] },
+        last_sync_at: null,
+        last_backup_at: null,
+      },
+    });
+  }
+
+  // Common (Meetings/Issues) Result methods (Phase 5 - Step 8)
+
+  async getMeetingsResult(projectId: string): Promise<Result<any[]>> {
+    return this.fetchResult<any[]>(`/projects/${projectId}/meetings`, undefined, {
+      fallbackData: [],
+    });
+  }
+
+  async getIssuesResult(projectId: string): Promise<Result<any[]>> {
+    return this.fetchResult<any[]>(`/projects/${projectId}/issues`, undefined, {
+      fallbackData: [],
+    });
+  }
+
+  // Education Result methods (Phase 5 - Step 8)
+
+  async getEducationsResult(): Promise<Result<any[]>> {
+    return this.fetchResult<any[]>(`${V2}/educations`, undefined, {
+      fallbackData: [],
+    });
+  }
+
+  async getEducationRoadmapsResult(): Promise<Result<any[]>> {
+    return this.fetchResult<any[]>('/educations/roadmaps', undefined, {
+      fallbackData: [],
+    });
+  }
+
+  async getEducationSessionsResult(educationId: string): Promise<Result<any[]>> {
+    return this.fetchResult<any[]>(`${V2}/educations/${educationId}/sessions`, undefined, {
+      fallbackData: [],
+    });
+  }
+
+  // Template Result methods (Phase 5 - Step 8)
+
+  async getTemplateSetsResult(category?: string): Promise<Result<any[]>> {
+    const params = category ? `?category=${category}` : '';
+    const fallbackData = category
+      ? DEFAULT_TEMPLATES.filter(t => t.category === category)
+      : DEFAULT_TEMPLATES;
+    return this.fetchResult<any[]>(`/templates${params}`, undefined, {
+      fallbackData,
+    });
+  }
+
+  async getTemplateSetResult(templateSetId: string): Promise<Result<any>> {
+    const defaultTemplate = getDefaultTemplateById(templateSetId);
+    return this.fetchResult<any>(`/templates/${templateSetId}`, undefined, {
+      fallbackData: defaultTemplate || null,
+    });
+  }
+
+  // WBS-Backlog Integration Result methods (Phase 5 - Step 8)
+
+  async getEpicsByPhaseResult(phaseId: string): Promise<Result<any[]>> {
+    return this.fetchResult<any[]>(`/integration/phases/${phaseId}/epics`, undefined, {
+      fallbackData: [],
+    });
+  }
+
+  async getUnlinkedEpicsResult(projectId: string): Promise<Result<any[]>> {
+    return this.fetchResult<any[]>(`/integration/projects/${projectId}/epics/unlinked`, undefined, {
+      fallbackData: [],
+    });
+  }
+
+  async getFeaturesByWbsGroupIntegrationResult(wbsGroupId: string): Promise<Result<any[]>> {
+    return this.fetchResult<any[]>(`/integration/wbs-groups/${wbsGroupId}/features`, undefined, {
+      fallbackData: [],
+    });
+  }
+
+  async getFeatureIntegrationResult(featureId: string): Promise<Result<Feature | null>> {
+    return this.fetchResult<Feature | null>(`/features/${featureId}`, undefined, {
+      fallbackData: null,
+    });
+  }
+
+  async getUnlinkedFeaturesResult(epicId: string): Promise<Result<any[]>> {
+    return this.fetchResult<any[]>(`/epics/${epicId}/features/unlinked`, undefined, {
+      fallbackData: [],
+    });
+  }
+
+  async getStoriesByWbsItemResult(wbsItemId: string): Promise<Result<any[]>> {
+    return this.fetchResult<any[]>(`/integration/wbs-items/${wbsItemId}/stories`, undefined, {
+      fallbackData: [],
+    });
+  }
+
+  async getUnlinkedStoriesResult(projectId: string): Promise<Result<any[]>> {
+    return this.fetchResult<any[]>(`/integration/projects/${projectId}/stories/unlinked`, undefined, {
+      fallbackData: [],
+    });
+  }
+
+  async getPhaseIntegrationSummaryResult(phaseId: string, projectId: string): Promise<Result<any>> {
+    return this.fetchResult<any>(`/integration/phases/${phaseId}/summary?projectId=${projectId}`, undefined, {
+      fallbackData: {
+        phaseId,
+        linkedEpicCount: 0,
+        wbsGroupCount: 0,
+        linkedFeatureCount: 0,
+        linkedStoryCount: 0,
+      },
+    });
+  }
+
+  // Remaining Dashboard Result methods (Phase 5 - Step 9)
+
+  async getPortfolioDashboardStatsResult(): Promise<Result<DashboardStats>> {
+    return this.fetchResult<DashboardStats>(`${V2}/dashboard/stats`);
+  }
+
+  async getPortfolioActivitiesResult(): Promise<Result<any[]>> {
+    return this.fetchResult<any[]>(`${V2}/dashboard/activities`);
+  }
+
+  async getProjectDashboardStatsResult(projectId: string): Promise<Result<DashboardStats>> {
+    return this.fetchResult<DashboardStats>(`${V2}/projects/${projectId}/dashboard/stats`);
+  }
+
+  async getProjectActivitiesResult(projectId: string): Promise<Result<any[]>> {
+    return this.fetchResult<any[]>(`${V2}/projects/${projectId}/dashboard/activities`);
+  }
+
+  async getWeightedProgressResult(projectId: string): Promise<Result<WeightedProgressDto>> {
+    return this.fetchResult<WeightedProgressDto>(`${V2}/projects/${projectId}/dashboard/weighted-progress`);
+  }
+
 }
 
 export const apiService = new ApiService();
