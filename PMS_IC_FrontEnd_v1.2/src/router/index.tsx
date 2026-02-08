@@ -41,6 +41,13 @@ const ReportManagement = lazy(() => import('../app/components/ReportManagement')
 const PmoConsolePage = lazy(() => import('../app/components/PmoConsolePage'));
 const PartDashboard = lazy(() => import('../app/components/PartDashboard'));
 
+// Pages missing from router (existed in old App.tsx switch)
+const SprintManagement = lazy(() => import('../app/components/SprintManagement'));
+const MyWorkPage = lazy(() => import('../app/components/MyWorkPage'));
+const DecisionRiskPage = lazy(() => import('../app/components/DecisionRiskPage'));
+const AuditEvidencePage = lazy(() => import('../app/components/AuditEvidencePage'));
+const PlaceholderPage = lazy(() => import('../app/components/PlaceholderPage'));
+
 // Wrapper component to inject userRole from store
 function withUserRole<P extends { userRole: UserRole }>(
   Component: ComponentType<P>
@@ -81,6 +88,10 @@ const AuditLogsPageWithRole = withUserRole(AuditLogsPage);
 const AnnouncementsPageWithRole = withUserRole(AnnouncementsPage);
 const PmoConsolePageWithRole = withUserRole(PmoConsolePage);
 const PartDashboardWithRole = withUserRole(PartDashboard);
+const SprintManagementWithRole = withUserRole(SprintManagement);
+const MyWorkPageWithRole = withUserRole(MyWorkPage);
+const DecisionRiskPageWithRole = withUserRole(DecisionRiskPage);
+const AuditEvidencePageWithRole = withUserRole(AuditEvidencePage);
 
 function Loading() {
   return (
@@ -219,6 +230,22 @@ export const router = createBrowserRouter([
           </SuspenseWrapper>
         ),
       },
+      {
+        path: 'sprints',
+        element: (
+          <SuspenseWrapper>
+            <SprintManagementWithRole />
+          </SuspenseWrapper>
+        ),
+      },
+      {
+        path: 'my-work',
+        element: (
+          <SuspenseWrapper>
+            <MyWorkPageWithRole />
+          </SuspenseWrapper>
+        ),
+      },
 
       // Quality Management Zone
       {
@@ -242,6 +269,14 @@ export const router = createBrowserRouter([
         element: (
           <SuspenseWrapper>
             <DeliverablesPageWithRole />
+          </SuspenseWrapper>
+        ),
+      },
+      {
+        path: 'decisions',
+        element: (
+          <SuspenseWrapper>
+            <DecisionRiskPageWithRole />
           </SuspenseWrapper>
         ),
       },
@@ -291,6 +326,24 @@ export const router = createBrowserRouter([
               <PmoConsolePageWithRole />
             </SuspenseWrapper>
           </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'health-matrix',
+        element: (
+          <ProtectedRoute requiredRoles={['pmo_head', 'pm', 'admin', 'sponsor']}>
+            <SuspenseWrapper>
+              <PlaceholderPage title="Health Matrix" description="Multi-project health scoring matrix for PMO oversight." />
+            </SuspenseWrapper>
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'audit-evidence',
+        element: (
+          <SuspenseWrapper>
+            <AuditEvidencePageWithRole />
+          </SuspenseWrapper>
         ),
       },
       {

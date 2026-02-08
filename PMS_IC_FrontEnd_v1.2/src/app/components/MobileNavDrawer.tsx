@@ -7,6 +7,8 @@ interface MobileNavDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   userRole: UserRole;
+  currentView?: string;
+  onViewChange?: (view: string) => void;
 }
 
 /**
@@ -17,6 +19,8 @@ const MobileNavDrawer = memo(function MobileNavDrawer({
   isOpen,
   onClose,
   userRole,
+  currentView,
+  onViewChange,
 }: MobileNavDrawerProps) {
   // Close on escape key
   const handleKeyDown = useCallback(
@@ -70,7 +74,7 @@ const MobileNavDrawer = memo(function MobileNavDrawer({
         </button>
 
         {/* Sidebar content */}
-        <Sidebar userRole={userRole} />
+        <Sidebar userRole={userRole} currentView={currentView} onViewChange={(view) => { onViewChange?.(view); onClose(); }} />
       </div>
     </div>
   );
