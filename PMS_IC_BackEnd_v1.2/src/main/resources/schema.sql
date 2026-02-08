@@ -799,6 +799,7 @@ CREATE TABLE IF NOT EXISTS project.requirements (
     category VARCHAR(100) DEFAULT 'FUNCTIONAL',
     priority VARCHAR(20) DEFAULT 'MEDIUM',
     status VARCHAR(50) DEFAULT 'IDENTIFIED',
+    progress INTEGER DEFAULT 0,
     progress_percentage INTEGER DEFAULT 0,
     source_text TEXT,
     page_number INTEGER,
@@ -1258,6 +1259,8 @@ CREATE TABLE IF NOT EXISTS report.reports (
     llm_confidence_score DECIMAL(3,2),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(50),
+    updated_by VARCHAR(50),
     published_at TIMESTAMP
 );
 
