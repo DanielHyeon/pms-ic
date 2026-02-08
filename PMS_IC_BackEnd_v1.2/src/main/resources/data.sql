@@ -1442,14 +1442,73 @@ UPDATE task.tasks SET part_id = 'part-002-ux' WHERE id IN ('task-002-06', 'task-
 UPDATE task.tasks SET part_id = 'part-002-mobile' WHERE id = 'task-002-08';
 
 -- ============================================
--- 33. REPORT TEMPLATES (report.report_templates)
+-- 33. REPORT TEMPLATES (report.report_templates) - UUID-based
 -- ============================================
-INSERT INTO report.report_templates (id, name, description, template_content, scope, active, created_at, updated_at)
+INSERT INTO report.report_templates (id, name, description, report_type, scope, target_roles, is_active, is_default, template_content, created_at, updated_at)
 VALUES
-    ('tpl-001', '주간 보고서', '주간 프로젝트 진행 현황 보고서 템플릿', '# 주간 보고서\n\n## 기간: {{start_date}} - {{end_date}}\n\n## 1. 이번 주 성과\n{{achievements}}\n\n## 2. 주요 지표\n{{metrics}}\n\n## 3. 이슈 및 리스크\n{{issues}}\n\n## 4. 다음 주 계획\n{{next_plans}}', 'PROJECT', true, NOW(), NOW()),
-    ('tpl-002', '스프린트 리뷰 보고서', '스프린트 완료 시 리뷰 보고서 템플릿', '# 스프린트 리뷰 보고서\n\n## 스프린트: {{sprint_name}}\n\n## 1. 완료 항목\n{{completed_items}}\n\n## 2. Velocity\n- 계획: {{planned_sp}}\n- 달성: {{completed_sp}}\n\n## 3. 데모 결과\n{{demo_feedback}}', 'SPRINT', true, NOW(), NOW()),
-    ('tpl-003', '경영진 브리핑', '경영진 대상 프로젝트 요약 보고서', '# Executive Summary\n\n## 프로젝트 상태: {{status}}\n\n## 1. 핵심 성과\n{{key_achievements}}\n\n## 2. 재무 현황\n{{financials}}\n\n## 3. 주요 리스크\n{{risks}}\n\n## 4. 의사결정 필요 사항\n{{decisions}}', 'EXECUTIVE', true, NOW(), NOW())
+    ('a1b2c3d4-0001-0001-0001-000000000001', 'Developer Weekly Report', 'Weekly progress report for individual developers', 'WEEKLY', 'PERSONAL', ARRAY['developer'], true, true, '# Weekly Report\n\n## Period: {{start_date}} - {{end_date}}\n\n## Completed Tasks\n{{completed}}\n\n## In Progress\n{{in_progress}}\n\n## Blockers\n{{blockers}}', NOW(), NOW()),
+    ('a1b2c3d4-0001-0001-0001-000000000002', 'PM Weekly Status Report', 'Comprehensive weekly status for project managers', 'WEEKLY', 'SYSTEM', ARRAY['pm','pmo_head'], true, true, '# PM Weekly Status\n\n## Executive Summary\n{{summary}}\n\n## Progress\n{{progress}}\n\n## Phase Status\n{{phases}}\n\n## Issues & Risks\n{{issues}}', NOW(), NOW()),
+    ('a1b2c3d4-0001-0001-0001-000000000003', 'Executive Monthly Briefing', 'Monthly executive summary for sponsors', 'MONTHLY', 'SYSTEM', ARRAY['sponsor','pmo_head'], true, true, '# Executive Summary\n\n## Project Status: {{status}}\n\n## Key Achievements\n{{achievements}}\n\n## KPI Trends\n{{kpis}}\n\n## Strategic Risks\n{{risks}}', NOW(), NOW())
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
+
+-- ============================================
+-- 33.1 ROLE REPORT DEFAULTS (report.role_report_defaults)
+-- ============================================
+INSERT INTO report.role_report_defaults
+(role, report_type, default_scope, default_sections, can_change_scope, can_select_sections, max_period_days)
+VALUES
+    ('sponsor', 'WEEKLY', 'PROJECT', ARRAY['executive_summary','kpi_overview','risks_issues','budget_status'], true, true, 30),
+    ('pmo_head', 'WEEKLY', 'PROJECT', ARRAY['executive_summary','progress_overview','team_performance','risks_issues','resource_status'], true, true, 30),
+    ('pm', 'WEEKLY', 'PROJECT', ARRAY['executive_summary','progress_overview','phase_status','team_performance','issues_risks','next_week_plan'], true, true, 14),
+    ('developer', 'WEEKLY', 'INDIVIDUAL', ARRAY['my_summary','completed_tasks','in_progress','blockers','next_week_plan'], false, true, 7),
+    ('qa', 'WEEKLY', 'INDIVIDUAL', ARRAY['my_summary','test_status','bugs_found','bugs_verified','next_week_plan'], false, true, 7),
+    ('business_analyst', 'WEEKLY', 'PROJECT', ARRAY['requirement_summary','story_mapping_status','changes','next_week_plan'], false, true, 7),
+    ('auditor', 'WEEKLY', 'PROJECT', ARRAY['compliance_summary','deliverables_status','audit_findings'], false, false, 30)
+ON CONFLICT (role, report_type) DO NOTHING;
+
+-- ============================================
+-- 33.2 REPORTS (report.reports) - Seed data
+-- ============================================
+INSERT INTO report.reports (id, project_id, report_type, report_scope, title, period_start, period_end, created_by, creator_role, generation_mode, status, content, metrics_snapshot, created_at, updated_at)
+VALUES
+    -- Project 1 reports
+    ('b1000001-0001-0001-0001-000000000001', 'proj-001', 'WEEKLY', 'PROJECT', 'Week 5 Status Report',
+     '2026-01-27', '2026-02-02', 'user-pm-001', 'PM', 'AUTO', 'PUBLISHED',
+     '{"summary":"Sprint 2 completed successfully with 85% velocity target achieved.","highlights":["OCR module integration complete","API gateway deployed to staging","13 of 15 story points delivered"],"issues":["Database migration delayed by 1 day","QA environment intermittent failures"],"nextWeek":["Start Sprint 3 planning","Complete fraud detection algorithm review"]}',
+     '{"totalTasks":45,"completedTasks":32,"inProgressTasks":8,"blockedTasks":2,"completionRate":71.1,"velocity":13,"storyPointsCompleted":13,"storyPointsPlanned":15,"bugCount":4,"bugResolved":3,"testCoverage":78.5}',
+     '2026-02-02 17:00:00', '2026-02-02 17:00:00'),
+
+    ('b1000001-0001-0001-0001-000000000002', 'proj-001', 'WEEKLY', 'PROJECT', 'Week 4 Status Report',
+     '2026-01-20', '2026-01-26', 'user-pm-001', 'PM', 'AUTO', 'PUBLISHED',
+     '{"summary":"Sprint 1 wrap-up and Sprint 2 kickoff. Infrastructure setup 90% complete.","highlights":["CI/CD pipeline operational","Database schema v2 deployed","Team onboarding completed"],"issues":["Vendor API documentation incomplete","Resource allocation for QA delayed"],"nextWeek":["Begin OCR module development","API gateway design review"]}',
+     '{"totalTasks":40,"completedTasks":28,"inProgressTasks":7,"blockedTasks":1,"completionRate":70.0,"velocity":11,"storyPointsCompleted":11,"storyPointsPlanned":13,"bugCount":2,"bugResolved":2,"testCoverage":72.0}',
+     '2026-01-26 17:00:00', '2026-01-26 17:00:00'),
+
+    ('b1000001-0001-0001-0001-000000000003', 'proj-001', 'WEEKLY', 'INDIVIDUAL', 'Developer Weekly - Park Minsu',
+     '2026-01-27', '2026-02-02', 'user-dev-001', 'DEVELOPER', 'MANUAL', 'PUBLISHED',
+     '{"summary":"Focused on API gateway implementation and code review.","completed":["REST API endpoints for document upload","JWT auth middleware","Unit tests for auth module"],"inProgress":["WebSocket integration for real-time notifications"],"blockers":["Waiting for SSL certificate for staging"]}',
+     null,
+     '2026-02-02 16:30:00', '2026-02-02 16:30:00'),
+
+    ('b1000001-0001-0001-0001-000000000004', 'proj-001', 'MONTHLY', 'PROJECT', 'January 2026 Monthly Report',
+     '2026-01-01', '2026-01-31', 'user-pm-001', 'PM', 'AUTO', 'PUBLISHED',
+     '{"summary":"Project kickoff month completed on schedule. Infrastructure setup and team formation achieved.","kpiTrends":{"schedule":"ON_TRACK","budget":"UNDER_BUDGET","quality":"GOOD"},"milestones":[{"name":"Project Charter Approved","status":"DONE"},{"name":"Infrastructure Setup","status":"DONE"},{"name":"Sprint 1 Complete","status":"DONE"}],"budgetAnalysis":{"planned":50000000,"actual":42000000,"variance":8000000}}',
+     '{"totalTasks":40,"completedTasks":28,"completionRate":70.0,"velocity":11,"bugCount":2,"testCoverage":72.0}',
+     '2026-02-01 10:00:00', '2026-02-01 10:00:00'),
+
+    ('b1000001-0001-0001-0001-000000000005', 'proj-001', 'WEEKLY', 'PROJECT', 'Week 6 Status Report',
+     '2026-02-03', '2026-02-09', 'user-pm-001', 'PM', 'AUTO', 'DRAFT',
+     '{"summary":"Sprint 3 in progress. Focus on fraud detection and API integration.","highlights":["Fraud detection model training started","API documentation 60% complete"],"issues":["Performance bottleneck in OCR pipeline","Need additional GPU resources"],"nextWeek":["Complete fraud detection v1","API load testing"]}',
+     '{"totalTasks":50,"completedTasks":35,"inProgressTasks":10,"blockedTasks":3,"completionRate":70.0,"velocity":14,"storyPointsCompleted":7,"storyPointsPlanned":15,"bugCount":5,"bugResolved":3,"testCoverage":80.2}',
+     '2026-02-09 12:00:00', '2026-02-09 12:00:00'),
+
+    -- Project 2 reports
+    ('b1000001-0001-0001-0002-000000000001', 'proj-002', 'WEEKLY', 'PROJECT', 'Week 5 Status Report',
+     '2026-01-27', '2026-02-02', 'user-pm-002', 'PM', 'MANUAL', 'PUBLISHED',
+     '{"summary":"Mobile app authentication module development in progress. UI/UX design review completed.","highlights":["Biometric auth prototype ready","UI component library established"],"issues":["iOS build pipeline failing","Third-party SDK version conflict"],"nextWeek":["Fix iOS build issues","Start payment integration"]}',
+     '{"totalTasks":30,"completedTasks":18,"inProgressTasks":8,"blockedTasks":2,"completionRate":60.0,"velocity":8,"bugCount":3,"bugResolved":1,"testCoverage":55.0}',
+     '2026-02-02 17:00:00', '2026-02-02 17:00:00')
+ON CONFLICT (id) DO NOTHING;
 
 -- ============================================
 -- 34. SPRINTS data consolidated in section 5.1

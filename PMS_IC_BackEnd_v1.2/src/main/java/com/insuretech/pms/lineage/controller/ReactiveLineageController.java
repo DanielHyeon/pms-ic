@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.insuretech.pms.chat.dto.sse.*;
 import com.insuretech.pms.common.dto.ApiResponse;
 import com.insuretech.pms.lineage.dto.LineageEventDto;
+import com.insuretech.pms.lineage.dto.LineageGraphDto;
 import com.insuretech.pms.lineage.service.ReactiveLineageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +28,13 @@ public class ReactiveLineageController {
     private final ReactiveLineageService lineageService;
     private final SseEventBuilder sseBuilder;
     private final ObjectMapper objectMapper;
+
+    @GetMapping("/graph")
+    public Mono<ResponseEntity<ApiResponse<LineageGraphDto>>> getLineageGraph(
+            @PathVariable String projectId) {
+        return lineageService.buildLineageGraph(projectId)
+                .map(graph -> ResponseEntity.ok(ApiResponse.success(graph)));
+    }
 
     @GetMapping("/events")
     public Mono<ResponseEntity<ApiResponse<List<LineageEventDto>>>> getEventsByProject(

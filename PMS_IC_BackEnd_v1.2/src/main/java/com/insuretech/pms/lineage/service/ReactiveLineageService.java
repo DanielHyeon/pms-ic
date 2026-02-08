@@ -2,20 +2,26 @@ package com.insuretech.pms.lineage.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.insuretech.pms.lineage.dto.LineageEventDto;
+import com.insuretech.pms.lineage.dto.*;
+import com.insuretech.pms.lineage.dto.LineageEdgeDto.LineageRelationship;
+import com.insuretech.pms.lineage.dto.LineageNodeDto.LineageNodeType;
 import com.insuretech.pms.lineage.enums.LineageEventType;
 import com.insuretech.pms.lineage.reactive.entity.R2dbcOutboxEvent;
 import com.insuretech.pms.lineage.reactive.repository.ReactiveOutboxEventRepository;
+import com.insuretech.pms.rfp.reactive.repository.ReactiveRequirementRepository;
+import com.insuretech.pms.task.reactive.repository.ReactiveUserStoryRepository;
+import com.insuretech.pms.task.reactive.repository.ReactiveTaskRepository;
+import com.insuretech.pms.task.reactive.repository.ReactiveSprintRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
 import java.time.LocalDateTime;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
@@ -24,6 +30,11 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ReactiveLineageService {
 
     private final ReactiveOutboxEventRepository outboxRepository;
+    private final ReactiveRequirementRepository requirementRepository;
+    private final ReactiveUserStoryRepository userStoryRepository;
+    private final ReactiveTaskRepository taskRepository;
+    private final ReactiveSprintRepository sprintRepository;
+    private final DatabaseClient databaseClient;
     private final ObjectMapper objectMapper;
 
     private final Map<String, Sinks.Many<LineageEventDto>> projectEventSinks = new ConcurrentHashMap<>();
@@ -113,6 +124,187 @@ public class ReactiveLineageService {
     public Flux<LineageEventDto> getEventsByProject(String projectId) {
         return outboxRepository.findByProjectId(projectId)
                 .map(this::toDto);
+    }
+
+    /**
+     * Build lineage graph from requirements, stories, tasks, sprints, and their trace links.
+     */
+    public Mono<LineageGraphDto> buildLineageGraph(String projectId) {
+        // Collect all nodes in parallel
+        Mono<List<LineageNodeDto>> requirementNodes = requirementRepository
+                .findByProjectIdOrderByCodeAsc(projectId)
+                .map(req -> LineageNodeDto.builder()
+                        .id(req.getId())
+                        .type(LineageNodeType.REQUIREMENT)
+                        .code(req.getCode())
+                        .title(req.getTitle())
+                        .status(req.getStatus())
+                        .metadata(Map.of("priority", req.getPriority() != null ? req.getPriority() : "MEDIUM",
+                                         "category", req.getCategory() != null ? req.getCategory() : ""))
+                        .build())
+                .collectList();
+
+        Mono<List<LineageNodeDto>> storyNodes = userStoryRepository
+                .findByProjectId(projectId)
+                .map(story -> LineageNodeDto.builder()
+                        .id(story.getId())
+                        .type(LineageNodeType.USER_STORY)
+                        .code(story.getId())
+                        .title(story.getTitle())
+                        .status(story.getStatus())
+                        .metadata(Map.of("storyPoints", story.getStoryPoints() != null ? story.getStoryPoints() : 0))
+                        .build())
+                .collectList();
+
+        Mono<List<LineageNodeDto>> taskNodes = taskRepository
+                .findByProjectIdOrderByOrderNumAsc(projectId)
+                .map(task -> LineageNodeDto.builder()
+                        .id(task.getId())
+                        .type(LineageNodeType.TASK)
+                        .code(task.getId())
+                        .title(task.getTitle())
+                        .status(task.getStatus())
+                        .build())
+                .collectList();
+
+        Mono<List<LineageNodeDto>> sprintNodes = sprintRepository
+                .findByProjectIdOrderByStartDateDesc(projectId)
+                .map(sprint -> LineageNodeDto.builder()
+                        .id(sprint.getId())
+                        .type(LineageNodeType.SPRINT)
+                        .code(sprint.getName())
+                        .title(sprint.getName())
+                        .status(sprint.getStatus())
+                        .build())
+                .collectList();
+
+        // Collect edges from trace links
+        Mono<List<LineageEdgeDto>> traceEdges = databaseClient
+                .sql("SELECT id, requirement_id, linked_entity_type, linked_entity_id, link_type, created_at " +
+                     "FROM project.requirement_trace_links WHERE requirement_id IN " +
+                     "(SELECT id FROM project.requirements WHERE project_id = :projectId)")
+                .bind("projectId", projectId)
+                .map((row, meta) -> LineageEdgeDto.builder()
+                        .id(row.get("id", String.class))
+                        .source(row.get("requirement_id", String.class))
+                        .target(row.get("linked_entity_id", String.class))
+                        .relationship(mapLinkType(row.get("link_type", String.class),
+                                                  row.get("linked_entity_type", String.class)))
+                        .createdAt(row.get("created_at", LocalDateTime.class))
+                        .build())
+                .all()
+                .collectList();
+
+        // Collect edges from requirement-story mappings
+        Mono<List<LineageEdgeDto>> storyMappingEdges = databaseClient
+                .sql("SELECT id::text as id, requirement_id, story_id, mapped_at " +
+                     "FROM project.requirement_story_mapping WHERE requirement_id IN " +
+                     "(SELECT id FROM project.requirements WHERE project_id = :projectId)")
+                .bind("projectId", projectId)
+                .map((row, meta) -> LineageEdgeDto.builder()
+                        .id(row.get("id", String.class))
+                        .source(row.get("requirement_id", String.class))
+                        .target(row.get("story_id", String.class))
+                        .relationship(LineageRelationship.DERIVES)
+                        .createdAt(row.get("mapped_at", LocalDateTime.class))
+                        .build())
+                .all()
+                .collectList();
+
+        // Collect edges from task->story relationships
+        Mono<List<LineageEdgeDto>> taskStoryEdges = databaseClient
+                .sql("SELECT id, user_story_id, title FROM task.tasks " +
+                     "WHERE project_id = :projectId AND user_story_id IS NOT NULL")
+                .bind("projectId", projectId)
+                .map((row, meta) -> LineageEdgeDto.builder()
+                        .id("ts-" + row.get("id", String.class))
+                        .source(row.get("user_story_id", String.class))
+                        .target(row.get("id", String.class))
+                        .relationship(LineageRelationship.BREAKS_DOWN_TO)
+                        .build())
+                .all()
+                .collectList();
+
+        // Collect edges from task->sprint relationships
+        Mono<List<LineageEdgeDto>> taskSprintEdges = databaseClient
+                .sql("SELECT id, sprint_id FROM task.tasks " +
+                     "WHERE project_id = :projectId AND sprint_id IS NOT NULL")
+                .bind("projectId", projectId)
+                .map((row, meta) -> LineageEdgeDto.builder()
+                        .id("tsp-" + row.get("id", String.class))
+                        .source(row.get("id", String.class))
+                        .target(row.get("sprint_id", String.class))
+                        .relationship(LineageRelationship.BELONGS_TO_SPRINT)
+                        .build())
+                .all()
+                .collectList();
+
+        // Combine all data into the graph
+        return Mono.zip(requirementNodes, storyNodes, taskNodes, sprintNodes,
+                        traceEdges, storyMappingEdges, taskStoryEdges, taskSprintEdges)
+                .map(tuple -> {
+                    List<LineageNodeDto> allNodes = new ArrayList<>();
+                    allNodes.addAll(tuple.getT1()); // requirements
+                    allNodes.addAll(tuple.getT2()); // stories
+                    allNodes.addAll(tuple.getT3()); // tasks
+                    allNodes.addAll(tuple.getT4()); // sprints
+
+                    List<LineageEdgeDto> allEdges = new ArrayList<>();
+                    allEdges.addAll(tuple.getT5()); // trace links
+                    allEdges.addAll(tuple.getT6()); // story mappings
+                    allEdges.addAll(tuple.getT7()); // task-story
+                    allEdges.addAll(tuple.getT8()); // task-sprint
+
+                    // Compute statistics
+                    int reqCount = tuple.getT1().size();
+                    int storyCount = tuple.getT2().size();
+                    int taskCount = tuple.getT3().size();
+                    int sprintCount = tuple.getT4().size();
+
+                    // Count linked requirements (those that appear as source in any edge)
+                    Set<String> linkedReqIds = new HashSet<>();
+                    for (LineageEdgeDto edge : allEdges) {
+                        if (tuple.getT1().stream().anyMatch(n -> n.getId().equals(edge.getSource()))) {
+                            linkedReqIds.add(edge.getSource());
+                        }
+                    }
+                    int linkedReqs = linkedReqIds.size();
+                    int unlinkedReqs = reqCount - linkedReqs;
+                    double coverage = reqCount > 0 ? (linkedReqs * 100.0 / reqCount) : 0.0;
+
+                    LineageGraphDto.LineageStatisticsDto stats = LineageGraphDto.LineageStatisticsDto.builder()
+                            .requirements(reqCount)
+                            .stories(storyCount)
+                            .tasks(taskCount)
+                            .sprints(sprintCount)
+                            .coverage(Math.round(coverage * 100.0) / 100.0)
+                            .linkedRequirements(linkedReqs)
+                            .unlinkedRequirements(unlinkedReqs)
+                            .build();
+
+                    return LineageGraphDto.builder()
+                            .nodes(allNodes)
+                            .edges(allEdges)
+                            .statistics(stats)
+                            .build();
+                })
+                .doOnSuccess(graph -> log.info("Built lineage graph for project {}: {} nodes, {} edges",
+                        projectId, graph.getNodes().size(), graph.getEdges().size()));
+    }
+
+    private LineageRelationship mapLinkType(String linkType, String entityType) {
+        if ("TRACED_TO".equals(linkType) || "DERIVES".equals(linkType)) {
+            return LineageRelationship.DERIVES;
+        }
+        if ("IMPLEMENTS".equals(linkType) || "IMPLEMENTED_BY".equals(linkType)) {
+            if ("USER_STORY".equals(entityType)) return LineageRelationship.DERIVES;
+            if ("TASK".equals(entityType)) return LineageRelationship.IMPLEMENTED_BY;
+            return LineageRelationship.IMPLEMENTED_BY;
+        }
+        if ("VERIFIED_BY".equals(linkType)) {
+            return LineageRelationship.IMPLEMENTED_BY;
+        }
+        return LineageRelationship.DERIVES;
     }
 
     private Sinks.Many<LineageEventDto> getOrCreateSink(String projectId) {

@@ -150,6 +150,10 @@ resilience4j:
       gguf-worker:
         timeoutDuration: 120s
 
+# Application Feature Flags
+app:
+  use-mock-data: ${APP_USE_MOCK_DATA:false}
+
 # File storage
 pms:
   storage:

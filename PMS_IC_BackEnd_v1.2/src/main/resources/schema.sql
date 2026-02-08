@@ -1202,31 +1202,101 @@ CREATE TABLE IF NOT EXISTS chat.chat_messages (
 -- ============================================
 
 CREATE TABLE IF NOT EXISTS report.report_templates (
-    id VARCHAR(36) PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255) NOT NULL,
     description TEXT,
+    report_type VARCHAR(30),
+    scope VARCHAR(50) DEFAULT 'SYSTEM',
+    target_roles TEXT[],
+    target_report_scopes TEXT[],
+    structure JSONB,
+    styling JSONB,
+    is_active BOOLEAN DEFAULT TRUE,
+    is_default BOOLEAN DEFAULT FALSE,
+    version INTEGER DEFAULT 1,
     template_content TEXT,
-    scope VARCHAR(50) DEFAULT 'PROJECT',
-    active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by VARCHAR(36),
     updated_by VARCHAR(36)
 );
 
-CREATE TABLE IF NOT EXISTS report.reports (
-    id VARCHAR(36) PRIMARY KEY,
-    project_id VARCHAR(36),
-    template_id VARCHAR(36) REFERENCES report.report_templates(id),
-    title VARCHAR(255) NOT NULL,
-    content TEXT,
-    report_type VARCHAR(50),
-    status VARCHAR(50) DEFAULT 'DRAFT',
-    generated_at TIMESTAMP,
+CREATE TABLE IF NOT EXISTS report.template_sections (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    template_id UUID NOT NULL REFERENCES report.report_templates(id) ON DELETE CASCADE,
+    section_key VARCHAR(100) NOT NULL,
+    section_title VARCHAR(255) NOT NULL,
+    section_type VARCHAR(50) NOT NULL DEFAULT 'DATA_TABLE',
+    description TEXT,
+    config JSONB,
+    display_order INTEGER NOT NULL DEFAULT 0,
+    is_required BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP,
-    created_by VARCHAR(36),
-    updated_by VARCHAR(36)
+    UNIQUE(template_id, section_key)
+);
+
+CREATE TABLE IF NOT EXISTS report.reports (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id VARCHAR(50) NOT NULL,
+    report_type VARCHAR(30) NOT NULL,
+    report_scope VARCHAR(30) NOT NULL,
+    title VARCHAR(500),
+    period_start DATE NOT NULL,
+    period_end DATE NOT NULL,
+    scope_phase_id VARCHAR(50),
+    scope_team_id VARCHAR(50),
+    scope_user_id VARCHAR(50),
+    created_by VARCHAR(50),
+    creator_role VARCHAR(30) NOT NULL,
+    generation_mode VARCHAR(20) NOT NULL,
+    template_id UUID,
+    status VARCHAR(20) DEFAULT 'DRAFT',
+    content JSONB NOT NULL DEFAULT '{}',
+    metrics_snapshot JSONB,
+    llm_generated_sections TEXT[],
+    llm_model VARCHAR(100),
+    llm_confidence_score DECIMAL(3,2),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    published_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS report.report_comments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    report_id UUID NOT NULL REFERENCES report.reports(id) ON DELETE CASCADE,
+    user_id VARCHAR(50) NOT NULL,
+    content TEXT NOT NULL,
+    parent_comment_id UUID REFERENCES report.report_comments(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS report.report_shares (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    report_id UUID NOT NULL REFERENCES report.reports(id) ON DELETE CASCADE,
+    shared_with_user_id VARCHAR(50),
+    shared_with_team_id VARCHAR(50),
+    shared_with_role VARCHAR(30),
+    permission VARCHAR(20) DEFAULT 'VIEW',
+    shared_by VARCHAR(50) NOT NULL,
+    shared_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP,
+    CONSTRAINT chk_share_target CHECK (
+        (shared_with_user_id IS NOT NULL AND shared_with_team_id IS NULL AND shared_with_role IS NULL) OR
+        (shared_with_user_id IS NULL AND shared_with_team_id IS NOT NULL AND shared_with_role IS NULL) OR
+        (shared_with_user_id IS NULL AND shared_with_team_id IS NULL AND shared_with_role IS NOT NULL)
+    )
+);
+
+CREATE TABLE IF NOT EXISTS report.user_template_preferences (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id VARCHAR(50) NOT NULL,
+    report_type VARCHAR(30) NOT NULL,
+    preferred_template_id UUID REFERENCES report.report_templates(id),
+    section_overrides JSONB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, report_type)
 );
 
 CREATE TABLE IF NOT EXISTS report.report_data_snapshots (
@@ -1774,6 +1844,12 @@ CREATE INDEX IF NOT EXISTS idx_reports_project ON report.reports(project_id);
 CREATE INDEX IF NOT EXISTS idx_reports_status ON report.reports(status);
 CREATE INDEX IF NOT EXISTS idx_reports_creator ON report.reports(created_by);
 CREATE INDEX IF NOT EXISTS idx_reports_created_at ON report.reports(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_reports_period ON report.reports(period_start, period_end);
+CREATE INDEX IF NOT EXISTS idx_reports_type_scope ON report.reports(report_type, report_scope);
+CREATE INDEX IF NOT EXISTS idx_report_comments_report ON report.report_comments(report_id);
+CREATE INDEX IF NOT EXISTS idx_report_comments_user ON report.report_comments(user_id);
+CREATE INDEX IF NOT EXISTS idx_report_shares_report ON report.report_shares(report_id);
+CREATE INDEX IF NOT EXISTS idx_report_shares_user ON report.report_shares(shared_with_user_id);
 CREATE INDEX IF NOT EXISTS idx_templates_scope ON report.report_templates(scope);
 CREATE INDEX IF NOT EXISTS idx_templates_creator ON report.report_templates(created_by);
 CREATE INDEX IF NOT EXISTS idx_snapshots_project_date ON report.report_data_snapshots(project_id, snapshot_date);
@@ -1788,6 +1864,7 @@ CREATE INDEX IF NOT EXISTS idx_sql_logs_date ON report.text_to_sql_logs(created_
 -- Lineage indexes
 CREATE INDEX IF NOT EXISTS idx_outbox_events_status ON lineage.outbox_events(status);
 CREATE INDEX IF NOT EXISTS idx_outbox_events_aggregate ON lineage.outbox_events(aggregate_type, aggregate_id);
+CREATE INDEX IF NOT EXISTS idx_outbox_events_project ON lineage.outbox_events(project_id);
 
 -- Project Health Scores indexes
 CREATE INDEX IF NOT EXISTS idx_health_scores_project ON project.project_health_scores(project_id);

@@ -55,6 +55,7 @@ public class ReactiveSecurityConfig {
                                 "/api/auth/refresh",
                                 "/api/v2/auth/login",
                                 "/api/v2/auth/refresh",
+                                "/api/config",
                                 "/api/chat/**",
                                 "/api/v2/chat/**",
                                 "/api/llm/**",

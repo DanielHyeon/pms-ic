@@ -1,5 +1,6 @@
 import type { Result, ApiError, ResultMeta, ResultWarning } from '../types/result';
 import { ok, fail } from '../types/result';
+import { loadAppConfig, isUseMockData } from '../stores/configStore';
 import type { PoBacklogViewDto, PmWorkboardViewDto, PmoPortfolioViewDto } from '../types/views';
 import type { DataQualityResponse } from '../hooks/api/useDataQuality';
 import type { WeightedProgressDto } from '../hooks/api/useDashboard';
@@ -107,32 +108,12 @@ export class ApiService {
 
   constructor() {
     this.token = localStorage.getItem('auth_token');
-    // 헬스 체크를 비동기로 실행하여 앱 시작을 막지 않음
-    this.checkBackendAvailability().catch(() => {
-      // 헬스 체크 실패는 조용히 처리 (실제 API 호출 시 다시 시도)
-    });
-  }
-
-  private async checkBackendAvailability() {
-    try {
-      const healthUrl = API_BASE_URL.replace('/api/v2', '').replace('/api', '') + '/actuator/health';
-      const response = await fetch(healthUrl, {
-        method: 'GET',
-        signal: AbortSignal.timeout(5000), // 타임아웃을 5초로 증가
-      });
-      this.useMockData = !response.ok;
-      if (response.ok) {
-        console.log('Backend connected successfully');
-      } else {
-        console.warn('Backend health check failed, will retry on actual API calls');
-        this.useMockData = true;
-      }
-    } catch (error) {
-      // 헬스 체크 실패는 정상적인 상황일 수 있음 (백엔드가 아직 시작 중일 수 있음)
-      // 실제 API 호출 시 다시 시도하므로 여기서는 조용히 처리
-      console.debug('Backend health check not available, will retry on API calls:', error);
+    // Fetch app config from backend to determine mock vs real mode
+    loadAppConfig().then(cfg => {
+      this.useMockData = cfg.useMockData;
+    }).catch(() => {
       this.useMockData = true;
-    }
+    });
   }
 
   setToken(token: string) {
@@ -151,7 +132,10 @@ export class ApiService {
     mockData: T,
     timeoutMs: number = 10000
   ): Promise<T> {
-    // Always try real API first, even if health check failed
+    // Short-circuit: if server config says use mock data, return immediately
+    if (isUseMockData()) {
+      return mockData;
+    }
     try {
       const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
       const headers: HeadersInit = {
@@ -263,6 +247,11 @@ export class ApiService {
       durationMs: Math.round(performance.now() - startMs),
       usedFallback: source === 'fallback',
     });
+
+    // Short-circuit: if server config says use mock data, return fallback immediately
+    if (isUseMockData() && config?.fallbackData !== undefined && config.fallbackData !== null) {
+      return ok(config.fallbackData, makeMeta('fallback'));
+    }
 
     const makeError = (
       code: ApiError['code'],
