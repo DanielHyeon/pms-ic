@@ -34,6 +34,13 @@ import {
 import { SprintPanel, EpicTreeView, EpicFormModal, FeatureFormModal, WbsConnectionPanel } from './backlog';
 import { UserStory as BacklogStory, Epic, EpicFormData, Feature, FeatureFormData } from '../../types/backlog';
 import { useProject } from '../../contexts/ProjectContext';
+import { usePreset } from '../../hooks/usePreset';
+import { useFilterSpec } from '../../hooks/useFilterSpec';
+import { PresetSwitcher } from './common/PresetSwitcher';
+import { BacklogKpiRow } from './backlog/BacklogKpiRow';
+import { BacklogFilters, BACKLOG_FILTER_KEYS } from './backlog/BacklogFilters';
+import { BacklogContextPanel } from './backlog/BacklogContextPanel';
+import type { ViewModePreset } from '../../types/menuOntology';
 
 interface BacklogManagementProps {
   userRole: UserRole;
@@ -58,6 +65,17 @@ export default function BacklogManagement({ userRole }: BacklogManagementProps) 
   const updateFeatureMutation = useUpdateFeature();
 
   const epicById = useMemo(() => new Map(epicList.map((e) => [e.id, e])), [epicList]);
+
+  // v2.0: Preset management
+  const { currentPreset, switchPreset } = usePreset(userRole.toUpperCase());
+
+  // v2.0: FilterSpec-based filtering
+  const { filters, setFilters } = useFilterSpec({ keys: BACKLOG_FILTER_KEYS, syncUrl: false });
+
+  // v2.0: Right context panel state
+  const [showContextPanel, setShowContextPanel] = useState(false);
+  const [selectedEpicForPanel, setSelectedEpicForPanel] = useState<Epic | null>(null);
+  const [selectedStoryForPanel, setSelectedStoryForPanel] = useState<UserStory | null>(null);
 
   const [expandedStory, setExpandedStory] = useState<string | null>(null);
   const [selectedPartFilter, setSelectedPartFilter] = useState<string>('');
@@ -180,6 +198,13 @@ export default function BacklogManagement({ userRole }: BacklogManagementProps) 
     );
   };
 
+  // v2.0: Open context panel for an epic
+  const handleEpicSelectForPanel = (epic: Epic) => {
+    setSelectedEpicForPanel(epic);
+    setSelectedStoryForPanel(null);
+    setShowContextPanel(true);
+  };
+
   // Handlers for Epic Tree View
   const handleStorySelect = (story: BacklogStory) => {
     // Convert BacklogStory to UserStory for edit modal
@@ -194,6 +219,10 @@ export default function BacklogManagement({ userRole }: BacklogManagementProps) 
       partId: story.partId,
       acceptanceCriteria: story.acceptanceCriteria || [],
     };
+    // v2.0: Also update context panel with selected story
+    setSelectedStoryForPanel(userStory);
+    setSelectedEpicForPanel(null);
+    setShowContextPanel(true);
     openEditModal(userStory);
   };
 
@@ -316,7 +345,14 @@ export default function BacklogManagement({ userRole }: BacklogManagementProps) 
             <h2 className="text-2xl font-semibold text-gray-900">백로그 관리</h2>
             <p className="text-sm text-gray-500 mt-1">Epic → Feature → User Story 계층 구조 관리</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-3 items-center">
+            {/* Preset Switcher (v2.0) */}
+            <PresetSwitcher
+              currentPreset={currentPreset}
+              onSwitch={switchPreset}
+              compact
+            />
+            <div className="w-px h-6 bg-gray-300" />
             {/* Part Filter */}
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1 text-gray-500">
@@ -400,6 +436,16 @@ export default function BacklogManagement({ userRole }: BacklogManagementProps) 
             )}
           </div>
         </div>
+      </div>
+
+      {/* KPI Cards (v2.0) */}
+      <div className="mb-4">
+        <BacklogKpiRow epics={epicList} stories={stories} preset={currentPreset} />
+      </div>
+
+      {/* Filter Bar (v2.0) */}
+      <div className="mb-4">
+        <BacklogFilters values={filters} onChange={setFilters} preset={currentPreset} />
       </div>
 
       {/* Sprint Panel */}
@@ -927,7 +973,9 @@ export default function BacklogManagement({ userRole }: BacklogManagementProps) 
         isLoading={createFeatureMutation.isPending || updateFeatureMutation.isPending}
       />
 
-      {/* Main Content - Tree View or List View */}
+      {/* Main Content - Tree View or List View + Context Panel (v2.0) */}
+      <div className="flex gap-0">
+        <div className={showContextPanel ? 'flex-1 min-w-0' : 'w-full'}>
       {viewMode === 'tree' ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Epic Tree View (2 columns) */}
@@ -1138,6 +1186,20 @@ export default function BacklogManagement({ userRole }: BacklogManagementProps) 
           </div>
         </div>
       )}
+        </div>
+        {/* Context Panel (v2.0) */}
+        {showContextPanel && (selectedEpicForPanel || selectedStoryForPanel) && (
+          <BacklogContextPanel
+            selectedEpic={selectedEpicForPanel || undefined}
+            selectedStory={selectedStoryForPanel}
+            onClose={() => {
+              setShowContextPanel(false);
+              setSelectedEpicForPanel(null);
+              setSelectedStoryForPanel(null);
+            }}
+          />
+        )}
+      </div>
 
       {/* WBS Connection Panel */}
       <WbsConnectionPanel

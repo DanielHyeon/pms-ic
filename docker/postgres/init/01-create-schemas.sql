@@ -33,6 +33,9 @@ CREATE SCHEMA IF NOT EXISTS education;
 -- Lineage schema (data lineage tracking, outbox events)
 CREATE SCHEMA IF NOT EXISTS lineage;
 
+-- Audit schema (audit trails, evidence, compliance)
+CREATE SCHEMA IF NOT EXISTS audit;
+
 -- ============================================
 -- Grant Privileges
 -- ============================================
@@ -45,6 +48,7 @@ GRANT ALL PRIVILEGES ON SCHEMA report TO pms_user;
 GRANT ALL PRIVILEGES ON SCHEMA rfp TO pms_user;
 GRANT ALL PRIVILEGES ON SCHEMA education TO pms_user;
 GRANT ALL PRIVILEGES ON SCHEMA lineage TO pms_user;
+GRANT ALL PRIVILEGES ON SCHEMA audit TO pms_user;
 
 -- ============================================
 -- Extensions

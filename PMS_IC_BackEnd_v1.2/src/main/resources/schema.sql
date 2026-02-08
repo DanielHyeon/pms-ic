@@ -77,6 +77,10 @@ CREATE TABLE IF NOT EXISTS project.projects (
     si_weight DECIMAL(5, 2) DEFAULT 0.30,
     progress INTEGER DEFAULT 0,
     is_default BOOLEAN DEFAULT FALSE,
+    health_score_current DECIMAL(5,2),
+    health_grade VARCHAR(5),
+    budget_burn_rate DECIMAL(5,2),
+    portfolio_status VARCHAR(50) DEFAULT 'ACTIVE',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP,
     created_by VARCHAR(36),
@@ -129,6 +133,8 @@ CREATE TABLE IF NOT EXISTS project.phases (
     progress INTEGER DEFAULT 0,
     description TEXT,
     track_type VARCHAR(20) DEFAULT 'COMMON',
+    evidence_required BOOLEAN DEFAULT FALSE,
+    compliance_status VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP,
     created_by VARCHAR(36),
@@ -362,6 +368,14 @@ CREATE TABLE IF NOT EXISTS project.issues (
     due_date DATE,
     resolved_at TIMESTAMP,
     comments TEXT,
+    escalation_level INTEGER DEFAULT 0,
+    escalation_chain_id VARCHAR(36),
+    sla_due_at TIMESTAMP,
+    sla_breached BOOLEAN DEFAULT FALSE,
+    resolution_type VARCHAR(50),
+    reopen_count INTEGER DEFAULT 0,
+    last_reopened_at TIMESTAMP,
+    linked_requirement_id VARCHAR(36),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP,
     created_by VARCHAR(36),
@@ -804,7 +818,10 @@ CREATE TABLE IF NOT EXISTS project.requirements (
     actual_effort_hours INTEGER,
     remaining_effort_hours INTEGER,
     last_progress_update TIMESTAMP,
-    progress_calc_method VARCHAR(50) DEFAULT 'STORY_POINT'
+    progress_calc_method VARCHAR(50) DEFAULT 'STORY_POINT',
+    trace_status VARCHAR(50) DEFAULT 'NOT_TRACED',
+    trace_coverage DECIMAL(5,2) DEFAULT 0,
+    ai_si_type VARCHAR(20) DEFAULT 'COMMON'
 );
 
 -- Project-scoped RFPs
@@ -823,6 +840,172 @@ CREATE TABLE IF NOT EXISTS project.rfps (
     updated_at TIMESTAMP,
     created_by VARCHAR(36),
     updated_by VARCHAR(36)
+);
+
+-- Project Health Scores (Dashboard - Screen 01)
+CREATE TABLE IF NOT EXISTS project.project_health_scores (
+    id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    project_id VARCHAR(36) NOT NULL REFERENCES project.projects(id) ON DELETE CASCADE,
+    score_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    overall_score DECIMAL(5,2) NOT NULL,
+    schedule_score DECIMAL(5,2),
+    budget_score DECIMAL(5,2),
+    quality_score DECIMAL(5,2),
+    risk_score DECIMAL(5,2),
+    resource_score DECIMAL(5,2),
+    grade VARCHAR(5),
+    trend VARCHAR(20) DEFAULT 'STABLE',
+    calculated_by VARCHAR(36),
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(project_id, score_date)
+);
+
+-- Requirement Trace Links (Screen 02 - Trace Chain)
+CREATE TABLE IF NOT EXISTS project.requirement_trace_links (
+    id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    requirement_id VARCHAR(36) NOT NULL,
+    linked_entity_type VARCHAR(50) NOT NULL,
+    linked_entity_id VARCHAR(36) NOT NULL,
+    link_type VARCHAR(50) DEFAULT 'IMPLEMENTS',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(36),
+    UNIQUE(requirement_id, linked_entity_type, linked_entity_id)
+);
+
+-- Requirement Step Events (Screen 02 - Workflow History)
+CREATE TABLE IF NOT EXISTS project.requirement_step_events (
+    id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    requirement_id VARCHAR(36) NOT NULL,
+    from_step VARCHAR(50),
+    to_step VARCHAR(50) NOT NULL,
+    changed_by VARCHAR(36),
+    change_reason TEXT,
+    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Requirement Change Requests (Screen 02 - Change Control)
+CREATE TABLE IF NOT EXISTS project.requirement_change_requests (
+    id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    project_id VARCHAR(36) NOT NULL REFERENCES project.projects(id) ON DELETE CASCADE,
+    requirement_id VARCHAR(36) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    change_type VARCHAR(50) NOT NULL DEFAULT 'MODIFICATION',
+    priority VARCHAR(20) DEFAULT 'MEDIUM',
+    status VARCHAR(50) DEFAULT 'DRAFT',
+    impact_analysis TEXT,
+    requested_by VARCHAR(36),
+    reviewed_by VARCHAR(36),
+    approved_by VARCHAR(36),
+    requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    reviewed_at TIMESTAMP,
+    approved_at TIMESTAMP,
+    rejected_reason TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP,
+    created_by VARCHAR(36),
+    updated_by VARCHAR(36)
+);
+
+-- Test Suites (Screen 10 - Test Management)
+CREATE TABLE IF NOT EXISTS project.test_suites (
+    id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    project_id VARCHAR(36) NOT NULL REFERENCES project.projects(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    test_type VARCHAR(50) DEFAULT 'FUNCTIONAL',
+    phase_id VARCHAR(36) REFERENCES project.phases(id),
+    status VARCHAR(50) DEFAULT 'ACTIVE',
+    owner_id VARCHAR(36),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP,
+    created_by VARCHAR(36),
+    updated_by VARCHAR(36)
+);
+
+-- Test Cases (Screen 10 - Test Management)
+CREATE TABLE IF NOT EXISTS project.test_cases (
+    id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    suite_id VARCHAR(36) NOT NULL REFERENCES project.test_suites(id) ON DELETE CASCADE,
+    project_id VARCHAR(36) NOT NULL REFERENCES project.projects(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    preconditions TEXT,
+    test_steps TEXT,
+    expected_result TEXT,
+    priority VARCHAR(20) DEFAULT 'MEDIUM',
+    status VARCHAR(50) DEFAULT 'DRAFT',
+    test_type VARCHAR(50) DEFAULT 'MANUAL',
+    assignee_id VARCHAR(36),
+    estimated_minutes INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP,
+    created_by VARCHAR(36),
+    updated_by VARCHAR(36)
+);
+
+-- Test Executions (Screen 10 - Test Runs)
+CREATE TABLE IF NOT EXISTS project.test_executions (
+    id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    test_case_id VARCHAR(36) NOT NULL REFERENCES project.test_cases(id) ON DELETE CASCADE,
+    project_id VARCHAR(36) NOT NULL REFERENCES project.projects(id) ON DELETE CASCADE,
+    sprint_id VARCHAR(36),
+    executor_id VARCHAR(36),
+    result VARCHAR(50) NOT NULL DEFAULT 'NOT_RUN',
+    actual_result TEXT,
+    defect_id VARCHAR(36),
+    environment VARCHAR(100),
+    execution_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    duration_minutes INTEGER,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP,
+    created_by VARCHAR(36),
+    updated_by VARCHAR(36)
+);
+
+-- Test Case Trace Links (Screen 10 - Traceability)
+CREATE TABLE IF NOT EXISTS project.test_case_trace_links (
+    id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    test_case_id VARCHAR(36) NOT NULL REFERENCES project.test_cases(id) ON DELETE CASCADE,
+    linked_entity_type VARCHAR(50) NOT NULL,
+    linked_entity_id VARCHAR(36) NOT NULL,
+    link_type VARCHAR(50) DEFAULT 'VERIFIES',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(36),
+    UNIQUE(test_case_id, linked_entity_type, linked_entity_id)
+);
+
+-- Issue Comments (Screen 09 - Issue Management)
+CREATE TABLE IF NOT EXISTS project.issue_comments (
+    id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    issue_id VARCHAR(36) NOT NULL REFERENCES project.issues(id) ON DELETE CASCADE,
+    author_id VARCHAR(36) NOT NULL,
+    content TEXT NOT NULL,
+    comment_type VARCHAR(50) DEFAULT 'COMMENT',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+-- Health Snapshots (Screen 15 - PMO Governance)
+CREATE TABLE IF NOT EXISTS project.health_snapshots (
+    id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    project_id VARCHAR(36) NOT NULL REFERENCES project.projects(id) ON DELETE CASCADE,
+    snapshot_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    overall_health DECIMAL(5,2),
+    schedule_health DECIMAL(5,2),
+    budget_health DECIMAL(5,2),
+    quality_health DECIMAL(5,2),
+    risk_health DECIMAL(5,2),
+    resource_health DECIMAL(5,2),
+    grade VARCHAR(5),
+    trend VARCHAR(20) DEFAULT 'STABLE',
+    phase_id VARCHAR(36),
+    notes TEXT,
+    snapshot_data JSONB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(project_id, snapshot_date)
 );
 
 -- ============================================
@@ -959,6 +1142,30 @@ CREATE TABLE IF NOT EXISTS task.weekly_report_trends (
     week_end_date DATE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(project_id, metric_name, week_end_date)
+);
+
+-- Task Time Logs (Screen 08 - My Work)
+CREATE TABLE IF NOT EXISTS task.task_time_logs (
+    id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    task_id VARCHAR(36) NOT NULL REFERENCES task.tasks(id) ON DELETE CASCADE,
+    project_id VARCHAR(36) NOT NULL,
+    user_id VARCHAR(36) NOT NULL,
+    logged_hours DECIMAL(5,2) NOT NULL,
+    log_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+-- Task Comments (Screen 08 - My Work)
+CREATE TABLE IF NOT EXISTS task.task_comments (
+    id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    task_id VARCHAR(36) NOT NULL REFERENCES task.tasks(id) ON DELETE CASCADE,
+    author_id VARCHAR(36) NOT NULL,
+    content TEXT NOT NULL,
+    comment_type VARCHAR(50) DEFAULT 'COMMENT',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP
 );
 
 -- ============================================
@@ -1222,6 +1429,114 @@ CREATE TABLE IF NOT EXISTS lineage.outbox_events (
 );
 
 -- ============================================
+-- RISK SCHEMA (Screen 12 - Decisions & Risk)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS risk.risks (
+    id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    project_id VARCHAR(36) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    category VARCHAR(50) DEFAULT 'TECHNICAL',
+    status VARCHAR(50) DEFAULT 'IDENTIFIED',
+    probability INTEGER DEFAULT 3 CHECK (probability BETWEEN 1 AND 5),
+    impact INTEGER DEFAULT 3 CHECK (impact BETWEEN 1 AND 5),
+    risk_score INTEGER GENERATED ALWAYS AS (probability * impact) STORED,
+    severity VARCHAR(20) GENERATED ALWAYS AS (
+        CASE
+            WHEN probability * impact >= 20 THEN 'CRITICAL'
+            WHEN probability * impact >= 12 THEN 'HIGH'
+            WHEN probability * impact >= 6 THEN 'MEDIUM'
+            ELSE 'LOW'
+        END
+    ) STORED,
+    owner_id VARCHAR(36),
+    identified_by VARCHAR(36),
+    identified_date DATE DEFAULT CURRENT_DATE,
+    due_date DATE,
+    phase_id VARCHAR(36),
+    linked_requirement_id VARCHAR(36),
+    linked_issue_id VARCHAR(36),
+    mitigation_strategy TEXT,
+    contingency_plan TEXT,
+    trigger_conditions TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP,
+    created_by VARCHAR(36),
+    updated_by VARCHAR(36)
+);
+
+CREATE TABLE IF NOT EXISTS risk.risk_responses (
+    id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    risk_id VARCHAR(36) NOT NULL REFERENCES risk.risks(id) ON DELETE CASCADE,
+    response_type VARCHAR(50) NOT NULL DEFAULT 'MITIGATE',
+    description TEXT NOT NULL,
+    status VARCHAR(50) DEFAULT 'PLANNED',
+    owner_id VARCHAR(36),
+    due_date DATE,
+    cost_estimate DECIMAL(15,2),
+    effectiveness VARCHAR(20),
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP,
+    created_by VARCHAR(36),
+    updated_by VARCHAR(36)
+);
+
+CREATE TABLE IF NOT EXISTS risk.decisions (
+    id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    project_id VARCHAR(36) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    category VARCHAR(50) DEFAULT 'TECHNICAL',
+    status VARCHAR(50) DEFAULT 'PENDING',
+    priority VARCHAR(20) DEFAULT 'MEDIUM',
+    decision_maker_id VARCHAR(36),
+    decided_option_id VARCHAR(36),
+    decided_at TIMESTAMP,
+    deadline DATE,
+    rationale TEXT,
+    impact_analysis TEXT,
+    phase_id VARCHAR(36),
+    linked_risk_id VARCHAR(36),
+    linked_requirement_id VARCHAR(36),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP,
+    created_by VARCHAR(36),
+    updated_by VARCHAR(36)
+);
+
+CREATE TABLE IF NOT EXISTS risk.decision_options (
+    id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    decision_id VARCHAR(36) NOT NULL REFERENCES risk.decisions(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    pros TEXT,
+    cons TEXT,
+    cost_estimate DECIMAL(15,2),
+    risk_level VARCHAR(20) DEFAULT 'MEDIUM',
+    recommended BOOLEAN DEFAULT FALSE,
+    order_num INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP,
+    created_by VARCHAR(36),
+    updated_by VARCHAR(36)
+);
+
+CREATE TABLE IF NOT EXISTS risk.risk_audit_trail (
+    id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    entity_type VARCHAR(50) NOT NULL,
+    entity_id VARCHAR(36) NOT NULL,
+    action VARCHAR(50) NOT NULL,
+    field_name VARCHAR(100),
+    old_value TEXT,
+    new_value TEXT,
+    changed_by VARCHAR(36),
+    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    project_id VARCHAR(36)
+);
+
+-- ============================================
 -- INDEXES
 -- ============================================
 
@@ -1474,6 +1789,81 @@ CREATE INDEX IF NOT EXISTS idx_sql_logs_date ON report.text_to_sql_logs(created_
 CREATE INDEX IF NOT EXISTS idx_outbox_events_status ON lineage.outbox_events(status);
 CREATE INDEX IF NOT EXISTS idx_outbox_events_aggregate ON lineage.outbox_events(aggregate_type, aggregate_id);
 
+-- Project Health Scores indexes
+CREATE INDEX IF NOT EXISTS idx_health_scores_project ON project.project_health_scores(project_id);
+CREATE INDEX IF NOT EXISTS idx_health_scores_date ON project.project_health_scores(score_date DESC);
+
+-- Requirement Trace Links indexes
+CREATE INDEX IF NOT EXISTS idx_req_trace_links_req ON project.requirement_trace_links(requirement_id);
+CREATE INDEX IF NOT EXISTS idx_req_trace_links_entity ON project.requirement_trace_links(linked_entity_type, linked_entity_id);
+
+-- Requirement Step Events indexes
+CREATE INDEX IF NOT EXISTS idx_req_step_events_req ON project.requirement_step_events(requirement_id);
+CREATE INDEX IF NOT EXISTS idx_req_step_events_time ON project.requirement_step_events(changed_at DESC);
+
+-- Requirement Change Requests indexes
+CREATE INDEX IF NOT EXISTS idx_req_change_requests_project ON project.requirement_change_requests(project_id);
+CREATE INDEX IF NOT EXISTS idx_req_change_requests_req ON project.requirement_change_requests(requirement_id);
+CREATE INDEX IF NOT EXISTS idx_req_change_requests_status ON project.requirement_change_requests(status);
+
+-- Test Suites indexes
+CREATE INDEX IF NOT EXISTS idx_test_suites_project ON project.test_suites(project_id);
+CREATE INDEX IF NOT EXISTS idx_test_suites_phase ON project.test_suites(phase_id);
+
+-- Test Cases indexes
+CREATE INDEX IF NOT EXISTS idx_test_cases_suite ON project.test_cases(suite_id);
+CREATE INDEX IF NOT EXISTS idx_test_cases_project ON project.test_cases(project_id);
+CREATE INDEX IF NOT EXISTS idx_test_cases_status ON project.test_cases(status);
+CREATE INDEX IF NOT EXISTS idx_test_cases_assignee ON project.test_cases(assignee_id);
+
+-- Test Executions indexes
+CREATE INDEX IF NOT EXISTS idx_test_executions_case ON project.test_executions(test_case_id);
+CREATE INDEX IF NOT EXISTS idx_test_executions_project ON project.test_executions(project_id);
+CREATE INDEX IF NOT EXISTS idx_test_executions_result ON project.test_executions(result);
+CREATE INDEX IF NOT EXISTS idx_test_executions_date ON project.test_executions(execution_date DESC);
+
+-- Test Case Trace Links indexes
+CREATE INDEX IF NOT EXISTS idx_tc_trace_links_case ON project.test_case_trace_links(test_case_id);
+CREATE INDEX IF NOT EXISTS idx_tc_trace_links_entity ON project.test_case_trace_links(linked_entity_type, linked_entity_id);
+
+-- Issue Comments indexes
+CREATE INDEX IF NOT EXISTS idx_issue_comments_issue ON project.issue_comments(issue_id);
+CREATE INDEX IF NOT EXISTS idx_issue_comments_author ON project.issue_comments(author_id);
+
+-- Health Snapshots indexes
+CREATE INDEX IF NOT EXISTS idx_health_snapshots_project ON project.health_snapshots(project_id);
+CREATE INDEX IF NOT EXISTS idx_health_snapshots_date ON project.health_snapshots(snapshot_date DESC);
+
+-- Task Time Logs indexes
+CREATE INDEX IF NOT EXISTS idx_task_time_logs_task ON task.task_time_logs(task_id);
+CREATE INDEX IF NOT EXISTS idx_task_time_logs_user ON task.task_time_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_task_time_logs_date ON task.task_time_logs(log_date);
+CREATE INDEX IF NOT EXISTS idx_task_time_logs_project ON task.task_time_logs(project_id);
+
+-- Task Comments indexes
+CREATE INDEX IF NOT EXISTS idx_task_comments_task ON task.task_comments(task_id);
+CREATE INDEX IF NOT EXISTS idx_task_comments_author ON task.task_comments(author_id);
+
+-- Risk indexes
+CREATE INDEX IF NOT EXISTS idx_risks_project ON risk.risks(project_id);
+CREATE INDEX IF NOT EXISTS idx_risks_status ON risk.risks(status);
+CREATE INDEX IF NOT EXISTS idx_risks_severity ON risk.risks(severity);
+CREATE INDEX IF NOT EXISTS idx_risks_owner ON risk.risks(owner_id);
+CREATE INDEX IF NOT EXISTS idx_risks_phase ON risk.risks(phase_id);
+CREATE INDEX IF NOT EXISTS idx_risk_responses_risk ON risk.risk_responses(risk_id);
+CREATE INDEX IF NOT EXISTS idx_risk_responses_status ON risk.risk_responses(status);
+
+-- Decision indexes
+CREATE INDEX IF NOT EXISTS idx_decisions_project ON risk.decisions(project_id);
+CREATE INDEX IF NOT EXISTS idx_decisions_status ON risk.decisions(status);
+CREATE INDEX IF NOT EXISTS idx_decisions_maker ON risk.decisions(decision_maker_id);
+CREATE INDEX IF NOT EXISTS idx_decision_options_decision ON risk.decision_options(decision_id);
+
+-- Risk Audit Trail indexes
+CREATE INDEX IF NOT EXISTS idx_risk_audit_entity ON risk.risk_audit_trail(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_risk_audit_project ON risk.risk_audit_trail(project_id);
+CREATE INDEX IF NOT EXISTS idx_risk_audit_time ON risk.risk_audit_trail(changed_at DESC);
+
 -- ============================================
 -- AUDIT SCHEMA
 -- ============================================
@@ -1514,3 +1904,103 @@ CREATE TABLE IF NOT EXISTS audit.data_quality_snapshots (
 
 CREATE INDEX IF NOT EXISTS idx_dq_snapshots_project_date
     ON audit.data_quality_snapshots(project_id, snapshot_date);
+
+-- Evidence Items (Screen 16 - Audit Evidence)
+CREATE TABLE IF NOT EXISTS audit.evidence_items (
+    id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    project_id VARCHAR(36) NOT NULL,
+    entity_type VARCHAR(50) NOT NULL,
+    entity_id VARCHAR(36) NOT NULL,
+    evidence_type VARCHAR(50) NOT NULL DEFAULT 'DOCUMENT',
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    file_path TEXT,
+    file_name VARCHAR(255),
+    file_size BIGINT,
+    hash_value VARCHAR(128),
+    status VARCHAR(50) DEFAULT 'COLLECTED',
+    collected_by VARCHAR(36),
+    collected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    verified_by VARCHAR(36),
+    verified_at TIMESTAMP,
+    phase_id VARCHAR(36),
+    compliance_category VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP,
+    created_by VARCHAR(36),
+    updated_by VARCHAR(36)
+);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_items_project ON audit.evidence_items(project_id);
+CREATE INDEX IF NOT EXISTS idx_evidence_items_entity ON audit.evidence_items(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_evidence_items_status ON audit.evidence_items(status);
+CREATE INDEX IF NOT EXISTS idx_evidence_items_phase ON audit.evidence_items(phase_id);
+
+-- Evidence Packages (Screen 16 - Bundled Evidence Export)
+CREATE TABLE IF NOT EXISTS audit.evidence_packages (
+    id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    project_id VARCHAR(36) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    package_type VARCHAR(50) DEFAULT 'AUDIT_REPORT',
+    status VARCHAR(50) DEFAULT 'DRAFT',
+    phase_id VARCHAR(36),
+    include_criteria JSONB,
+    generated_file_path TEXT,
+    generated_at TIMESTAMP,
+    generated_by VARCHAR(36),
+    approved_by VARCHAR(36),
+    approved_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP,
+    created_by VARCHAR(36),
+    updated_by VARCHAR(36)
+);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_packages_project ON audit.evidence_packages(project_id);
+CREATE INDEX IF NOT EXISTS idx_evidence_packages_status ON audit.evidence_packages(status);
+
+-- Compliance Checklists (Screen 16 - Compliance Tracking)
+CREATE TABLE IF NOT EXISTS audit.compliance_checklists (
+    id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    project_id VARCHAR(36) NOT NULL,
+    checklist_name VARCHAR(255) NOT NULL,
+    category VARCHAR(100),
+    item_description TEXT NOT NULL,
+    required BOOLEAN DEFAULT TRUE,
+    status VARCHAR(50) DEFAULT 'NOT_STARTED',
+    evidence_item_id VARCHAR(36),
+    phase_id VARCHAR(36),
+    assignee_id VARCHAR(36),
+    due_date DATE,
+    completed_at TIMESTAMP,
+    completed_by VARCHAR(36),
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP,
+    created_by VARCHAR(36),
+    updated_by VARCHAR(36)
+);
+
+CREATE INDEX IF NOT EXISTS idx_compliance_checklists_project ON audit.compliance_checklists(project_id);
+CREATE INDEX IF NOT EXISTS idx_compliance_checklists_status ON audit.compliance_checklists(status);
+CREATE INDEX IF NOT EXISTS idx_compliance_checklists_phase ON audit.compliance_checklists(phase_id);
+
+-- Export Audit Trails (Screen 16 - Export Log)
+CREATE TABLE IF NOT EXISTS audit.export_audit_trails (
+    id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    project_id VARCHAR(36) NOT NULL,
+    export_type VARCHAR(50) NOT NULL,
+    export_format VARCHAR(20) NOT NULL DEFAULT 'PDF',
+    exported_by VARCHAR(36) NOT NULL,
+    exported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    file_path TEXT,
+    file_size BIGINT,
+    record_count INTEGER,
+    filters_applied JSONB,
+    status VARCHAR(50) DEFAULT 'COMPLETED',
+    error_message TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_export_audit_trails_project ON audit.export_audit_trails(project_id);
+CREATE INDEX IF NOT EXISTS idx_export_audit_trails_exported ON audit.export_audit_trails(exported_at DESC);

@@ -1,36 +1,135 @@
+// Menu configuration — ontology-based, capability-driven menu system.
+// Organises 25 MenuOntologyNodes into 11 zones and provides helpers
+// for filtering by capability, intent search, and backward-compat
+// role-based access checks.
+
 import {
   LayoutDashboard,
-  Briefcase,
-  Network,
-  Users,
-  FileText,
   ClipboardList,
-  GitGraph,
-  GitBranch,
-  CalendarDays,
   ListTodo,
+  CalendarDays,
+  GitBranch,
   Kanban,
-  TestTube,
+  Timer,
+  UserCheck,
   AlertCircle,
+  TestTube,
   Package,
+  Scale,
+  History,
+  BarChart3,
+  PieChart,
+  Gauge,
+  Activity,
+  Shield,
   MessageSquare,
   Megaphone,
   Bot,
   GraduationCap,
-  History,
-  BarChart3,
-  PieChart,
   Settings,
   UserCog,
-  Shield,
-  LucideIcon,
   ChevronDown,
   ChevronRight,
-  Gauge,
+  LucideIcon,
 } from 'lucide-react';
-import { UserRole } from '../stores/authStore';
 
-// Menu item types
+import type {
+  MenuOntologyNode,
+  MenuDomain,
+  Capability,
+  IntentTag,
+} from '../types/menuOntology';
+
+import {
+  dashboardNode,
+  requirementsNode,
+  backlogNode,
+  wbsNode,
+  phasesNode,
+  kanbanNode,
+  sprintsNode,
+  myWorkNode,
+  issuesNode,
+  testsNode,
+  deliverablesNode,
+  decisionsNode,
+  lineageNode,
+  reportsNode,
+  statisticsNode,
+  pmoNode,
+  healthMatrixNode,
+  auditEvidenceNode,
+  meetingsNode,
+  announcementsNode,
+  aiAssistantNode,
+  educationNode,
+  adminProjectNode,
+  adminSystemNode,
+  allOntologyNodes,
+  ontologyNodeMap,
+} from './menuOntologyNodes';
+
+// Re-export for convenience
+export { allOntologyNodes, ontologyNodeMap };
+
+// ─── Icon Mapping ───────────────────────────────────────────────
+
+/** Maps nodeId to its Lucide icon component */
+export const nodeIconMap: Record<string, LucideIcon> = {
+  dashboard: LayoutDashboard,
+  requirements: ClipboardList,
+  backlog: ListTodo,
+  wbs: CalendarDays,
+  phases: GitBranch,
+  kanban: Kanban,
+  sprints: Timer,
+  'my-work': UserCheck,
+  issues: AlertCircle,
+  tests: TestTube,
+  deliverables: Package,
+  decisions: Scale,
+  lineage: History,
+  reports: BarChart3,
+  statistics: PieChart,
+  pmo: Gauge,
+  'health-matrix': Activity,
+  'audit-evidence': Shield,
+  meetings: MessageSquare,
+  announcements: Megaphone,
+  'ai-assistant': Bot,
+  education: GraduationCap,
+  'admin-project': Settings,
+  'admin-system': UserCog,
+};
+
+/** Zone-level icon mapping (uses the primary node icon) */
+const zoneIconMap: Record<string, LucideIcon> = {
+  overview: LayoutDashboard,
+  plan: ClipboardList,
+  execution: Kanban,
+  control: AlertCircle,
+  trace: History,
+  reports: BarChart3,
+  governance: Gauge,
+  audit: Shield,
+  collaboration: MessageSquare,
+  tools: Bot,
+  admin: Settings,
+};
+
+// ─── MenuZone Interface ─────────────────────────────────────────
+
+export interface MenuZone {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  domain: MenuDomain;
+  nodes: MenuOntologyNode[];
+  defaultExpanded?: boolean;
+}
+
+// ─── Legacy Types (backward compat) ─────────────────────────────
+
 export interface MenuItem {
   id: string;
   path: string;
@@ -53,432 +152,266 @@ export interface MenuConfig {
   groups: MenuGroup[];
 }
 
-// Complete menu configuration following the 9-zone structure
-export const menuConfig: MenuConfig = {
-  // Standalone items (not grouped)
-  standalone: [
-    {
-      id: 'dashboard',
-      path: '/',
-      label: '통합 대시보드',
-      icon: LayoutDashboard,
-      description: '프로젝트 현황 및 KPI 한눈에 보기',
-    },
-  ],
+// ─── 11 Menu Zones ──────────────────────────────────────────────
 
-  // Grouped menu items
-  groups: [
-    // Zone 2: Project Setup
-    {
-      id: 'project-setup',
-      label: '프로젝트 설정',
-      icon: Briefcase,
-      zone: 'SETUP',
-      defaultExpanded: false,
-      items: [
-        {
-          id: 'projects',
-          path: '/projects',
-          label: '프로젝트 목록',
-          icon: Briefcase,
-        },
-        {
-          id: 'parts',
-          path: '/parts',
-          label: '파트/조직 설정',
-          icon: Network,
-        },
-        {
-          id: 'roles',
-          path: '/roles',
-          label: '팀원 및 권한',
-          icon: Users,
-        },
-      ],
-    },
+export const menuZones: MenuZone[] = [
+  {
+    id: 'zone-overview',
+    label: '개요',
+    icon: LayoutDashboard,
+    domain: 'overview',
+    nodes: [dashboardNode],
+    defaultExpanded: true,
+  },
+  {
+    id: 'zone-plan',
+    label: '계획 및 구조',
+    icon: ClipboardList,
+    domain: 'plan',
+    nodes: [requirementsNode, backlogNode, wbsNode, phasesNode],
+    defaultExpanded: false,
+  },
+  {
+    id: 'zone-execution',
+    label: '실행 관리',
+    icon: Kanban,
+    domain: 'execution',
+    nodes: [kanbanNode, sprintsNode, myWorkNode],
+    defaultExpanded: true,
+  },
+  {
+    id: 'zone-control',
+    label: '통제 관리',
+    icon: AlertCircle,
+    domain: 'control',
+    nodes: [issuesNode, testsNode, deliverablesNode, decisionsNode],
+    defaultExpanded: false,
+  },
+  {
+    id: 'zone-trace',
+    label: '추적성',
+    icon: History,
+    domain: 'trace',
+    nodes: [lineageNode],
+    defaultExpanded: false,
+  },
+  {
+    id: 'zone-reports',
+    label: '리포트',
+    icon: BarChart3,
+    domain: 'reports',
+    nodes: [reportsNode, statisticsNode],
+    defaultExpanded: false,
+  },
+  {
+    id: 'zone-governance',
+    label: 'PMO / 거버넌스',
+    icon: Gauge,
+    domain: 'governance',
+    nodes: [pmoNode, healthMatrixNode],
+    defaultExpanded: false,
+  },
+  {
+    id: 'zone-audit',
+    label: '감사',
+    icon: Shield,
+    domain: 'audit',
+    nodes: [auditEvidenceNode],
+    defaultExpanded: false,
+  },
+  {
+    id: 'zone-collaboration',
+    label: '협업',
+    icon: MessageSquare,
+    domain: 'collaboration',
+    nodes: [meetingsNode, announcementsNode],
+    defaultExpanded: false,
+  },
+  {
+    id: 'zone-tools',
+    label: '도구',
+    icon: Bot,
+    domain: 'tools',
+    nodes: [aiAssistantNode, educationNode],
+    defaultExpanded: false,
+  },
+  {
+    id: 'zone-admin',
+    label: '관리',
+    icon: Settings,
+    domain: 'admin',
+    nodes: [adminProjectNode, adminSystemNode],
+    defaultExpanded: false,
+  },
+];
 
-    // Zone 3: Requirements Management
-    {
-      id: 'requirements-mgmt',
-      label: '요구사항 관리',
-      icon: ClipboardList,
-      zone: 'PLANNING',
-      defaultExpanded: false,
-      items: [
-        {
-          id: 'rfp',
-          path: '/rfp',
-          label: 'RFP 관리',
-          icon: FileText,
-        },
-        {
-          id: 'requirements',
-          path: '/requirements',
-          label: '요구사항 정의',
-          icon: ClipboardList,
-        },
-        {
-          id: 'traceability',
-          path: '/traceability',
-          label: '추적 매트릭스',
-          icon: GitGraph,
-        },
-      ],
-    },
+// ─── Capability-Based Helpers ───────────────────────────────────
 
-    // Zone 4: Execution Management
-    {
-      id: 'execution-mgmt',
-      label: '실행 관리',
-      icon: GitBranch,
-      zone: 'EXECUTION',
-      defaultExpanded: true,
-      items: [
-        {
-          id: 'phases',
-          path: '/phases',
-          label: '단계별 관리',
-          icon: GitBranch,
-        },
-        {
-          id: 'wbs',
-          path: '/wbs',
-          label: '일정 관리 (WBS)',
-          icon: CalendarDays,
-        },
-        {
-          id: 'backlog',
-          path: '/backlog',
-          label: '백로그 관리',
-          icon: ListTodo,
-        },
-        {
-          id: 'kanban',
-          path: '/kanban',
-          label: '칸반 보드',
-          icon: Kanban,
-        },
-      ],
-    },
-
-    // Zone 5: Quality Management
-    {
-      id: 'quality-mgmt',
-      label: '품질 관리',
-      icon: TestTube,
-      zone: 'VERIFICATION',
-      defaultExpanded: false,
-      items: [
-        {
-          id: 'testing',
-          path: '/testing',
-          label: '테스트 관리',
-          icon: TestTube,
-        },
-        {
-          id: 'issues',
-          path: '/issues',
-          label: '이슈 관리',
-          icon: AlertCircle,
-        },
-        {
-          id: 'deliverables',
-          path: '/deliverables',
-          label: '산출물 관리',
-          icon: Package,
-        },
-      ],
-    },
-
-    // Zone 6: Collaboration
-    {
-      id: 'collaboration',
-      label: '협업',
-      icon: MessageSquare,
-      zone: 'COMMUNICATION',
-      defaultExpanded: false,
-      items: [
-        {
-          id: 'meetings',
-          path: '/meetings',
-          label: '회의 관리',
-          icon: MessageSquare,
-        },
-        {
-          id: 'announcements',
-          path: '/announcements',
-          label: '공지사항',
-          icon: Megaphone,
-        },
-        {
-          id: 'ai-assistant',
-          path: '/ai-assistant',
-          label: 'AI 어시스턴트',
-          icon: Bot,
-        },
-      ],
-    },
-
-    // Zone 7: Education Management
-    {
-      id: 'education-mgmt',
-      label: '교육 관리',
-      icon: GraduationCap,
-      zone: 'CAPABILITY',
-      defaultExpanded: false,
-      items: [
-        {
-          id: 'education',
-          path: '/education',
-          label: '교육 로드맵',
-          icon: GraduationCap,
-        },
-      ],
-    },
-
-    // Zone 8: Analytics & Reports
-    {
-      id: 'analytics',
-      label: '분석 및 리포트',
-      icon: BarChart3,
-      zone: 'INSIGHT',
-      defaultExpanded: false,
-      items: [
-        {
-          id: 'pmo-console',
-          path: '/pmo-console',
-          label: 'PMO 대시보드',
-          icon: Gauge,
-        },
-        {
-          id: 'lineage',
-          path: '/lineage',
-          label: 'Lineage & History',
-          icon: History,
-        },
-        {
-          id: 'reports',
-          path: '/reports',
-          label: '프로젝트 리포트',
-          icon: BarChart3,
-        },
-        {
-          id: 'statistics',
-          path: '/statistics',
-          label: '통계 대시보드',
-          icon: PieChart,
-        },
-      ],
-    },
-
-    // Zone 9: Settings
-    {
-      id: 'admin-settings',
-      label: '설정',
-      icon: Settings,
-      zone: 'ADMIN',
-      defaultExpanded: false,
-      items: [
-        {
-          id: 'user-management',
-          path: '/user-management',
-          label: '사용자 관리',
-          icon: UserCog,
-        },
-        {
-          id: 'system-settings',
-          path: '/system-settings',
-          label: '시스템 설정',
-          icon: Settings,
-        },
-        {
-          id: 'audit-logs',
-          path: '/audit-logs',
-          label: '감사 로그',
-          icon: Shield,
-        },
-        {
-          id: 'settings',
-          path: '/settings',
-          label: '개인 설정',
-          icon: Settings,
-        },
-      ],
-    },
-  ],
-};
-
-// Role-based menu access configuration (updated for new structure)
-export const menuAccessByRole: Record<UserRole, string[]> = {
-  sponsor: [
-    'dashboard',
-    'rfp',
-    'requirements',
-    'traceability',
-    'lineage',
-    'phases',
-    'reports',
-    'statistics',
-    'pmo-console',
-    'roles',
-    'education',
-    'settings',
-  ],
-  pmo_head: [
-    'dashboard',
-    'projects',
-    'parts',
-    'roles',
-    'rfp',
-    'requirements',
-    'traceability',
-    'phases',
-    'wbs',
-    'backlog',
-    'kanban',
-    'testing',
-    'issues',
-    'deliverables',
-    'meetings',
-    'announcements',
-    'ai-assistant',
-    'education',
-    'pmo-console',
-    'lineage',
-    'reports',
-    'statistics',
-    'user-management',
-    'system-settings',
-    'audit-logs',
-    'settings',
-  ],
-  pm: [
-    'dashboard',
-    'parts',
-    'rfp',
-    'requirements',
-    'traceability',
-    'phases',
-    'wbs',
-    'backlog',
-    'kanban',
-    'testing',
-    'issues',
-    'deliverables',
-    'meetings',
-    'announcements',
-    'ai-assistant',
-    'education',
-    'pmo-console',
-    'lineage',
-    'reports',
-    'statistics',
-    'settings',
-  ],
-  developer: [
-    'dashboard',
-    'requirements',
-    'backlog',
-    'kanban',
-    'testing',
-    'issues',
-    'ai-assistant',
-    'education',
-    'lineage',
-    'reports',
-    'settings',
-  ],
-  qa: [
-    'dashboard',
-    'requirements',
-    'backlog',
-    'kanban',
-    'testing',
-    'issues',
-    'deliverables',
-    'ai-assistant',
-    'education',
-    'lineage',
-    'reports',
-    'settings',
-  ],
-  business_analyst: [
-    'dashboard',
-    'rfp',
-    'requirements',
-    'traceability',
-    'phases',
-    'backlog',
-    'meetings',
-    'ai-assistant',
-    'education',
-    'lineage',
-    'reports',
-    'statistics',
-    'settings',
-  ],
-  auditor: [
-    'dashboard',
-    'requirements',
-    'traceability',
-    'phases',
-    'deliverables',
-    'lineage',
-    'reports',
-    'statistics',
-    'audit-logs',
-    'settings',
-  ],
-  admin: [
-    'dashboard',
-    'projects',
-    'parts',
-    'roles',
-    'rfp',
-    'requirements',
-    'traceability',
-    'phases',
-    'wbs',
-    'backlog',
-    'kanban',
-    'testing',
-    'issues',
-    'deliverables',
-    'meetings',
-    'announcements',
-    'ai-assistant',
-    'education',
-    'pmo-console',
-    'lineage',
-    'reports',
-    'statistics',
-    'user-management',
-    'system-settings',
-    'audit-logs',
-    'settings',
-  ],
-};
-
-// Helper function to check menu access
-export function canAccessMenu(role: UserRole | undefined, menuId: string): boolean {
-  if (!role) return false;
-  return menuAccessByRole[role]?.includes(menuId) ?? false;
+/**
+ * Checks whether a user with the given capabilities can access a node.
+ * Access requires at least one of the node's requiredCaps.
+ */
+export function canAccessNode(
+  node: MenuOntologyNode,
+  capabilities: Set<Capability> | Capability[],
+): boolean {
+  const capSet = capabilities instanceof Set ? capabilities : new Set(capabilities);
+  if (node.requiredCaps.length === 0) return true;
+  return node.requiredCaps.some((cap) => capSet.has(cap));
 }
 
-// Helper function to filter menu groups by role
+/**
+ * Returns zones with only the nodes accessible to the given capabilities.
+ * Empty zones are removed entirely.
+ */
+export function getVisibleZones(capabilities: Set<Capability> | Capability[]): MenuZone[] {
+  const capSet = capabilities instanceof Set ? capabilities : new Set(capabilities);
+
+  return menuZones
+    .map((zone) => ({
+      ...zone,
+      nodes: zone.nodes.filter((node) => canAccessNode(node, capSet)),
+    }))
+    .filter((zone) => zone.nodes.length > 0);
+}
+
+/**
+ * Finds a single ontology node by its nodeId.
+ */
+export function findNodeById(nodeId: string): MenuOntologyNode | undefined {
+  return ontologyNodeMap.get(nodeId);
+}
+
+/**
+ * Finds all ontology nodes that include the given intent tag.
+ * Sorted by priority (ascending — lower number = higher priority).
+ */
+export function findNodesByIntent(intent: IntentTag): MenuOntologyNode[] {
+  return allOntologyNodes
+    .filter((node) => node.intents.includes(intent))
+    .sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99));
+}
+
+/**
+ * Returns the LucideIcon component for a given nodeId.
+ */
+export function getNodeIcon(nodeId: string): LucideIcon {
+  return nodeIconMap[nodeId] || LayoutDashboard;
+}
+
+// ─── Backward-Compat: Legacy Menu Config ────────────────────────
+
+// Role-to-menuId access mapping (preserved from original menuConfig)
+import { UserRole } from '../stores/authStore';
+
+const menuAccessByRole: Record<UserRole, string[]> = {
+  sponsor: [
+    'dashboard', 'rfp', 'requirements', 'lineage', 'phases',
+    'reports', 'statistics', 'pmo', 'education', 'settings',
+    'backlog', 'wbs', 'kanban', 'issues', 'tests',
+    'deliverables', 'decisions', 'meetings', 'announcements',
+  ],
+  pmo_head: [
+    'dashboard', 'requirements', 'backlog', 'wbs', 'phases',
+    'kanban', 'sprints', 'issues', 'tests', 'deliverables',
+    'decisions', 'lineage', 'reports', 'statistics', 'pmo',
+    'health-matrix', 'audit-evidence', 'meetings', 'announcements',
+    'ai-assistant', 'education', 'admin-project', 'admin-system',
+  ],
+  pm: [
+    'dashboard', 'requirements', 'backlog', 'wbs', 'phases',
+    'kanban', 'sprints', 'my-work', 'issues', 'tests',
+    'deliverables', 'decisions', 'lineage', 'reports', 'statistics',
+    'pmo', 'health-matrix', 'meetings', 'announcements',
+    'ai-assistant', 'education', 'admin-project',
+  ],
+  developer: [
+    'dashboard', 'requirements', 'backlog', 'wbs', 'phases',
+    'kanban', 'sprints', 'my-work', 'issues', 'tests',
+    'deliverables', 'decisions', 'lineage', 'reports',
+    'meetings', 'announcements', 'ai-assistant', 'education',
+  ],
+  qa: [
+    'dashboard', 'requirements', 'backlog', 'kanban', 'sprints',
+    'issues', 'tests', 'deliverables', 'lineage', 'reports',
+    'meetings', 'announcements', 'ai-assistant', 'education',
+  ],
+  business_analyst: [
+    'dashboard', 'requirements', 'backlog', 'phases', 'issues',
+    'lineage', 'reports', 'statistics', 'meetings', 'announcements',
+    'ai-assistant', 'education',
+  ],
+  auditor: [
+    'dashboard', 'requirements', 'phases', 'deliverables',
+    'lineage', 'reports', 'statistics', 'pmo', 'audit-evidence',
+    'announcements',
+  ],
+  admin: [
+    'dashboard', 'requirements', 'backlog', 'wbs', 'phases',
+    'kanban', 'sprints', 'my-work', 'issues', 'tests',
+    'deliverables', 'decisions', 'lineage', 'reports', 'statistics',
+    'pmo', 'health-matrix', 'audit-evidence', 'meetings',
+    'announcements', 'ai-assistant', 'education', 'admin-project',
+    'admin-system',
+  ],
+};
+
+/**
+ * Backward-compatible menu access check.
+ * Maps old role strings to menu IDs internally.
+ */
+export function canAccessMenu(role: UserRole | string | undefined, menuId: string): boolean {
+  if (!role) return false;
+  const normalised = role.toLowerCase() as UserRole;
+  return menuAccessByRole[normalised]?.includes(menuId) ?? false;
+}
+
+/**
+ * Legacy helper: returns a MenuConfig (standalone + groups) filtered by role.
+ * Used by existing Sidebar code paths that have not yet migrated to zone-based rendering.
+ */
 export function getFilteredMenuConfig(role: UserRole): MenuConfig {
   const accessibleMenuIds = menuAccessByRole[role] || [];
 
-  return {
-    standalone: menuConfig.standalone.filter((item) => accessibleMenuIds.includes(item.id)),
-    groups: menuConfig.groups
-      .map((group) => ({
-        ...group,
-        items: group.items.filter((item) => accessibleMenuIds.includes(item.id)),
-      }))
-      .filter((group) => group.items.length > 0),
-  };
+  const standalone: MenuItem[] = menuZones
+    .flatMap((z) => z.nodes)
+    .filter((n) => n.nodeId === 'dashboard' && accessibleMenuIds.includes(n.nodeId))
+    .map((n) => ({
+      id: n.nodeId,
+      path: n.route,
+      label: n.label,
+      icon: nodeIconMap[n.nodeId] || LayoutDashboard,
+      description: n.canonicalQuestions[0],
+    }));
+
+  const groups: MenuGroup[] = menuZones
+    .filter((z) => z.domain !== 'overview')
+    .map((zone) => ({
+      id: zone.id,
+      label: zone.label,
+      icon: zone.icon,
+      zone: zone.domain.toUpperCase(),
+      defaultExpanded: zone.defaultExpanded,
+      items: zone.nodes
+        .filter((n) => accessibleMenuIds.includes(n.nodeId))
+        .map((n) => ({
+          id: n.nodeId,
+          path: n.route,
+          label: n.label,
+          icon: nodeIconMap[n.nodeId] || LayoutDashboard,
+          description: n.canonicalQuestions[0],
+        })),
+    }))
+    .filter((g) => g.items.length > 0);
+
+  return { standalone, groups };
 }
 
-// Export icons for external use
+// Legacy menuConfig object for code that imports `menuConfig.groups`
+export const menuConfig: MenuConfig = getFilteredMenuConfig('admin');
+
+// Re-export chevron icons for external use
 export { ChevronDown, ChevronRight };
+
+// Re-export menuAccessByRole for authStore backward compat
+export { menuAccessByRole };

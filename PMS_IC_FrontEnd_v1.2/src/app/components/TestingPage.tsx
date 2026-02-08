@@ -2,18 +2,15 @@ import { useState, useMemo } from 'react';
 import {
   TestTube,
   Plus,
-  Filter,
-  Search,
-  CheckCircle,
-  XCircle,
-  Clock,
-  AlertTriangle,
   Play,
-  BarChart3,
-  Layers,
 } from 'lucide-react';
 import { getRolePermissions } from '../../utils/rolePermissions';
 import { UserRole } from '../App';
+import { usePreset } from '../../hooks/usePreset';
+import { useFilterSpec } from '../../hooks/useFilterSpec';
+import { PresetSwitcher } from './common/PresetSwitcher';
+import { TestKpiRow, TestFilters, TEST_FILTER_KEYS, TestRightPanel } from './tests';
+import type { TestPanelMode } from './tests';
 
 interface TestingPageProps {
   userRole: UserRole;
@@ -126,24 +123,31 @@ const mockTestCases: TestCase[] = [
 
 export default function TestingPage({ userRole, projectId = 'proj-001' }: TestingPageProps) {
   const [testCases] = useState<TestCase[]>(mockTestCases);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('');
-  const [filterType, setFilterType] = useState<string>('');
 
   // Role permissions
   const permissions = getRolePermissions(userRole);
   const canManage = permissions.canEdit;
 
-  // Filter test cases
+  // Preset and filter systems
+  const { currentPreset, switchPreset } = usePreset(userRole.toUpperCase());
+  const { filters, setFilters } = useFilterSpec({ keys: TEST_FILTER_KEYS, syncUrl: false });
+  const [selectedTestId, setSelectedTestId] = useState<string | null>(null);
+  const [panelMode, setPanelMode] = useState<TestPanelMode>('none');
+
+  // Filter test cases using FilterSpec values
   const filteredTestCases = useMemo(() => {
     let filtered = testCases;
+
+    const searchQuery = (filters.q as string) || '';
+    const filterStatus = (filters.lastOutcome as string) || '';
+    const filterPriority = (filters.priority as string) || '';
 
     if (filterStatus) {
       filtered = filtered.filter((tc) => tc.status === filterStatus);
     }
 
-    if (filterType) {
-      filtered = filtered.filter((tc) => tc.type === filterType);
+    if (filterPriority) {
+      filtered = filtered.filter((tc) => tc.priority === filterPriority);
     }
 
     if (searchQuery) {
@@ -156,23 +160,33 @@ export default function TestingPage({ userRole, projectId = 'proj-001' }: Testin
     }
 
     return filtered;
-  }, [testCases, filterStatus, filterType, searchQuery]);
+  }, [testCases, filters]);
 
   // Calculate statistics
-  const stats = {
-    total: testCases.length,
-    passed: testCases.filter((tc) => tc.status === 'PASSED').length,
-    failed: testCases.filter((tc) => tc.status === 'FAILED').length,
-    pending: testCases.filter((tc) => tc.status === 'PENDING').length,
-    running: testCases.filter((tc) => tc.status === 'RUNNING').length,
-    passRate: testCases.length > 0
-      ? Math.round(
-          (testCases.filter((tc) => tc.status === 'PASSED').length /
-            testCases.filter((tc) => ['PASSED', 'FAILED'].includes(tc.status)).length) *
-            100
-        ) || 0
-      : 0,
-  };
+  const stats = useMemo(() => {
+    const total = testCases.length;
+    const passed = testCases.filter((tc) => tc.status === 'PASSED').length;
+    const failed = testCases.filter((tc) => tc.status === 'FAILED').length;
+    const blocked = testCases.filter((tc) => tc.status === 'BLOCKED').length;
+    const notRun = testCases.filter((tc) => tc.status === 'PENDING').length;
+    const executedCount = testCases.filter((tc) =>
+      ['PASSED', 'FAILED'].includes(tc.status)
+    ).length;
+    const passRate =
+      executedCount > 0 ? Math.round((passed / executedCount) * 100) : 0;
+
+    return {
+      total,
+      passed,
+      failed,
+      blocked,
+      notRun,
+      passRate,
+      coverageRate: 78,       // mock
+      executionRate: 67,      // mock
+      regressionPassRate: 92, // mock
+    };
+  }, [testCases]);
 
   // Get status badge styles
   const getStatusBadge = (status: TestStatus) => {
@@ -257,12 +271,16 @@ export default function TestingPage({ userRole, projectId = 'proj-001' }: Testin
   };
 
   return (
-    <div className="flex-1 p-6 space-y-6">
+    <div className="flex-1 p-6 space-y-6 flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">테스트 관리</h1>
-          <p className="text-gray-500 mt-1">테스트 케이스 및 실행 결과 관리</p>
+        <div className="flex items-center gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">테스트 관리</h1>
+            <p className="text-gray-500 mt-1">테스트 케이스 및 실행 결과 관리</p>
+          </div>
+          <div className="mx-3 h-8 w-px bg-gray-200" />
+          <PresetSwitcher currentPreset={currentPreset} onSwitch={switchPreset} compact />
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -284,199 +302,116 @@ export default function TestingPage({ userRole, projectId = 'proj-001' }: Testin
         </div>
       </div>
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-6 gap-4">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <TestTube size={20} className="text-gray-600" />
-              <span className="text-sm text-gray-500">전체</span>
-            </div>
-            <span className="text-2xl font-bold text-gray-900">{stats.total}</span>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CheckCircle size={20} className="text-green-600" />
-              <span className="text-sm text-gray-500">성공</span>
-            </div>
-            <span className="text-2xl font-bold text-green-600">{stats.passed}</span>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <XCircle size={20} className="text-red-600" />
-              <span className="text-sm text-gray-500">실패</span>
-            </div>
-            <span className="text-2xl font-bold text-red-600">{stats.failed}</span>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Clock size={20} className="text-gray-500" />
-              <span className="text-sm text-gray-500">대기</span>
-            </div>
-            <span className="text-2xl font-bold text-gray-600">{stats.pending}</span>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <AlertTriangle size={20} className="text-blue-600" />
-              <span className="text-sm text-gray-500">실행 중</span>
-            </div>
-            <span className="text-2xl font-bold text-blue-600">{stats.running}</span>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <BarChart3 size={20} className="text-emerald-600" />
-              <span className="text-sm text-gray-500">성공률</span>
-            </div>
-            <span className="text-2xl font-bold text-emerald-600">{stats.passRate}%</span>
-          </div>
-        </div>
-      </div>
+      {/* KPI Row */}
+      <TestKpiRow stats={stats} preset={currentPreset} />
 
       {/* Filters */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-        <div className="flex items-center gap-4">
-          {/* Search */}
-          <div className="relative flex-1 max-w-sm">
-            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="테스트 케이스 검색..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+      <TestFilters values={filters} onChange={setFilters} preset={currentPreset} />
 
-          {/* Type Filter */}
-          <div className="flex items-center gap-2">
-            <Layers size={16} className="text-gray-400" />
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">전체 유형</option>
-              <option value="UNIT">단위 테스트</option>
-              <option value="INTEGRATION">통합 테스트</option>
-              <option value="E2E">E2E 테스트</option>
-              <option value="PERFORMANCE">성능 테스트</option>
-              <option value="SECURITY">보안 테스트</option>
-              <option value="UAT">UAT</option>
-            </select>
-          </div>
-
-          {/* Status Filter */}
-          <div className="flex items-center gap-2">
-            <Filter size={16} className="text-gray-400" />
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">전체 상태</option>
-              <option value="PENDING">대기</option>
-              <option value="RUNNING">실행 중</option>
-              <option value="PASSED">성공</option>
-              <option value="FAILED">실패</option>
-              <option value="SKIPPED">건너뜀</option>
-            </select>
+      {/* Test Case Table + Right Panel */}
+      <div className="flex gap-4 flex-1 min-h-0">
+        <div className="flex-1 overflow-auto">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    테스트 ID
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    제목
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                    유형
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                    우선순위
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
+                    상태
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    담당자
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                    실행 시간
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {filteredTestCases.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-12 text-center text-gray-400">
+                      <TestTube size={32} className="mx-auto mb-2 opacity-50" />
+                      <p>표시할 테스트 케이스가 없습니다.</p>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredTestCases.map((tc) => (
+                    <tr
+                      key={tc.id}
+                      className={`hover:bg-gray-50 cursor-pointer ${
+                        selectedTestId === tc.id ? 'bg-blue-50' : ''
+                      }`}
+                      onClick={() => {
+                        setSelectedTestId(tc.id);
+                        setPanelMode('tc-detail');
+                      }}
+                    >
+                      <td className="px-4 py-3">
+                        <span className="text-sm font-mono text-gray-600">{tc.code}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-gray-900">{tc.title}</p>
+                        {tc.description && (
+                          <p className="text-xs text-gray-500 truncate max-w-md">{tc.description}</p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${getTypeBadge(tc.type)}`}>
+                          {getTypeLabel(tc.type)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${getPriorityBadge(tc.priority)}`}>
+                          {tc.priority}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusBadge(tc.status)}`}>
+                          {getStatusLabel(tc.status)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-gray-600">{tc.assignee || '-'}</span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {tc.duration ? (
+                          <span className="text-sm text-gray-600">{tc.duration}초</span>
+                        ) : (
+                          <span className="text-sm text-gray-400">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
-      </div>
-
-      {/* Test Case Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                테스트 ID
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                제목
-              </th>
-              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
-                유형
-              </th>
-              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
-                우선순위
-              </th>
-              <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">
-                상태
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                담당자
-              </th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">
-                실행 시간
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {filteredTestCases.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-4 py-12 text-center text-gray-400">
-                  <TestTube size={32} className="mx-auto mb-2 opacity-50" />
-                  <p>표시할 테스트 케이스가 없습니다.</p>
-                </td>
-              </tr>
-            ) : (
-              filteredTestCases.map((tc) => (
-                <tr key={tc.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3">
-                    <span className="text-sm font-mono text-gray-600">{tc.code}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-gray-900">{tc.title}</p>
-                    {tc.description && (
-                      <p className="text-xs text-gray-500 truncate max-w-md">{tc.description}</p>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${getTypeBadge(tc.type)}`}>
-                      {getTypeLabel(tc.type)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${getPriorityBadge(tc.priority)}`}>
-                      {tc.priority}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusBadge(tc.status)}`}>
-                      {getStatusLabel(tc.status)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="text-sm text-gray-600">{tc.assignee || '-'}</span>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    {tc.duration ? (
-                      <span className="text-sm text-gray-600">{tc.duration}초</span>
-                    ) : (
-                      <span className="text-sm text-gray-400">-</span>
-                    )}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+        {panelMode !== 'none' && (
+          <TestRightPanel
+            mode={panelMode}
+            testCase={testCases.find((tc) => tc.id === selectedTestId)}
+            preset={currentPreset}
+            onClose={() => {
+              setPanelMode('none');
+              setSelectedTestId(null);
+            }}
+            onModeChange={setPanelMode}
+            canEdit={canManage}
+          />
+        )}
       </div>
     </div>
   );

@@ -8,7 +8,17 @@ import {
   TreeDeciduous,
   Layers,
 } from 'lucide-react';
-import { WbsTreeView, StoryLinkModal, WbsOverviewTree, WbsGanttChart } from './wbs';
+import {
+  WbsTreeView,
+  StoryLinkModal,
+  WbsOverviewTree,
+  WbsGanttChart,
+  WbsKpiRow,
+  WbsFilters,
+  WBS_FILTER_KEYS,
+  WbsContextPanel,
+} from './wbs';
+import type { WbsPanelMode } from './wbs';
 import { WbsBacklogIntegration } from './integration';
 import { usePhases } from '../../hooks/api/usePhases';
 import { useStories } from '../../hooks/api/useStories';
@@ -24,6 +34,9 @@ import { getRolePermissions } from '../../utils/rolePermissions';
 import { PhaseWithWbs } from '../../types/wbs';
 import { UserRole } from '../App';
 import { useProject } from '../../contexts/ProjectContext';
+import { usePreset } from '../../hooks/usePreset';
+import { useFilterSpec } from '../../hooks/useFilterSpec';
+import { PresetSwitcher } from './common/PresetSwitcher';
 
 interface WbsManagementProps {
   userRole: UserRole;
@@ -57,6 +70,17 @@ export default function WbsManagement({ userRole }: WbsManagementProps) {
   const [showStoryLinkModal, setShowStoryLinkModal] = useState(false);
   const [selectedWbsItemId, setSelectedWbsItemId] = useState<string>('');
   const [selectedWbsItemName, setSelectedWbsItemName] = useState<string>('');
+
+  // v2.0: Preset management
+  const { currentPreset, switchPreset } = usePreset(userRole.toUpperCase());
+
+  // v2.0: FilterSpec-based filtering
+  const { filters, setFilters } = useFilterSpec({ keys: WBS_FILTER_KEYS, syncUrl: false });
+
+  // v2.0: Right context panel state
+  const [panelMode, setPanelMode] = useState<WbsPanelMode>('none');
+  const [selectedGroup, setSelectedGroup] = useState<any>(null);
+  const [selectedItem, setSelectedItem] = useState<any>(null);
 
   // API hooks - use usePhases with projectId for direct filtering
   const { data: phasesRaw } = usePhases(projectId);
@@ -218,6 +242,14 @@ export default function WbsManagement({ userRole }: WbsManagementProps) {
         </div>
 
         <div className="flex items-center gap-4">
+          {/* Preset Switcher (v2.0) */}
+          <PresetSwitcher
+            currentPreset={currentPreset}
+            onSwitch={switchPreset}
+            compact
+          />
+          <div className="w-px h-6 bg-gray-300" />
+
           {/* Excel Import/Export */}
           {canEdit && (
             <ExcelImportExportButtons
@@ -251,6 +283,12 @@ export default function WbsManagement({ userRole }: WbsManagementProps) {
           </div>
         </div>
       </div>
+
+      {/* KPI Cards (v2.0) */}
+      <WbsKpiRow preset={currentPreset} phases={phasesWithWbs} />
+
+      {/* Filter Bar (v2.0) */}
+      <WbsFilters values={filters} onChange={setFilters} preset={currentPreset} />
 
       {/* Category Selector - Only show for 'phase' view mode */}
       {viewMode === 'phase' && (
@@ -306,90 +344,111 @@ export default function WbsManagement({ userRole }: WbsManagementProps) {
         </div>
       )}
 
-      {/* Main Content based on view mode */}
-      {viewMode === 'overview' && (
-        <WbsOverviewTree
-          phases={phasesWithWbs}
-          isLoading={wbsLoading}
-          onRefresh={refetchWbs}
-          canEdit={canEdit}
-        />
-      )}
+      {/* Main Content + Context Panel (v2.0) */}
+      <div className="flex gap-4">
+        <div className={panelMode !== 'none' ? 'flex-1 min-w-0' : 'w-full'}>
+          {/* Main Content based on view mode */}
+          {viewMode === 'overview' && (
+            <WbsOverviewTree
+              phases={phasesWithWbs}
+              isLoading={wbsLoading}
+              onRefresh={refetchWbs}
+              canEdit={canEdit}
+            />
+          )}
 
-      {viewMode === 'gantt' && (
-        <WbsGanttChart
-          phases={phasesWithWbs}
-          projectId={projectId}
-          isLoading={wbsLoading}
-        />
-      )}
+          {viewMode === 'gantt' && (
+            <WbsGanttChart
+              phases={phasesWithWbs}
+              projectId={projectId}
+              isLoading={wbsLoading}
+            />
+          )}
 
-      {viewMode === 'phase' && (
-        <>
-          {!selectedPhaseId ? (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-              <FolderTree size={48} className="mx-auto text-gray-300 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                카테고리를 선택하세요
-              </h3>
-              <p className="text-gray-500 mb-4">
-                WBS 구조를 확인하고 관리하려면 먼저 카테고리를 선택해 주세요.
-              </p>
-              <p className="text-sm text-gray-400">
-                또는 상단의 &quot;전체 트리&quot; 또는 &quot;간트 차트&quot;를 선택하여 전체 프로젝트 WBS를 확인할 수 있습니다.
-              </p>
-            </div>
-          ) : (
+          {viewMode === 'phase' && (
             <>
-              {/* Tab Navigation */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-                <div className="border-b border-gray-200">
-                  <nav className="flex space-x-0">
-                    {tabs.map((tab) => (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        onClick={() => setActiveTab(tab.id)}
-                        className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-                          activeTab === tab.id
-                            ? 'border-blue-600 text-blue-600'
-                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                        }`}
-                      >
-                        <tab.icon size={16} />
-                        {tab.label}
-                      </button>
-                    ))}
-                  </nav>
+              {!selectedPhaseId ? (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+                  <FolderTree size={48} className="mx-auto text-gray-300 mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    카테고리를 선택하세요
+                  </h3>
+                  <p className="text-gray-500 mb-4">
+                    WBS 구조를 확인하고 관리하려면 먼저 카테고리를 선택해 주세요.
+                  </p>
+                  <p className="text-sm text-gray-400">
+                    또는 상단의 &quot;전체 트리&quot; 또는 &quot;간트 차트&quot;를 선택하여 전체 프로젝트 WBS를 확인할 수 있습니다.
+                  </p>
                 </div>
+              ) : (
+                <>
+                  {/* Tab Navigation */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+                    <div className="border-b border-gray-200">
+                      <nav className="flex space-x-0">
+                        {tabs.map((tab) => (
+                          <button
+                            key={tab.id}
+                            type="button"
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                              activeTab === tab.id
+                                ? 'border-blue-600 text-blue-600'
+                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                            }`}
+                          >
+                            <tab.icon size={16} />
+                            {tab.label}
+                          </button>
+                        ))}
+                      </nav>
+                    </div>
 
-                {/* Tab Content */}
-                <div className="p-6">
-                  {activeTab === 'wbs' && selectedPhase && (
-                    <WbsTreeView
-                      phaseId={selectedPhaseId}
-                      phaseName={selectedPhase.name}
-                      phaseCode={selectedPhase.code || '1'}
-                      canEdit={canEdit}
-                      onLinkStory={handleLinkStory}
-                      childPhases={childPhasesOfSelected}
-                    />
-                  )}
+                    {/* Tab Content */}
+                    <div className="p-6">
+                      {activeTab === 'wbs' && selectedPhase && (
+                        <WbsTreeView
+                          phaseId={selectedPhaseId}
+                          phaseName={selectedPhase.name}
+                          phaseCode={selectedPhase.code || '1'}
+                          canEdit={canEdit}
+                          onLinkStory={handleLinkStory}
+                          childPhases={childPhasesOfSelected}
+                        />
+                      )}
 
-                  {activeTab === 'integration' && (
-                    <WbsBacklogIntegration
-                      projectId={projectId}
-                      phaseId={selectedPhaseId}
-                      phaseName={selectedPhase?.name || ''}
-                      canEdit={canEdit}
-                    />
-                  )}
-                </div>
-              </div>
+                      {activeTab === 'integration' && (
+                        <WbsBacklogIntegration
+                          projectId={projectId}
+                          phaseId={selectedPhaseId}
+                          phaseName={selectedPhase?.name || ''}
+                          canEdit={canEdit}
+                        />
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
             </>
           )}
-        </>
-      )}
+        </div>
+
+        {/* Context Panel (v2.0) */}
+        {panelMode !== 'none' && (
+          <WbsContextPanel
+            panelMode={panelMode}
+            selectedGroup={selectedGroup}
+            selectedItem={selectedItem}
+            selectedPhase={phasesWithWbs.find(p => p.id === selectedPhaseId) || null}
+            preset={currentPreset}
+            onClose={() => {
+              setPanelMode('none');
+              setSelectedGroup(null);
+              setSelectedItem(null);
+            }}
+          />
+        )}
+      </div>
 
       {/* Story Link Modal */}
       {showStoryLinkModal && (

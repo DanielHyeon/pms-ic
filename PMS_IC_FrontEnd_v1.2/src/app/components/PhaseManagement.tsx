@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Plus, LayoutTemplate } from 'lucide-react';
+import type { ViewModePreset } from '../../types/menuOntology';
 import { useStories } from '../../hooks/api/useStories';
 import { usePhaseWbs } from '../../hooks/api/useWbs';
 import { WbsGroupWithItems, calculateWeightedProgress } from '../../types/wbs';
@@ -48,6 +49,10 @@ import {
   type SettingsTabType,
 } from './phases';
 import { useProject } from '../../contexts/ProjectContext';
+import { usePreset } from '../../hooks/usePreset';
+import { useFilterSpec } from '../../hooks/useFilterSpec';
+import { PresetSwitcher } from './common/PresetSwitcher';
+import { PhaseKpiRow, PhaseFilters, PHASE_FILTER_KEYS, HealthSummaryStrip } from './phases';
 
 interface PhaseManagementProps {
   userRole: UserRole;
@@ -148,6 +153,10 @@ export default function PhaseManagement({ userRole }: PhaseManagementProps) {
   // Permissions
   const permissions = getRolePermissions(userRole);
   const { canEdit, canApprove, canUpload, canManageKpi, canManagePhases } = permissions;
+
+  // v2.0 hooks: Preset switching and FilterSpec-based filtering
+  const { currentPreset, switchPreset } = usePreset(userRole.toUpperCase());
+  const { filters, setFilters } = useFilterSpec({ keys: PHASE_FILTER_KEYS, syncUrl: false });
 
   // Sync phases with API data and handle project changes
   useEffect(() => {
@@ -440,7 +449,22 @@ export default function PhaseManagement({ userRole }: PhaseManagementProps) {
         canManagePhases={canManagePhases}
         onOpenSettings={() => setShowSettingsModal(true)}
         onAddPhase={() => openPhaseModal()}
+        preset={currentPreset}
+        onSwitchPreset={switchPreset}
       />
+
+      <div className="space-y-4 mb-6">
+        <HealthSummaryStrip
+          phases={syncedPhases}
+          selectedPhaseId={selectedPhase.id}
+          onPhaseSelect={handlePhaseSelect}
+          preset={currentPreset}
+        />
+
+        <PhaseKpiRow preset={currentPreset} phases={syncedPhases} />
+
+        <PhaseFilters values={filters} onChange={setFilters} preset={currentPreset} />
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <PhaseList
@@ -547,14 +571,23 @@ interface HeaderProps {
   canManagePhases: boolean;
   onOpenSettings: () => void;
   onAddPhase: () => void;
+  preset: ViewModePreset;
+  onSwitchPreset: (preset: ViewModePreset) => void;
 }
 
-function Header({ canManagePhases, onOpenSettings, onAddPhase }: HeaderProps) {
+function Header({ canManagePhases, onOpenSettings, onAddPhase, preset, onSwitchPreset }: HeaderProps) {
   return (
     <div className="mb-6 flex items-center justify-between">
-      <div>
-        <h2 className="text-2xl font-semibold text-gray-900">단계별 프로젝트 관리</h2>
-        <p className="text-sm text-gray-500 mt-1">Waterfall 기반 거시적 프로세스 관리</p>
+      <div className="flex items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-semibold text-gray-900">단계별 프로젝트 관리</h2>
+          <p className="text-sm text-gray-500 mt-1">Waterfall 기반 거시적 프로세스 관리</p>
+        </div>
+        <PresetSwitcher
+          currentPreset={preset}
+          onSwitch={onSwitchPreset}
+          compact
+        />
       </div>
       {canManagePhases && (
         <div className="flex items-center gap-2">

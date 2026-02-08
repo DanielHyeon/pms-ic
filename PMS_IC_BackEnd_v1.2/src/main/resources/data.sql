@@ -1258,17 +1258,17 @@ ON CONFLICT (id) DO UPDATE SET summary = EXCLUDED.summary;
 -- ============================================
 -- 21. ISSUES (project.issues)
 -- ============================================
-INSERT INTO project.issues (id, project_id, title, description, issue_type, status, priority, assignee, reporter, reviewer, due_date, resolved_at, resolution, comments, created_at, updated_at)
+INSERT INTO project.issues (id, project_id, title, description, issue_type, status, priority, assignee, reporter, reviewer, due_date, resolved_at, resolution, comments, escalation_level, sla_due_at, sla_breached, resolution_type, reopen_count, linked_requirement_id, created_at, updated_at)
 VALUES
     -- Project 1 Issues
-    ('issue-001-01', 'proj-001', '보안 아키텍처 검토 담당자 미배정', '시스템 설계 단계에서 보안 아키텍처 검토를 위한 전문 담당자가 아직 배정되지 않음', 'RISK', 'OPEN', 'HIGH', NULL, 'user-pm-001', 'user-pmo-001', '2026-02-15', NULL, NULL, '외부 보안 컨설턴트 투입 검토 중', NOW(), NOW()),
-    ('issue-001-02', 'proj-001', 'API 명세서 검토 지연', 'API 명세서 초안 검토가 일정보다 2일 지연됨', 'ISSUE', 'IN_PROGRESS', 'MEDIUM', 'user-dev-001', 'user-pm-001', 'user-dev-003', '2026-02-20', NULL, NULL, '추가 검토자 투입으로 해결 중', NOW(), NOW()),
-    ('issue-001-03', 'proj-001', 'Neo4j 라이선스 검토 필요', 'Neo4j Enterprise Edition 라이선스 비용 및 조건 검토 필요', 'QUESTION', 'OPEN', 'LOW', 'user-ba-001', 'user-dev-002', NULL, '2026-02-28', NULL, NULL, NULL, NOW(), NOW()),
-    ('issue-001-04', 'proj-001', 'RFP 요구사항 변경 요청', '고객사에서 OCR 정확도 요구사항을 99%에서 97%로 완화 요청', 'CHANGE_REQUEST', 'RESOLVED', 'HIGH', 'user-ba-001', 'user-sponsor-001', 'user-pm-001', '2026-01-25', '2026-01-24', '고객 협의 후 97%로 조정 합의', '고객 협의 후 97%로 조정 합의', NOW(), NOW()),
+    ('issue-001-01', 'proj-001', '보안 아키텍처 검토 담당자 미배정', '시스템 설계 단계에서 보안 아키텍처 검토를 위한 전문 담당자가 아직 배정되지 않음', 'RISK', 'OPEN', 'HIGH', NULL, 'user-pm-001', 'user-pmo-001', '2026-02-15', NULL, NULL, '외부 보안 컨설턴트 투입 검토 중', 1, '2026-02-15 18:00:00', false, NULL, 0, 'preq-001-05', NOW(), NOW()),
+    ('issue-001-02', 'proj-001', 'API 명세서 검토 지연', 'API 명세서 초안 검토가 일정보다 2일 지연됨', 'ISSUE', 'IN_PROGRESS', 'MEDIUM', 'user-dev-001', 'user-pm-001', 'user-dev-003', '2026-02-20', NULL, NULL, '추가 검토자 투입으로 해결 중', 0, '2026-02-20 18:00:00', false, NULL, 0, 'preq-001-03', NOW(), NOW()),
+    ('issue-001-03', 'proj-001', 'Neo4j 라이선스 검토 필요', 'Neo4j Enterprise Edition 라이선스 비용 및 조건 검토 필요', 'QUESTION', 'OPEN', 'LOW', 'user-ba-001', 'user-dev-002', NULL, '2026-02-28', NULL, NULL, NULL, 0, NULL, false, NULL, 0, NULL, NOW(), NOW()),
+    ('issue-001-04', 'proj-001', 'RFP 요구사항 변경 요청', '고객사에서 OCR 정확도 요구사항을 99%에서 97%로 완화 요청', 'CHANGE_REQUEST', 'RESOLVED', 'HIGH', 'user-ba-001', 'user-sponsor-001', 'user-pm-001', '2026-01-25', '2026-01-24', '고객 협의 후 97%로 조정 합의', '고객 협의 후 97%로 조정 합의', 0, '2026-01-25 18:00:00', false, 'FIXED', 0, 'preq-001-01', NOW(), NOW()),
 
     -- Project 2 Issues
-    ('issue-002-01', 'proj-002', '사용자 조사 참여자 모집 지연', '모바일 앱 사용자 조사를 위한 참여자 모집이 예상보다 지연됨', 'ISSUE', 'OPEN', 'MEDIUM', 'user-ba-001', 'user-pm-002', NULL, '2026-02-20', NULL, NULL, '마케팅팀 협조 요청 중', NOW(), NOW()),
-    ('issue-002-02', 'proj-002', 'iOS 개발자 부족', 'Swift 전문 개발자 1명 추가 투입 필요', 'RISK', 'OPEN', 'HIGH', NULL, 'user-pm-002', 'user-pmo-001', '2026-03-15', NULL, NULL, '채용 진행 중', NOW(), NOW())
+    ('issue-002-01', 'proj-002', '사용자 조사 참여자 모집 지연', '모바일 앱 사용자 조사를 위한 참여자 모집이 예상보다 지연됨', 'ISSUE', 'OPEN', 'MEDIUM', 'user-ba-001', 'user-pm-002', NULL, '2026-02-20', NULL, NULL, '마케팅팀 협조 요청 중', 0, '2026-02-20 18:00:00', false, NULL, 0, NULL, NOW(), NOW()),
+    ('issue-002-02', 'proj-002', 'iOS 개발자 부족', 'Swift 전문 개발자 1명 추가 투입 필요', 'RISK', 'OPEN', 'HIGH', NULL, 'user-pm-002', 'user-pmo-001', '2026-03-15', NULL, NULL, '채용 진행 중', 1, '2026-03-01 18:00:00', false, NULL, 0, NULL, NOW(), NOW())
 ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, status = EXCLUDED.status;
 
 -- ============================================
@@ -1457,8 +1457,271 @@ ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 -- (All 8 sprints are now defined in a single INSERT statement above)
 
 -- ============================================
--- Summary (v20260207):
--- - 18 users (various roles)
+-- 35. PROJECT HEALTH SCORES (project.project_health_scores)
+-- ============================================
+INSERT INTO project.project_health_scores (id, project_id, score_date, overall_score, schedule_score, budget_score, quality_score, risk_score, resource_score, grade, trend, calculated_by)
+VALUES
+    ('phs-001-01', 'proj-001', '2026-02-01', 78.50, 85.00, 90.00, 70.00, 65.00, 82.00, 'B+', 'IMPROVING', 'user-pm-001'),
+    ('phs-001-02', 'proj-001', '2026-02-07', 80.20, 86.00, 90.00, 72.00, 68.00, 85.00, 'B+', 'IMPROVING', 'user-pm-001'),
+    ('phs-002-01', 'proj-002', '2026-02-01', 65.00, 60.00, 80.00, 55.00, 70.00, 60.00, 'C+', 'DECLINING', 'user-pm-002'),
+    ('phs-002-02', 'proj-002', '2026-02-07', 63.50, 58.00, 78.00, 55.00, 72.00, 55.00, 'C', 'DECLINING', 'user-pm-002')
+ON CONFLICT (project_id, score_date) DO NOTHING;
+
+-- Update project health columns
+UPDATE project.projects SET health_score_current = 80.20, health_grade = 'B+', budget_burn_rate = 20.00, portfolio_status = 'ACTIVE' WHERE id = 'proj-001';
+UPDATE project.projects SET health_score_current = 63.50, health_grade = 'C', budget_burn_rate = 15.00, portfolio_status = 'AT_RISK' WHERE id = 'proj-002';
+
+-- ============================================
+-- 36. REQUIREMENT TRACE LINKS (project.requirement_trace_links)
+-- ============================================
+INSERT INTO project.requirement_trace_links (id, requirement_id, linked_entity_type, linked_entity_id, link_type, created_by)
+VALUES
+    -- Req → Epic links
+    ('rtl-001', 'preq-001-01', 'EPIC', 'epic-001-01', 'IMPLEMENTS', 'user-pm-001'),
+    ('rtl-002', 'preq-001-02', 'EPIC', 'epic-001-02', 'IMPLEMENTS', 'user-pm-001'),
+    ('rtl-003', 'preq-001-03', 'EPIC', 'epic-001-03', 'IMPLEMENTS', 'user-pm-001'),
+    ('rtl-004', 'preq-001-05', 'EPIC', 'epic-001-04', 'IMPLEMENTS', 'user-pm-001'),
+    -- Req → Story links
+    ('rtl-005', 'preq-001-01', 'USER_STORY', 'story-001-01', 'TRACED_TO', 'user-pm-001'),
+    ('rtl-006', 'preq-001-02', 'USER_STORY', 'story-001-02', 'TRACED_TO', 'user-pm-001'),
+    -- Req → Deliverable links
+    ('rtl-007', 'preq-001-01', 'DELIVERABLE', 'deliv-001-01', 'VERIFIED_BY', 'user-qa-001'),
+    ('rtl-008', 'preq-001-03', 'DELIVERABLE', 'deliv-001-07', 'VERIFIED_BY', 'user-qa-001')
+ON CONFLICT (requirement_id, linked_entity_type, linked_entity_id) DO NOTHING;
+
+-- Update requirement trace status
+UPDATE project.requirements SET trace_status = 'FULLY_TRACED', trace_coverage = 100.00, ai_si_type = 'AI' WHERE id = 'preq-001-01';
+UPDATE project.requirements SET trace_status = 'PARTIALLY_TRACED', trace_coverage = 60.00, ai_si_type = 'AI' WHERE id = 'preq-001-02';
+UPDATE project.requirements SET trace_status = 'PARTIALLY_TRACED', trace_coverage = 40.00, ai_si_type = 'SI' WHERE id = 'preq-001-03';
+UPDATE project.requirements SET trace_status = 'NOT_TRACED', trace_coverage = 0.00, ai_si_type = 'COMMON' WHERE id = 'preq-001-04';
+UPDATE project.requirements SET trace_status = 'PARTIALLY_TRACED', trace_coverage = 50.00, ai_si_type = 'COMMON' WHERE id = 'preq-001-05';
+
+-- ============================================
+-- 37. REQUIREMENT CHANGE REQUESTS (project.requirement_change_requests)
+-- ============================================
+INSERT INTO project.requirement_change_requests (id, project_id, requirement_id, title, description, change_type, priority, status, impact_analysis, requested_by, reviewed_by, approved_by, requested_at, reviewed_at, approved_at)
+VALUES
+    ('rcr-001', 'proj-001', 'preq-001-01', 'OCR 정확도 기준 완화', '고객사 요청으로 OCR 정확도 목표를 99%에서 97%로 완화', 'MODIFICATION', 'HIGH', 'APPROVED', '일정 단축 가능, 비용 절감 예상. 품질 허용 범위 내.', 'user-sponsor-001', 'user-pm-001', 'user-pmo-001', '2026-01-20 10:00:00', '2026-01-22 14:00:00', '2026-01-24 09:00:00'),
+    ('rcr-002', 'proj-001', 'preq-001-03', 'API 응답 시간 강화', 'API 응답 시간 기준을 200ms에서 150ms로 강화 요청', 'MODIFICATION', 'MEDIUM', 'UNDER_REVIEW', '인프라 투자 필요. 캐싱 레이어 추가 검토.', 'user-dev-001', NULL, NULL, '2026-02-05 11:00:00', NULL, NULL),
+    ('rcr-003', 'proj-002', 'preq-002-01', '생체인증 방식 추가', '지문인증 외 얼굴인식 인증 방식 추가 요청', 'ADDITION', 'HIGH', 'DRAFT', NULL, 'user-pm-002', NULL, NULL, '2026-02-07 15:00:00', NULL, NULL)
+ON CONFLICT (id) DO NOTHING;
+
+-- ============================================
+-- 38. TEST SUITES (project.test_suites)
+-- ============================================
+INSERT INTO project.test_suites (id, project_id, name, description, test_type, phase_id, status, owner_id)
+VALUES
+    ('ts-001-01', 'proj-001', '요구사항 검증 테스트', '모든 RFP 요구사항에 대한 검증 테스트 모음', 'FUNCTIONAL', 'phase-001-05', 'ACTIVE', 'user-qa-001'),
+    ('ts-001-02', 'proj-001', 'AI 모델 성능 테스트', 'OCR, 분류, 사기탐지 모델 성능 검증', 'PERFORMANCE', 'phase-001-05', 'ACTIVE', 'user-qa-001'),
+    ('ts-001-03', 'proj-001', '보안 취약점 테스트', '인증, 암호화, 접근제어 보안 테스트', 'SECURITY', 'phase-001-05', 'DRAFT', 'user-qa-001'),
+    ('ts-001-04', 'proj-001', 'API 통합 테스트', 'REST API 엔드포인트 통합 테스트', 'INTEGRATION', 'phase-001-05', 'ACTIVE', 'user-qa-001'),
+    ('ts-002-01', 'proj-002', '모바일 UI 테스트', '사용성 및 UI 컴포넌트 테스트', 'FUNCTIONAL', 'phase-002-02', 'DRAFT', 'user-qa-002')
+ON CONFLICT (id) DO NOTHING;
+
+-- ============================================
+-- 39. TEST CASES (project.test_cases)
+-- ============================================
+INSERT INTO project.test_cases (id, suite_id, project_id, title, description, preconditions, test_steps, expected_result, priority, status, test_type, assignee_id, estimated_minutes)
+VALUES
+    -- Requirement validation test cases
+    ('tc-001-01', 'ts-001-01', 'proj-001', 'OCR 정확도 97% 검증', '보험 문서 OCR 처리 정확도가 97% 이상인지 검증', '1000장 표본 문서 준비\nOCR 엔진 배포 완료', '1. 표본 문서 일괄 처리\n2. 결과를 원본과 대조\n3. 정확도 산출', '정확도 97% 이상', 'CRITICAL', 'READY', 'AUTOMATED', 'user-qa-001', 120),
+    ('tc-001-02', 'ts-001-01', 'proj-001', '사기 탐지율 95% 검증', '사기 탐지 모델의 탐지율이 95% 이상인지 검증', '테스트 데이터셋 준비 (사기/정상 혼합)', '1. 혼합 데이터셋 입력\n2. 사기 탐지 실행\n3. 탐지율/오탐률 산출', '탐지율 95% 이상, 오탐률 5% 이하', 'CRITICAL', 'DRAFT', 'AUTOMATED', 'user-qa-001', 90),
+    ('tc-001-03', 'ts-001-01', 'proj-001', 'API 응답 시간 200ms 이내', 'REST API 주요 엔드포인트 응답 시간 검증', 'API 서버 기동, 테스트 환경 준비', '1. 주요 API 엔드포인트 호출 (100회)\n2. 응답 시간 측정\n3. 평균/최대값 산출', '평균 응답 시간 200ms 이내', 'HIGH', 'READY', 'AUTOMATED', 'user-qa-001', 60),
+    ('tc-001-04', 'ts-001-01', 'proj-001', 'AES-256 암호화 적용 확인', '민감 데이터의 AES-256 암호화 처리 확인', '데이터베이스 접근 가능', '1. 민감 데이터 입력\n2. DB 저장 값 확인\n3. 복호화 검증', '모든 민감 데이터 AES-256 암호화 처리', 'CRITICAL', 'DRAFT', 'MANUAL', 'user-qa-001', 45),
+
+    -- AI performance test cases
+    ('tc-001-05', 'ts-001-02', 'proj-001', 'OCR 처리 속도 5초 이내', '단일 문서 OCR 처리가 5초 이내 완료되는지 검증', 'OCR 엔진 배포 완료', '1. 다양한 크기의 문서 입력 (50건)\n2. 개별 처리 시간 측정', '모든 문서 5초 이내 처리', 'HIGH', 'READY', 'AUTOMATED', 'user-qa-001', 30),
+    ('tc-001-06', 'ts-001-02', 'proj-001', '문서 분류 정확도 검증', '문서 유형 분류 모델 정확도 검증', '분류 모델 학습 완료', '1. 테스트셋 입력\n2. 분류 결과 대조\n3. 정확도 산출', '분류 정확도 95% 이상', 'HIGH', 'DRAFT', 'AUTOMATED', 'user-qa-001', 60),
+
+    -- Security test cases
+    ('tc-001-07', 'ts-001-03', 'proj-001', 'JWT 토큰 만료 검증', 'JWT 토큰 만료 시 정상적으로 접근 거부되는지 검증', 'JWT 인증 시스템 배포 완료', '1. 만료된 토큰으로 API 호출\n2. 응답 코드 확인', '401 Unauthorized 응답', 'HIGH', 'READY', 'MANUAL', 'user-qa-001', 30),
+    ('tc-001-08', 'ts-001-03', 'proj-001', 'SQL Injection 방어 검증', 'SQL Injection 공격에 대한 방어 검증', 'API 엔드포인트 접근 가능', '1. 악성 SQL 페이로드 입력\n2. 시스템 응답 확인', '모든 악성 입력 차단, 정상 에러 응답', 'CRITICAL', 'DRAFT', 'MANUAL', 'user-qa-001', 60),
+
+    -- API integration test cases
+    ('tc-001-09', 'ts-001-04', 'proj-001', '보험청구 등록 API 통합 테스트', '보험청구 등록 전체 플로우 통합 검증', 'API 서버 + DB 기동', '1. 청구 등록 요청\n2. DB 저장 확인\n3. 이벤트 발행 확인', '정상 등록 및 이벤트 발행', 'HIGH', 'READY', 'AUTOMATED', 'user-qa-001', 45),
+    ('tc-001-10', 'ts-001-04', 'proj-001', '파일 업로드 API 테스트', '대용량 파일 업로드 처리 검증', 'API 서버 기동, 스토리지 설정', '1. 10MB 이상 파일 업로드\n2. 처리 상태 확인\n3. 다운로드 검증', '정상 업로드 및 다운로드 가능', 'MEDIUM', 'READY', 'MANUAL', 'user-qa-001', 30),
+
+    -- Project 2 test cases
+    ('tc-002-01', 'ts-002-01', 'proj-002', '로그인 화면 UI 테스트', '생체인증 로그인 플로우 UI 검증', '모바일 앱 빌드 완료', '1. 앱 실행\n2. 생체인증 시도\n3. 로그인 완료 확인', '3초 이내 로그인 완료', 'HIGH', 'DRAFT', 'MANUAL', 'user-qa-002', 30),
+    ('tc-002-02', 'ts-002-01', 'proj-002', '보험증권 목록 표시 테스트', '보험증권 목록 렌더링 및 상태 업데이트 검증', '테스트 데이터 로딩', '1. 목록 화면 진입\n2. 스크롤 테스트\n3. 실시간 상태 확인', '목록 정상 표시, 실시간 업데이트', 'MEDIUM', 'DRAFT', 'MANUAL', 'user-qa-002', 45)
+ON CONFLICT (id) DO NOTHING;
+
+-- ============================================
+-- 40. TEST EXECUTIONS (project.test_executions)
+-- ============================================
+INSERT INTO project.test_executions (id, test_case_id, project_id, sprint_id, executor_id, result, actual_result, environment, execution_date, duration_minutes, notes)
+VALUES
+    ('te-001', 'tc-001-03', 'proj-001', 'sprint-001-02', 'user-qa-001', 'PASS', '평균 응답 시간 145ms, 최대 198ms', 'STAGING', '2026-02-05 14:00:00', 55, '모든 엔드포인트 기준 충족'),
+    ('te-002', 'tc-001-05', 'proj-001', 'sprint-001-02', 'user-qa-001', 'PASS', '평균 처리 시간 3.2초, 최대 4.8초', 'STAGING', '2026-02-05 15:00:00', 28, '기준 충족'),
+    ('te-003', 'tc-001-07', 'proj-001', 'sprint-001-02', 'user-qa-001', 'PASS', '만료 토큰 401 응답 확인', 'STAGING', '2026-02-06 10:00:00', 25, 'JWT 만료 로직 정상'),
+    ('te-004', 'tc-001-09', 'proj-001', 'sprint-001-02', 'user-qa-001', 'FAIL', 'DB 저장은 성공하나 이벤트 발행 지연 (3초 초과)', 'STAGING', '2026-02-06 11:00:00', 40, '이벤트 발행 메커니즘 개선 필요, 이슈 등록됨'),
+    ('te-005', 'tc-001-10', 'proj-001', 'sprint-001-02', 'user-qa-001', 'PASS', '10MB 파일 정상 업로드/다운로드', 'STAGING', '2026-02-06 14:00:00', 28, NULL)
+ON CONFLICT (id) DO NOTHING;
+
+-- ============================================
+-- 41. TEST CASE TRACE LINKS (project.test_case_trace_links)
+-- ============================================
+INSERT INTO project.test_case_trace_links (id, test_case_id, linked_entity_type, linked_entity_id, link_type, created_by)
+VALUES
+    ('tctl-001', 'tc-001-01', 'REQUIREMENT', 'preq-001-01', 'VERIFIES', 'user-qa-001'),
+    ('tctl-002', 'tc-001-02', 'REQUIREMENT', 'preq-001-02', 'VERIFIES', 'user-qa-001'),
+    ('tctl-003', 'tc-001-03', 'REQUIREMENT', 'preq-001-03', 'VERIFIES', 'user-qa-001'),
+    ('tctl-004', 'tc-001-04', 'REQUIREMENT', 'preq-001-05', 'VERIFIES', 'user-qa-001'),
+    ('tctl-005', 'tc-001-05', 'REQUIREMENT', 'preq-001-01', 'VERIFIES', 'user-qa-001'),
+    ('tctl-006', 'tc-001-09', 'USER_STORY', 'story-001-01', 'VALIDATES', 'user-qa-001')
+ON CONFLICT (test_case_id, linked_entity_type, linked_entity_id) DO NOTHING;
+
+-- ============================================
+-- 42. ISSUE COMMENTS (project.issue_comments)
+-- ============================================
+INSERT INTO project.issue_comments (id, issue_id, author_id, content, comment_type)
+VALUES
+    ('ic-001', 'issue-001-01', 'user-pm-001', '보안 컨설턴트 3곳 견적 요청 완료. 2월 10일까지 비교 분석 예정.', 'COMMENT'),
+    ('ic-002', 'issue-001-01', 'user-pmo-001', '예산 범위 내에서 진행 부탁드립니다. 긴급 건으로 처리 권한 부여합니다.', 'COMMENT'),
+    ('ic-003', 'issue-001-02', 'user-dev-001', 'API 명세서 v0.3 업로드 완료. 변경사항 리뷰 부탁드립니다.', 'COMMENT'),
+    ('ic-004', 'issue-001-04', 'user-ba-001', '고객사 담당자 확인 완료. 97%로 최종 합의.', 'STATUS_CHANGE'),
+    ('ic-005', 'issue-002-01', 'user-pm-002', '마케팅팀에서 SNS 채널 통해 참여자 모집 지원하기로 했습니다.', 'COMMENT'),
+    ('ic-006', 'issue-002-02', 'user-pmo-001', '헤드헌터 통해 iOS 시니어 개발자 인터뷰 2건 진행 중', 'COMMENT')
+ON CONFLICT (id) DO NOTHING;
+
+-- ============================================
+-- 43. HEALTH SNAPSHOTS (project.health_snapshots)
+-- ============================================
+INSERT INTO project.health_snapshots (id, project_id, snapshot_date, overall_health, schedule_health, budget_health, quality_health, risk_health, resource_health, grade, trend, notes, snapshot_data)
+VALUES
+    ('hs-001-01', 'proj-001', '2026-01-31', 75.00, 80.00, 92.00, 65.00, 62.00, 76.00, 'B', 'STABLE', '1월 말 기준 - 요구사항 분석 완료', '{"phases_completed": 1, "phases_total": 6, "open_issues": 2, "open_risks": 1}'),
+    ('hs-001-02', 'proj-001', '2026-02-07', 80.20, 86.00, 90.00, 72.00, 68.00, 85.00, 'B+', 'IMPROVING', '설계 단계 60% 진행', '{"phases_completed": 1, "phases_total": 6, "open_issues": 3, "open_risks": 1, "sprint_velocity": 38}'),
+    ('hs-002-01', 'proj-002', '2026-01-31', 68.00, 65.00, 85.00, 60.00, 72.00, 55.00, 'C+', 'STABLE', '리서치 단계 진행 중', '{"phases_completed": 0, "phases_total": 3, "open_issues": 1, "open_risks": 1}'),
+    ('hs-002-02', 'proj-002', '2026-02-07', 63.50, 58.00, 78.00, 55.00, 72.00, 55.00, 'C', 'DECLINING', 'iOS 개발자 부족 리스크', '{"phases_completed": 0, "phases_total": 3, "open_issues": 2, "open_risks": 2, "staffing_gap": 1}')
+ON CONFLICT (project_id, snapshot_date) DO NOTHING;
+
+-- ============================================
+-- 44. RISKS (risk.risks)
+-- ============================================
+INSERT INTO risk.risks (id, project_id, title, description, category, status, probability, impact, owner_id, identified_by, identified_date, due_date, phase_id, linked_requirement_id, mitigation_strategy, contingency_plan, trigger_conditions)
+VALUES
+    ('risk-001-01', 'proj-001', 'AI 모델 정확도 미달', 'OCR/사기탐지 AI 모델이 목표 정확도(97%/95%)를 달성하지 못할 위험', 'TECHNICAL', 'OPEN', 4, 5, 'user-dev-001', 'user-pm-001', '2026-01-15', '2026-04-30', 'phase-001-03', 'preq-001-01', 'POC 조기 수행, 외부 전문가 자문, 대안 모델 준비', '정확도 기준 단계적 완화 (97→95→93)', 'POC 결과 정확도 90% 미만'),
+    ('risk-001-02', 'proj-001', '레거시 시스템 연동 지연', '기존 보험심사 시스템과의 연동 API 인터페이스 구현 지연', 'INTEGRATION', 'OPEN', 3, 4, 'user-dev-002', 'user-pm-001', '2026-01-20', '2026-05-15', 'phase-001-04', 'preq-001-03', '전담 인력 배치, 레거시 팀 조기 미팅, Mock API 선행 개발', '연동 범위 축소 후 2차 릴리스에서 처리', '레거시 API 문서 수령 지연 2주 초과'),
+    ('risk-001-03', 'proj-001', '보안 감사 불합격', '금융 보안 감사 기준 미충족으로 인한 배포 지연 위험', 'COMPLIANCE', 'MITIGATING', 2, 5, 'user-qa-001', 'user-pm-001', '2026-02-01', '2026-05-30', 'phase-001-05', 'preq-001-05', '보안 아키텍처 조기 검토, 외부 보안 컨설팅 진행', '사전 모의 감사 실시, 취약점 패치 우선 처리', '보안 체크리스트 미충족 항목 3건 이상'),
+    ('risk-002-01', 'proj-002', 'iOS 개발자 인력 부족', '숙련된 Swift/SwiftUI 개발자 확보 어려움', 'RESOURCE', 'OPEN', 4, 4, 'user-pm-002', 'user-pm-002', '2026-02-01', '2026-03-15', NULL, NULL, '헤드헌터 투입, 프리랜서 대안 검토', 'React Native 대체 검토', '2주 내 채용 실패'),
+    ('risk-002-02', 'proj-002', '사용자 조사 지연', 'UX 리서치를 위한 참여자 확보 지연', 'SCHEDULE', 'MITIGATING', 3, 3, 'user-ba-001', 'user-pm-002', '2026-02-05', '2026-02-28', 'phase-002-01', 'preq-002-01', '마케팅팀 SNS 채널 활용, 인센티브 제공', '내부 직원 대상 가리서치 선진행', '참여자 10명 미만')
+ON CONFLICT (id) DO NOTHING;
+
+-- ============================================
+-- 45. RISK RESPONSES (risk.risk_responses)
+-- ============================================
+INSERT INTO risk.risk_responses (id, risk_id, response_type, description, status, owner_id, due_date, cost_estimate, effectiveness)
+VALUES
+    ('rr-001', 'risk-001-01', 'MITIGATE', 'POC 조기 수행: 2월 중 소규모 데이터셋으로 모델 성능 검증', 'IN_PROGRESS', 'user-dev-001', '2026-02-28', 0.00, 'HIGH'),
+    ('rr-002', 'risk-001-01', 'MITIGATE', '외부 AI 전문가 자문: 모델 아키텍처 리뷰 1회', 'PLANNED', 'user-pm-001', '2026-03-15', 5000000.00, 'MEDIUM'),
+    ('rr-003', 'risk-001-02', 'MITIGATE', '레거시 팀 공동 워크숍: API 인터페이스 사전 정의', 'PLANNED', 'user-dev-002', '2026-02-20', 0.00, 'HIGH'),
+    ('rr-004', 'risk-001-03', 'MITIGATE', '외부 보안 컨설팅 진행: ISMS 사전 점검', 'IN_PROGRESS', 'user-qa-001', '2026-03-30', 15000000.00, 'HIGH'),
+    ('rr-005', 'risk-002-01', 'TRANSFER', '프리랜서 iOS 개발자 3개월 계약 검토', 'PLANNED', 'user-pm-002', '2026-02-28', 24000000.00, 'MEDIUM'),
+    ('rr-006', 'risk-002-02', 'MITIGATE', 'SNS 채널 통한 참여자 모집 캠페인', 'IN_PROGRESS', 'user-ba-001', '2026-02-15', 1000000.00, 'MEDIUM')
+ON CONFLICT (id) DO NOTHING;
+
+-- ============================================
+-- 46. DECISIONS (risk.decisions)
+-- ============================================
+INSERT INTO risk.decisions (id, project_id, title, description, category, status, priority, decision_maker_id, decided_option_id, decided_at, deadline, rationale, impact_analysis, phase_id, linked_risk_id)
+VALUES
+    ('dec-001-01', 'proj-001', '기술 스택 최종 선정', 'AI 보험심사 시스템의 핵심 기술 스택 결정', 'TECHNICAL', 'DECIDED', 'HIGH', 'user-pm-001', 'dopt-001-01', '2026-01-28 15:00:00', '2026-01-31', 'Spring WebFlux 기반 reactive 아키텍처가 실시간 처리에 적합', '전체 아키텍처에 영향. 팀 역량 고려한 최적 선택.', 'phase-001-02', NULL),
+    ('dec-001-02', 'proj-001', 'AI 모델 프레임워크 선택', 'OCR/분류 모델 학습 및 서빙 프레임워크 결정', 'TECHNICAL', 'DECIDED', 'HIGH', 'user-dev-001', 'dopt-002-02', '2026-02-03 10:00:00', '2026-02-05', 'GGUF 양자화 모델이 on-premise 배포에 적합하고 비용 효율적', 'AI 파트 전체 개발 방향 결정. 학습 vs 서빙 분리.', 'phase-001-03', 'risk-001-01'),
+    ('dec-001-03', 'proj-001', '클라우드 인프라 선택', '운영 환경 클라우드 플랫폼 결정', 'INFRASTRUCTURE', 'PENDING', 'HIGH', NULL, NULL, NULL, '2026-02-28', NULL, '비용, 보안, 레거시 연동 모두 영향', NULL, NULL),
+    ('dec-002-01', 'proj-002', '크로스플랫폼 vs 네이티브', '모바일 앱 개발 방식 결정', 'TECHNICAL', 'DECIDED', 'CRITICAL', 'user-pm-002', 'dopt-004-01', '2026-01-25 11:00:00', '2026-01-30', '보안 요구사항과 생체인증을 고려하면 네이티브가 적합', 'iOS/Android 별도 팀 필요. 인력 2배 소요.', NULL, 'risk-002-01')
+ON CONFLICT (id) DO NOTHING;
+
+-- ============================================
+-- 47. DECISION OPTIONS (risk.decision_options)
+-- ============================================
+INSERT INTO risk.decision_options (id, decision_id, title, description, pros, cons, cost_estimate, risk_level, recommended, order_num)
+VALUES
+    -- Decision 1: Tech Stack
+    ('dopt-001-01', 'dec-001-01', 'Spring WebFlux + R2DBC', 'Reactive 스택 기반 비동기 처리', 'Non-blocking IO, 높은 처리량, 실시간 SSE 지원', '학습 곡선, 디버깅 난이도', 0.00, 'LOW', true, 1),
+    ('dopt-001-02', 'dec-001-01', 'Spring MVC + JPA', '전통적인 동기 처리 스택', '팀 경험 풍부, 안정적', '동시성 처리 한계, SSE 구현 복잡', 0.00, 'LOW', false, 2),
+
+    -- Decision 2: AI Framework
+    ('dopt-002-01', 'dec-001-02', 'PyTorch + TorchServe', '범용 ML 프레임워크', '유연성, 큰 커뮤니티', 'GPU 비용, 서빙 인프라 필요', 50000000.00, 'MEDIUM', false, 1),
+    ('dopt-002-02', 'dec-001-02', 'llama.cpp + GGUF', '경량 추론 엔진', '비용 효율, CPU 추론 가능, 빠른 배포', '학습 미지원, 모델 제한', 5000000.00, 'LOW', true, 2),
+    ('dopt-002-03', 'dec-001-02', 'vLLM + GPTQ', '고성능 추론 서버', '높은 처리량, 배치 최적화', 'GPU 필수, 비용 높음', 80000000.00, 'HIGH', false, 3),
+
+    -- Decision 3: Cloud
+    ('dopt-003-01', 'dec-001-03', 'AWS', 'Amazon Web Services', 'AI 서비스 풍부, 글로벌 인프라', '비용, Lock-in', 120000000.00, 'MEDIUM', false, 1),
+    ('dopt-003-02', 'dec-001-03', 'Azure', 'Microsoft Azure', 'Enterprise 친화, AD 연동', 'AI 서비스 제한적', 110000000.00, 'MEDIUM', false, 2),
+    ('dopt-003-03', 'dec-001-03', 'On-Premise', '자체 데이터센터', '보안 완전 제어, 장기 비용 절감', '초기 투자, 운영 인력', 200000000.00, 'LOW', false, 3),
+
+    -- Decision 4: Mobile
+    ('dopt-004-01', 'dec-002-01', 'Native (Swift + Kotlin)', 'iOS/Android 네이티브 개발', '최적 성능, 생체인증 완벽 지원, 보안', '인력 2배, 코드 중복', 0.00, 'LOW', true, 1),
+    ('dopt-004-02', 'dec-002-01', 'React Native', '크로스플랫폼 JS 기반', '코드 공유 70%, 빠른 개발', '생체인증 제한, 성능 Trade-off', 0.00, 'MEDIUM', false, 2),
+    ('dopt-004-03', 'dec-002-01', 'Flutter', '크로스플랫폼 Dart 기반', '통일 UI, 우수 성능', '네이티브 모듈 제한, 팀 러닝커브', 0.00, 'MEDIUM', false, 3)
+ON CONFLICT (id) DO NOTHING;
+
+-- ============================================
+-- 48. TASK TIME LOGS (task.task_time_logs)
+-- ============================================
+INSERT INTO task.task_time_logs (id, task_id, project_id, user_id, logged_hours, log_date, description)
+VALUES
+    ('ttl-001', 'task-001-01', 'proj-001', 'user-ba-001', 4.00, '2026-01-15', '이해관계자 인터뷰 1차'),
+    ('ttl-002', 'task-001-01', 'proj-001', 'user-ba-001', 6.00, '2026-01-16', '이해관계자 인터뷰 2차 및 정리'),
+    ('ttl-003', 'task-001-02', 'proj-001', 'user-ba-001', 8.00, '2026-01-17', '요구사항 명세서 초안 작성'),
+    ('ttl-004', 'task-001-03', 'proj-001', 'user-dev-001', 6.00, '2026-02-01', '아키텍처 설계 초안'),
+    ('ttl-005', 'task-001-03', 'proj-001', 'user-dev-001', 4.00, '2026-02-02', '아키텍처 리뷰 반영'),
+    ('ttl-006', 'task-001-04', 'proj-001', 'user-dev-001', 8.00, '2026-02-03', '기술 스택 비교 분석'),
+    ('ttl-007', 'task-001-05', 'proj-001', 'user-dev-002', 5.00, '2026-02-04', 'ERD 초안 작성'),
+    ('ttl-008', 'task-001-05', 'proj-001', 'user-dev-002', 3.00, '2026-02-05', 'ERD 리뷰 반영'),
+    ('ttl-009', 'task-001-07', 'proj-001', 'user-dev-001', 4.00, '2026-02-06', 'API 명세서 작성'),
+    ('ttl-010', 'task-002-01', 'proj-002', 'user-ba-001', 6.00, '2026-02-03', '경쟁사 앱 분석')
+ON CONFLICT (id) DO NOTHING;
+
+-- ============================================
+-- 49. TASK COMMENTS (task.task_comments)
+-- ============================================
+INSERT INTO task.task_comments (id, task_id, author_id, content, comment_type)
+VALUES
+    ('tc-comm-001', 'task-001-01', 'user-pm-001', '인터뷰 대상자 목록 확인 부탁드립니다.', 'COMMENT'),
+    ('tc-comm-002', 'task-001-01', 'user-ba-001', '5명 인터뷰 완료. 결과 정리 중입니다.', 'COMMENT'),
+    ('tc-comm-003', 'task-001-03', 'user-dev-001', '아키텍처 설계 초안 완료. 리뷰 요청합니다.', 'COMMENT'),
+    ('tc-comm-004', 'task-001-03', 'user-pmo-001', '보안 아키텍처 부분 보강 필요합니다.', 'COMMENT'),
+    ('tc-comm-005', 'task-001-05', 'user-dev-002', 'ERD 초안 작성 중. Neo4j 그래프 모델은 별도 문서로 진행합니다.', 'COMMENT'),
+    ('tc-comm-006', 'task-001-07', 'user-dev-003', 'API 명세서 리뷰 완료. 인증 부분 수정 필요.', 'COMMENT')
+ON CONFLICT (id) DO NOTHING;
+
+-- ============================================
+-- 50. EVIDENCE ITEMS (audit.evidence_items)
+-- ============================================
+INSERT INTO audit.evidence_items (id, project_id, entity_type, entity_id, evidence_type, title, description, file_path, file_name, file_size, status, collected_by, phase_id, compliance_category)
+VALUES
+    ('ev-001', 'proj-001', 'DELIVERABLE', 'deliv-001-01', 'DOCUMENT', '요구사항 명세서(SRS) 승인본', 'SPONSOR 승인 완료된 SRS 최종본', '/evidence/proj-001/SRS_approved.pdf', 'SRS_approved.pdf', 2457600, 'VERIFIED', 'user-qa-001', 'phase-001-01', 'REQUIREMENTS'),
+    ('ev-002', 'proj-001', 'DELIVERABLE', 'deliv-001-04', 'DOCUMENT', '시스템 아키텍처 설계서 승인본', 'PMO HEAD 승인된 아키텍처 문서', '/evidence/proj-001/architecture_approved.pdf', 'architecture_approved.pdf', 3072000, 'VERIFIED', 'user-qa-001', 'phase-001-02', 'DESIGN'),
+    ('ev-003', 'proj-001', 'MEETING', 'meeting-001-01', 'MINUTES', '킥오프 미팅 회의록', '프로젝트 킥오프 미팅 회의록 및 참석자 서명', '/evidence/proj-001/kickoff_minutes.pdf', 'kickoff_minutes.pdf', 512000, 'COLLECTED', 'user-pm-001', 'phase-001-01', 'GOVERNANCE'),
+    ('ev-004', 'proj-001', 'ISSUE', 'issue-001-04', 'APPROVAL', '변경 요청 승인 이력', 'OCR 정확도 변경 요청에 대한 고객/PMO 승인 이력', '/evidence/proj-001/change_request_approval.pdf', 'change_request_approval.pdf', 256000, 'VERIFIED', 'user-qa-001', 'phase-001-01', 'CHANGE_MANAGEMENT')
+ON CONFLICT (id) DO NOTHING;
+
+-- ============================================
+-- 51. COMPLIANCE CHECKLISTS (audit.compliance_checklists)
+-- ============================================
+INSERT INTO audit.compliance_checklists (id, project_id, checklist_name, category, item_description, required, status, evidence_item_id, phase_id, assignee_id, due_date)
+VALUES
+    ('cl-001', 'proj-001', '요구사항 단계 산출물', 'REQUIREMENTS', '요구사항 명세서(SRS) 작성 및 승인', true, 'COMPLETED', 'ev-001', 'phase-001-01', 'user-ba-001', '2026-01-31'),
+    ('cl-002', 'proj-001', '요구사항 단계 산출물', 'REQUIREMENTS', '이해관계자 인터뷰 보고서', true, 'COMPLETED', NULL, 'phase-001-01', 'user-ba-001', '2026-01-31'),
+    ('cl-003', 'proj-001', '요구사항 단계 산출물', 'REQUIREMENTS', '요구사항 추적 매트릭스(RTM)', true, 'COMPLETED', NULL, 'phase-001-01', 'user-ba-001', '2026-01-31'),
+    ('cl-004', 'proj-001', '설계 단계 산출물', 'DESIGN', '시스템 아키텍처 설계서 승인', true, 'COMPLETED', 'ev-002', 'phase-001-02', 'user-dev-001', '2026-02-28'),
+    ('cl-005', 'proj-001', '설계 단계 산출물', 'DESIGN', 'ERD 및 데이터 모델 문서', true, 'IN_PROGRESS', NULL, 'phase-001-02', 'user-dev-002', '2026-02-28'),
+    ('cl-006', 'proj-001', '설계 단계 산출물', 'DESIGN', 'API 명세서 (OpenAPI 3.0)', true, 'IN_PROGRESS', NULL, 'phase-001-02', 'user-dev-001', '2026-02-28'),
+    ('cl-007', 'proj-001', '보안 감사 항목', 'SECURITY', '보안 아키텍처 검토 보고서', true, 'NOT_STARTED', NULL, 'phase-001-02', 'user-qa-001', '2026-03-15'),
+    ('cl-008', 'proj-001', '보안 감사 항목', 'SECURITY', '취약점 점검 결과 보고서', true, 'NOT_STARTED', NULL, 'phase-001-05', 'user-qa-001', '2026-05-30'),
+    ('cl-009', 'proj-001', '거버넌스', 'GOVERNANCE', '프로젝트 킥오프 미팅 회의록', true, 'COMPLETED', 'ev-003', 'phase-001-01', 'user-pm-001', '2026-01-15'),
+    ('cl-010', 'proj-001', '거버넌스', 'GOVERNANCE', '변경관리 이력 (Change Requests)', true, 'COMPLETED', 'ev-004', NULL, 'user-pm-001', NULL)
+ON CONFLICT (id) DO NOTHING;
+
+-- Update phase compliance status
+UPDATE project.phases SET evidence_required = true, compliance_status = 'COMPLIANT' WHERE id = 'phase-001-01';
+UPDATE project.phases SET evidence_required = true, compliance_status = 'IN_PROGRESS' WHERE id = 'phase-001-02';
+UPDATE project.phases SET evidence_required = true, compliance_status = 'NOT_STARTED' WHERE id IN ('phase-001-03', 'phase-001-04', 'phase-001-05', 'phase-001-06');
+
+-- ============================================
+-- Summary (v20260208):
+-- - 26 users (various roles)
 -- - 42 permissions (across 11 categories)
 -- - 150+ role-permission mappings (8 roles)
 -- - 2 projects (AI Claims Processing, Mobile Platform)
@@ -1468,7 +1731,7 @@ ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 -- - 8 sprints (4+2 for proj-001, 2 for proj-002)
 -- - 5 user stories (with neo4j_node_id)
 -- - 2 RFPs
--- - 11 requirements
+-- - 11 requirements (with trace_status, trace_coverage, ai_si_type)
 -- - 6 parts (3 per project)
 -- - 25+ project members
 -- - 7 outbox events (lineage tracking)
@@ -1481,7 +1744,8 @@ ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 -- - 9 chat sessions
 -- - 14 chat messages
 -- - 6 weekly reports (with part_id, scope_type)
--- - 6 issues (with resolution)
+-- - 6 issues (with escalation_level, sla_due_at, resolution_type)
+-- - 6 issue comments
 -- - 9 deliverables (with rag_status, rag_version, rag_doc_id)
 -- - 9 KPIs
 -- - 8 meetings
@@ -1492,4 +1756,20 @@ ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 -- - 2 backlogs
 -- - 7 backlog items
 -- - 3 report templates
+-- - 4 project health scores
+-- - 8 requirement trace links
+-- - 3 requirement change requests
+-- - 5 test suites
+-- - 12 test cases
+-- - 5 test executions
+-- - 6 test case trace links
+-- - 4 health snapshots (PMO)
+-- - 5 risks (with computed risk_score/severity)
+-- - 6 risk responses
+-- - 4 decisions
+-- - 12 decision options
+-- - 10 task time logs
+-- - 6 task comments
+-- - 4 evidence items (audit)
+-- - 10 compliance checklists
 -- ============================================

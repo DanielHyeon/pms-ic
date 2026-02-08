@@ -4,6 +4,9 @@ export * from './useProjects';
 // Phase hooks
 export * from './usePhases';
 
+// KPI hooks (typed, ReactiveKpiController)
+export * from './useKpis';
+
 // Task/Kanban hooks
 export * from './useTasks';
 
@@ -42,6 +45,9 @@ export * from './useRoles';
 
 // Weekly Report hooks
 export * from './useWeeklyReports';
+
+// Report v2 hooks (ReactiveReportController)
+export * from './useReports';
 
 // WIP hooks
 export * from './useWip';
@@ -95,3 +101,15 @@ export * from './useDbAdmin';
 
 // Excel Import/Export hooks (Requirements, WBS)
 export * from './useExcelImportExport';
+
+// Data Quality hooks
+export * from './useDataQuality';
+
+// WBS Snapshots hooks
+export * from './useWbsSnapshots';
+
+// View hooks (PMO portfolio, custom views)
+export * from './useViews';
+
+// Project Authorization hooks
+export * from './useProjectAuth';

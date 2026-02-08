@@ -7,6 +7,10 @@ import { useKanbanBoard, Task, Column as ColumnType } from '../../hooks/useKanba
 import { useKanbanTasks, organizeTasksIntoColumns, useCreateTask, useUpdateTask, useDeleteTask } from '../../hooks/api/useTasks';
 import { getPriorityColor } from '../../utils/status';
 import { useProject } from '../../contexts/ProjectContext';
+import { usePreset } from '../../hooks/usePreset';
+import { useFilterSpec } from '../../hooks/useFilterSpec';
+import { PresetSwitcher } from './common/PresetSwitcher';
+import { KanbanKpiRow, KanbanFilters, KANBAN_FILTER_KEYS } from './kanban';
 
 interface TaskCardProps {
   task: Task;
@@ -296,6 +300,10 @@ export default function KanbanBoard({ userRole }: { userRole: UserRole }) {
     return { totalTasks, completedTasks, inProgressTasks, firefightingTasks };
   }, [columns]);
 
+  // v2.0: Preset and FilterSpec integration
+  const { currentPreset, switchPreset } = usePreset(userRole.toUpperCase());
+  const { filters, setFilters } = useFilterSpec({ keys: KANBAN_FILTER_KEYS, syncUrl: false });
+
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
   const [showEditTaskModal, setShowEditTaskModal] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -385,6 +393,7 @@ export default function KanbanBoard({ userRole }: { userRole: UserRole }) {
             <h2 className="text-2xl font-semibold text-gray-900">스크럼 보드</h2>
             <p className="text-sm text-gray-500 mt-1">Sprint 5 - AI 모델링 단계 (2025.08.05 ~ 2025.08.18)</p>
           </div>
+          <PresetSwitcher currentPreset={currentPreset} onSwitch={switchPreset} compact />
           {canEdit && (
             <button
               onClick={() => setShowAddTaskModal(true)}
@@ -396,27 +405,12 @@ export default function KanbanBoard({ userRole }: { userRole: UserRole }) {
           )}
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-4 gap-4">
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <p className="text-sm text-gray-500">전체 작업</p>
-            <p className="text-2xl font-semibold text-gray-900 mt-1">{stats.totalTasks}</p>
-          </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <p className="text-sm text-gray-500">진행 중</p>
-            <p className="text-2xl font-semibold text-blue-600 mt-1">{stats.inProgressTasks}</p>
-          </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <p className="text-sm text-gray-500">완료</p>
-            <p className="text-2xl font-semibold text-green-600 mt-1">{stats.completedTasks}</p>
-          </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="text-red-600" size={16} />
-              <p className="text-sm text-gray-500">긴급 이슈</p>
-            </div>
-            <p className="text-2xl font-semibold text-red-600 mt-1">{stats.firefightingTasks}</p>
-          </div>
+        {/* KPI Row - preset-driven metrics */}
+        <KanbanKpiRow preset={currentPreset} stats={stats} />
+
+        {/* FilterSpec-based filtering */}
+        <div className="mt-4">
+          <KanbanFilters values={filters} onChange={setFilters} preset={currentPreset} />
         </div>
       </div>
 

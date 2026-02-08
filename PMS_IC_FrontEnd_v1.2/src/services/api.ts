@@ -13,6 +13,46 @@ import type {
   ImpactAnalysisDto,
 } from '../types/lineage';
 import type { Part, PartMember, PartDashboard, PartMetrics } from '../types/part';
+
+export interface KpiApiDto {
+  id: string;
+  phaseId: string;
+  name: string;
+  target: string;
+  current: string;
+  status: string;
+}
+
+export interface ReportApiDto {
+  id: string;
+  projectId: string;
+  reportType: string;
+  reportScope: string;
+  title: string;
+  periodStart: string;
+  periodEnd: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  publishedAt?: string;
+  generationMode?: string;
+  llmGeneratedSections?: string[];
+  llmModel?: string;
+  createdBy?: string;
+  creatorRole?: string;
+}
+
+export interface ReportProgressEvent {
+  reportId: string;
+  phase: string;
+  percentage: number;
+  message: string;
+}
+
+export type ReportStreamEvent =
+  | { type: 'meta'; traceId: string; timestamp: string }
+  | { type: 'progress'; reportId: string; phase: string; percentage: number; message: string };
+
 import { DEFAULT_TEMPLATES, getDefaultTemplateById } from '../data/defaultTemplates';
 import type { WbsGroup, WbsItem, WbsTask } from '../types/wbs';
 import { getMockWbsGroups, getMockWbsItems, getMockWbsTasks } from '../mocks/wbs.mock';
@@ -3409,6 +3449,148 @@ export class ApiService {
     });
   }
 
+  // Report v2 API (ReactiveReportController)
+
+  async getProjectReportsResult(projectId: string): Promise<Result<ReportApiDto[]>> {
+    return this.fetchResult<ReportApiDto[]>(`${V2}/projects/${projectId}/reports`, undefined, {
+      fallbackData: [],
+    });
+  }
+
+  async getReportByIdResult(projectId: string, reportId: string): Promise<Result<ReportApiDto>> {
+    return this.fetchResult<ReportApiDto>(`${V2}/projects/${projectId}/reports/${reportId}`, undefined, {
+      fallbackData: null,
+    });
+  }
+
+  async createProjectReport(projectId: string, data: {
+    reportType: string;
+    reportScope: string;
+    title: string;
+    periodStart: string;
+    periodEnd: string;
+    generationMode?: string;
+  }): Promise<ReportApiDto> {
+    const response = await this.fetchStrict<{ data: ReportApiDto } | ReportApiDto>(
+      `${V2}/projects/${projectId}/reports`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      },
+    );
+    return response && typeof response === 'object' && 'data' in response
+      ? (response as { data: ReportApiDto }).data
+      : response as ReportApiDto;
+  }
+
+  async publishProjectReport(projectId: string, reportId: string): Promise<void> {
+    await this.fetchStrict<void>(
+      `${V2}/projects/${projectId}/reports/${reportId}/publish`,
+      { method: 'PATCH' },
+    );
+  }
+
+  async deleteProjectReport(projectId: string, reportId: string): Promise<void> {
+    await this.fetchStrict<void>(
+      `${V2}/projects/${projectId}/reports/${reportId}`,
+      { method: 'DELETE' },
+    );
+  }
+
+  /**
+   * Stream report generation via SSE.
+   * Returns an AbortController to cancel the stream.
+   */
+  streamReportGeneration(
+    projectId: string,
+    request: {
+      reportType: string;
+      periodStart: string;
+      periodEnd: string;
+      scope?: string;
+      scopePhaseId?: string;
+      scopeTeamId?: string;
+      useAiSummary?: boolean;
+      customTitle?: string;
+      sections?: string[];
+    },
+    onEvent: (event: ReportStreamEvent) => void,
+    onDone: (reportId?: string) => void,
+    onError: (error: string) => void,
+  ): AbortController {
+    const controller = new AbortController();
+    const url = `${API_BASE_URL}${V2}/projects/${projectId}/reports/generate/stream`;
+
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'text/event-stream',
+        ...(this.token ? { 'Authorization': `Bearer ${this.token}` } : {}),
+      },
+      body: JSON.stringify({ projectId, ...request }),
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          onError(`HTTP ${response.status}: ${response.statusText}`);
+          return;
+        }
+        const reader = response.body?.getReader();
+        if (!reader) {
+          onError('No response body');
+          return;
+        }
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let lastReportId: string | undefined;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          let currentEventType = '';
+          for (const line of lines) {
+            if (line.startsWith('event:')) {
+              currentEventType = line.slice(6).trim();
+            } else if (line.startsWith('data:')) {
+              const dataStr = line.slice(5).trim();
+              if (!dataStr) continue;
+              try {
+                const data = JSON.parse(dataStr);
+                if (currentEventType === 'delta' && data.kind === 'JSON' && data.json) {
+                  const progress = JSON.parse(data.json) as ReportProgressEvent;
+                  lastReportId = progress.reportId;
+                  onEvent({ type: 'progress', ...progress });
+                } else if (currentEventType === 'meta') {
+                  onEvent({ type: 'meta', traceId: data.traceId, timestamp: data.timestamp });
+                } else if (currentEventType === 'done') {
+                  onDone(lastReportId);
+                } else if (currentEventType === 'error') {
+                  onError(data.message || 'Stream error');
+                }
+              } catch {
+                // Skip unparseable lines
+              }
+            }
+          }
+        }
+        // Stream ended naturally
+        onDone(lastReportId);
+      })
+      .catch((err) => {
+        if (err.name !== 'AbortError') {
+          onError(err.message || 'Stream failed');
+        }
+      });
+
+    return controller;
+  }
+
   // WIP Result methods (Phase 5 - Step 8)
 
   async getProjectWipStatusResult(projectId: string): Promise<Result<any>> {
@@ -3670,6 +3852,40 @@ export class ApiService {
 
   async getWeightedProgressResult(projectId: string): Promise<Result<WeightedProgressDto>> {
     return this.fetchResult<WeightedProgressDto>(`${V2}/projects/${projectId}/dashboard/weighted-progress`);
+  }
+
+  // KPI typed API (ReactiveKpiController)
+
+  async getPhaseKpisTyped(phaseId: string): Promise<Result<KpiApiDto[]>> {
+    return this.fetchResult<KpiApiDto[]>(`/phases/${phaseId}/kpis`, undefined, {
+      fallbackData: [],
+    });
+  }
+
+  async getPhaseKpisByStatus(phaseId: string, status: string): Promise<Result<KpiApiDto[]>> {
+    return this.fetchResult<KpiApiDto[]>(`/phases/${phaseId}/kpis/status/${status}`, undefined, {
+      fallbackData: [],
+    });
+  }
+
+  async getKpiById(kpiId: string): Promise<Result<KpiApiDto>> {
+    return this.fetchResult<KpiApiDto>(`/kpis/${kpiId}`, undefined, {
+      fallbackData: null,
+    });
+  }
+
+  async updateKpiStatus(kpiId: string, status: string): Promise<KpiApiDto> {
+    return this.fetchStrict<KpiApiDto>(`/kpis/${kpiId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+  }
+
+  async updateKpiValue(kpiId: string, current: string): Promise<KpiApiDto> {
+    return this.fetchStrict<KpiApiDto>(`/kpis/${kpiId}/value`, {
+      method: 'PATCH',
+      body: JSON.stringify({ current }),
+    });
   }
 
 }

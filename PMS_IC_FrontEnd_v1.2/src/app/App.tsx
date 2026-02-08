@@ -12,7 +12,6 @@ import Header from './components/Header';
 import LoginScreen from './components/LoginScreen';
 import Settings from './components/Settings';
 import SystemSettings from './components/SystemSettings';
-import { LayoutDashboard, GitBranch, Kanban, ListTodo, Users, Settings as SettingsIcon, GraduationCap, FolderOpen, Briefcase, Network, FileText, ClipboardList, History, Cpu } from 'lucide-react';
 import EducationManagement from './components/EducationManagement';
 import CommonManagement from './components/CommonManagement';
 import ProjectManagement from './components/ProjectManagement';
@@ -23,8 +22,59 @@ import { LineageManagement } from './components/lineage';
 import { ProjectProvider } from '../contexts/ProjectContext';
 import ToastContainer from './components/ToastContainer';
 import { ProjectShell } from './components/workbench/ProjectShell';
+import WbsManagement from './components/WbsManagement';
+import IssuesPage from './components/IssuesPage';
+import TestingPage from './components/TestingPage';
+import DeliverablesPage from './components/DeliverablesPage';
+import MeetingsPage from './components/MeetingsPage';
+import AnnouncementsPage from './components/AnnouncementsPage';
+import ReportManagement from './components/ReportManagement';
+import StatisticsPage from './components/StatisticsPage';
+import PmoConsolePage from './components/PmoConsolePage';
+import AuditLogsPage from './components/AuditLogsPage';
+import UserManagementPage from './components/UserManagementPage';
+import SprintManagement from './components/SprintManagement';
+import MyWorkPage from './components/MyWorkPage';
+import PlaceholderPage from './components/PlaceholderPage';
+import DecisionRiskPage from './components/DecisionRiskPage';
+import AuditEvidencePage from './components/AuditEvidencePage';
 
-export type View = 'dashboard' | 'projects' | 'parts' | 'rfp' | 'requirements' | 'lineage' | 'phases' | 'kanban' | 'backlog' | 'workbench' | 'roles' | 'common' | 'education' | 'settings' | 'system-settings';
+export type View =
+  | 'dashboard'
+  | 'projects'
+  | 'parts'
+  | 'rfp'
+  | 'requirements'
+  | 'lineage'
+  | 'phases'
+  | 'kanban'
+  | 'backlog'
+  | 'workbench'
+  | 'roles'
+  | 'common'
+  | 'education'
+  | 'settings'
+  | 'system-settings'
+  | 'wbs'
+  | 'issues'
+  | 'tests'
+  | 'deliverables'
+  | 'meetings'
+  | 'announcements'
+  | 'reports'
+  | 'statistics'
+  | 'pmo'
+  | 'audit-evidence'
+  | 'ai-assistant'
+  | 'admin-project'
+  | 'admin-system'
+  | 'sprints'
+  | 'my-work'
+  | 'decisions'
+  | 'health-matrix'
+  | 'pmo-console'
+  | 'audit-logs'
+  | 'user-management';
 
 export type UserRole = 'sponsor' | 'pmo_head' | 'pm' | 'developer' | 'qa' | 'business_analyst' | 'auditor' | 'admin';
 
@@ -54,79 +104,83 @@ export default function App() {
     setAiPanelOpen(false);
   };
 
-  // 역할별 메뉴 접근 권한
-  const getAvailableMenus = (role: UserRole): View[] => {
-    const menuAccess: Record<UserRole, View[]> = {
-      sponsor: ['dashboard', 'rfp', 'requirements', 'lineage', 'phases', 'workbench', 'roles', 'common', 'education', 'settings'],
-      pmo_head: ['dashboard', 'projects', 'parts', 'rfp', 'requirements', 'lineage', 'phases', 'kanban', 'backlog', 'workbench', 'roles', 'common', 'education', 'system-settings', 'settings'],
-      pm: ['dashboard', 'projects', 'parts', 'rfp', 'requirements', 'lineage', 'phases', 'kanban', 'backlog', 'workbench', 'common', 'education', 'settings'],
-      developer: ['dashboard', 'requirements', 'lineage', 'kanban', 'backlog', 'workbench', 'education', 'settings'],
-      qa: ['dashboard', 'requirements', 'lineage', 'kanban', 'backlog', 'workbench', 'education', 'settings'],
-      business_analyst: ['dashboard', 'rfp', 'requirements', 'lineage', 'phases', 'backlog', 'workbench', 'education', 'settings'],
-      auditor: ['dashboard', 'requirements', 'lineage', 'phases', 'roles', 'settings'],
-      admin: ['dashboard', 'projects', 'parts', 'rfp', 'requirements', 'lineage', 'phases', 'kanban', 'backlog', 'workbench', 'roles', 'common', 'education', 'system-settings', 'settings'],
-    };
-    return menuAccess[role] || [];
-  };
-
-  const allMenuItems = [
-    { id: 'dashboard' as View, label: '통합 대시보드', icon: LayoutDashboard },
-    { id: 'projects' as View, label: '프로젝트 관리', icon: Briefcase },
-    { id: 'parts' as View, label: '파트 관리', icon: Network },
-    { id: 'rfp' as View, label: 'RFP 관리', icon: FileText },
-    { id: 'requirements' as View, label: '요구사항 관리', icon: ClipboardList },
-    { id: 'lineage' as View, label: 'Lineage & History', icon: History },
-    { id: 'phases' as View, label: '단계별 관리', icon: GitBranch },
-    { id: 'kanban' as View, label: '칸반 보드', icon: Kanban },
-    { id: 'backlog' as View, label: '백로그 관리', icon: ListTodo },
-    { id: 'workbench' as View, label: 'Workbench', icon: LayoutDashboard },
-    { id: 'roles' as View, label: '권한 관리', icon: Users },
-    { id: 'common' as View, label: '공통 관리', icon: FolderOpen },
-    { id: 'education' as View, label: '교육 관리', icon: GraduationCap },
-    { id: 'system-settings' as View, label: '시스템 설정', icon: Cpu },
-    { id: 'settings' as View, label: '개인 설정', icon: SettingsIcon },
-  ];
-
-  const availableMenus = currentUser ? getAvailableMenus(currentUser.role) : [];
-  const menuItems = allMenuItems.filter((item) => availableMenus.includes(item.id));
-
-  // 역할별 AI 어시스턴트 접근 권한
-  const canUseAI = !!currentUser?.role && ['sponsor', 'pmo_head', 'pm', 'developer', 'qa', 'business_analyst'].includes(currentUser.role);
+  const canUseAI = !!currentUser?.role && ['sponsor', 'pmo_head', 'pm', 'developer', 'qa', 'business_analyst', 'admin'].includes(currentUser.role);
 
   const renderContent = () => {
+    const userRole = currentUser?.role || 'pm';
+
     switch (currentView) {
       case 'dashboard':
-        return <Dashboard userRole={currentUser?.role || 'pm'} />;
+        return <Dashboard userRole={userRole} />;
       case 'projects':
-        return <ProjectManagement userRole={currentUser?.role || 'pm'} />;
+        return <ProjectManagement userRole={userRole} />;
       case 'parts':
-        return <PartManagement userRole={currentUser?.role || 'pm'} />;
+        return <PartManagement userRole={userRole} />;
       case 'rfp':
-        return <RfpManagement userRole={currentUser?.role || 'pm'} />;
+        return <RfpManagement userRole={userRole} />;
       case 'requirements':
-        return <RequirementManagement userRole={currentUser?.role || 'pm'} />;
+        return <RequirementManagement userRole={userRole} />;
       case 'lineage':
-        return <LineageManagement userRole={currentUser?.role || 'pm'} />;
+        return <LineageManagement userRole={userRole} />;
       case 'phases':
-        return <PhaseManagement userRole={currentUser?.role || 'pm'} />;
+        return <PhaseManagement userRole={userRole} />;
       case 'kanban':
-        return <KanbanBoard userRole={currentUser?.role || 'pm'} />;
+        return <KanbanBoard userRole={userRole} />;
       case 'backlog':
-        return <BacklogManagement userRole={currentUser?.role || 'pm'} />;
+        return <BacklogManagement userRole={userRole} />;
       case 'workbench':
         return <ProjectShell />;
       case 'roles':
-        return <RoleManagement userRole={currentUser?.role || 'pm'} />;
+        return <RoleManagement userRole={userRole} />;
       case 'common':
-        return <CommonManagement userRole={currentUser?.role || 'pm'} />;
+        return <CommonManagement userRole={userRole} />;
       case 'education':
-        return <EducationManagement userRole={currentUser?.role || 'pm'} />;
+        return <EducationManagement userRole={userRole} />;
       case 'system-settings':
-        return <SystemSettings userRole={currentUser?.role || 'pm'} />;
+        return <SystemSettings userRole={userRole} />;
       case 'settings':
-        return <Settings userRole={currentUser?.role || 'pm'} />;
+        return <Settings userRole={userRole} />;
+      case 'wbs':
+        return <WbsManagement userRole={userRole} />;
+      case 'issues':
+        return <IssuesPage userRole={userRole} />;
+      case 'tests':
+        return <TestingPage userRole={userRole} />;
+      case 'deliverables':
+        return <DeliverablesPage userRole={userRole} />;
+      case 'meetings':
+        return <MeetingsPage userRole={userRole} />;
+      case 'announcements':
+        return <AnnouncementsPage userRole={userRole} />;
+      case 'reports':
+        return <ReportManagement userRole={userRole} />;
+      case 'statistics':
+        return <StatisticsPage userRole={userRole} />;
+      case 'pmo':
+      case 'pmo-console':
+        return <PmoConsolePage userRole={userRole} />;
+      case 'audit-logs':
+        return <AuditLogsPage userRole={userRole} />;
+      case 'user-management':
+        return <UserManagementPage userRole={userRole} />;
+      case 'ai-assistant':
+        return <PlaceholderPage title="AI Assistant" description="AI Assistant is accessible from the header panel toggle." />;
+      case 'admin-project':
+        return <PlaceholderPage title="Project Settings" description="Project-level configuration and member management." />;
+      case 'admin-system':
+        return <PlaceholderPage title="System Administration" description="System-wide settings and user account management." />;
+      case 'sprints':
+        return <SprintManagement userRole={userRole} />;
+      case 'my-work':
+        return <MyWorkPage userRole={userRole} />;
+      case 'decisions':
+        return <DecisionRiskPage userRole={userRole} />;
+      case 'health-matrix':
+        return <PlaceholderPage title="Health Matrix" description="Multi-project health scoring matrix for PMO oversight." />;
+      case 'audit-evidence':
+        return <AuditEvidencePage userRole={userRole} />;
       default:
-        return <Dashboard userRole={currentUser?.role || 'pm'} />;
+        return <Dashboard userRole={userRole} />;
     }
   };
 
@@ -138,12 +192,11 @@ export default function App() {
     <DndProvider backend={HTML5Backend}>
       <div className="flex h-screen bg-gray-50">
         <Sidebar
-          menuItems={menuItems}
           currentView={currentView}
           onViewChange={(view: string) => setCurrentView(view as View)}
           userRole={currentUser.role}
         />
-        
+
         <ProjectProvider>
           <div className="flex-1 flex flex-col overflow-hidden">
             <Header

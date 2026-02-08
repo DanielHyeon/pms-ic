@@ -1,19 +1,15 @@
 import { useState } from 'react';
-import {
-  AlertTriangle,
-  Plus,
-  Filter,
-  Search,
-  BarChart3,
-  AlertCircle,
-  CheckCircle,
-  Clock,
-} from 'lucide-react';
+import { Plus } from 'lucide-react';
 import IssueManagement from './common/IssueManagement';
 import { useIssues, useCreateIssue } from '../../hooks/api/useCommon';
 import { getRolePermissions } from '../../utils/rolePermissions';
 import { UserRole } from '../App';
 import { useProject } from '../../contexts/ProjectContext';
+import { usePreset } from '../../hooks/usePreset';
+import { useFilterSpec } from '../../hooks/useFilterSpec';
+import { PresetSwitcher } from './common/PresetSwitcher';
+import { IssueKpiRow, IssueFilters, ISSUE_FILTER_KEYS, IssueRightPanel } from './issues';
+import type { IssuePanelMode } from './issues';
 
 interface IssuesPageProps {
   userRole: UserRole;
@@ -23,8 +19,6 @@ export default function IssuesPage({ userRole }: IssuesPageProps) {
   // Get current project from context
   const { currentProject } = useProject();
   const projectId = currentProject?.id;
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('');
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   // API hooks
@@ -35,22 +29,23 @@ export default function IssuesPage({ userRole }: IssuesPageProps) {
   const permissions = getRolePermissions(userRole);
   const canManage = permissions.canEdit;
 
-  // Calculate statistics
-  const stats = {
-    total: issues.length,
-    open: issues.filter((i) => i.status === 'OPEN').length,
-    inProgress: issues.filter((i) => i.status === 'IN_PROGRESS').length,
-    resolved: issues.filter((i) => ['RESOLVED', 'VERIFIED', 'CLOSED'].includes(i.status)).length,
-    critical: issues.filter((i) => i.priority === 'CRITICAL' && !['RESOLVED', 'VERIFIED', 'CLOSED'].includes(i.status)).length,
-  };
+  // Preset and filter systems
+  const { currentPreset, switchPreset } = usePreset(userRole.toUpperCase());
+  const { filters, setFilters } = useFilterSpec({ keys: ISSUE_FILTER_KEYS, syncUrl: false });
+  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
+  const [panelMode, setPanelMode] = useState<IssuePanelMode>('none');
 
   return (
-    <div className="flex-1 p-6 space-y-6">
+    <div className="flex-1 p-6 space-y-6 flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">이슈 관리</h1>
-          <p className="text-gray-500 mt-1">프로젝트 이슈 추적 및 관리</p>
+        <div className="flex items-center gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Issue Management</h1>
+            <p className="text-gray-500 mt-1">Track and manage project issues</p>
+          </div>
+          <div className="mx-3 h-8 w-px bg-gray-200" />
+          <PresetSwitcher currentPreset={currentPreset} onSwitch={switchPreset} compact />
         </div>
         {canManage && (
           <button
@@ -59,108 +54,42 @@ export default function IssuesPage({ userRole }: IssuesPageProps) {
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
           >
             <Plus size={18} />
-            이슈 등록
+            New Issue
           </button>
         )}
       </div>
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-5 gap-4">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <AlertTriangle size={20} className="text-gray-600" />
-              <span className="text-sm text-gray-500">전체</span>
-            </div>
-            <span className="text-2xl font-bold text-gray-900">{stats.total}</span>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <AlertCircle size={20} className="text-blue-600" />
-              <span className="text-sm text-gray-500">신규</span>
-            </div>
-            <span className="text-2xl font-bold text-blue-600">{stats.open}</span>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Clock size={20} className="text-amber-600" />
-              <span className="text-sm text-gray-500">진행중</span>
-            </div>
-            <span className="text-2xl font-bold text-amber-600">{stats.inProgress}</span>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CheckCircle size={20} className="text-green-600" />
-              <span className="text-sm text-gray-500">해결</span>
-            </div>
-            <span className="text-2xl font-bold text-green-600">{stats.resolved}</span>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <AlertTriangle size={20} className="text-red-600" />
-              <span className="text-sm text-gray-500">긴급</span>
-            </div>
-            <span className="text-2xl font-bold text-red-600">{stats.critical}</span>
-          </div>
-        </div>
-      </div>
+      {/* KPI Row */}
+      <IssueKpiRow issues={issues} preset={currentPreset} />
 
       {/* Filters */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-        <div className="flex items-center gap-4">
-          {/* Search */}
-          <div className="relative flex-1 max-w-sm">
-            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="이슈 검색..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+      <IssueFilters values={filters} onChange={setFilters} preset={currentPreset} />
 
-          {/* Status Filter */}
-          <div className="flex items-center gap-2">
-            <Filter size={16} className="text-gray-400" />
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">전체 상태</option>
-              <option value="OPEN">신규</option>
-              <option value="IN_PROGRESS">진행중</option>
-              <option value="RESOLVED">해결</option>
-              <option value="VERIFIED">검증완료</option>
-              <option value="CLOSED">종료</option>
-            </select>
-          </div>
+      {/* Issue List + Right Panel */}
+      <div className="flex gap-4 flex-1 min-h-0">
+        <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 p-6 overflow-auto">
+          <IssueManagement
+            projectId={projectId}
+            issues={issues}
+            isLoading={isLoading}
+            canManage={canManage}
+            searchQuery={(filters.q as string) || ''}
+            filter={(filters.status as string) || ''}
+          />
         </div>
-      </div>
-
-      {/* Issue List */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <IssueManagement
-          projectId={projectId}
-          issues={issues}
-          isLoading={isLoading}
-          canManage={canManage}
-          searchQuery={searchQuery}
-          filter={filterStatus}
-        />
+        {panelMode !== 'none' && (
+          <IssueRightPanel
+            mode={panelMode}
+            issue={issues.find((i) => i.id === selectedIssueId)}
+            preset={currentPreset}
+            onClose={() => {
+              setPanelMode('none');
+              setSelectedIssueId(null);
+            }}
+            onModeChange={setPanelMode}
+            canEdit={canManage}
+          />
+        )}
       </div>
     </div>
   );

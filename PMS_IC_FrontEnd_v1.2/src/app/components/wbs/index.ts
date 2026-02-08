@@ -4,3 +4,7 @@ export { default as StoryLinkModal } from './StoryLinkModal';
 export { default as WbsOverviewTree } from './WbsOverviewTree';
 export { default as WbsGanttChart } from './WbsGanttChart';
 export { default as WbsSnapshotList } from './WbsSnapshotList';
+export { WbsKpiRow } from './WbsKpiRow';
+export { WbsFilters, WBS_FILTER_KEYS } from './WbsFilters';
+export { WbsContextPanel } from './WbsContextPanel';
+export type { WbsPanelMode } from './WbsContextPanel';

@@ -25,3 +25,8 @@ export { ReadOnlyBanner } from './shared';
 
 // Modals
 export { UploadModal, KpiModal, PhaseModal, SettingsModal } from './modals';
+
+// v2.0 components
+export { PhaseKpiRow } from './PhaseKpiRow';
+export { PhaseFilters, PHASE_FILTER_KEYS } from './PhaseFilters';
+export { HealthSummaryStrip } from './HealthSummaryStrip';

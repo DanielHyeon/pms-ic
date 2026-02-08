@@ -1,22 +1,20 @@
 import { useState, useMemo } from 'react';
-import {
-  FileText,
-  Plus,
-  Filter,
-  Search,
-  Upload,
-  Download,
-  CheckCircle,
-  Clock,
-  AlertCircle,
-  FolderOpen,
-  Eye,
-} from 'lucide-react';
+import { Upload } from 'lucide-react';
 import DeliverableManagement from './common/DeliverableManagement';
 import { usePhases, useProjectDeliverables } from '../../hooks/api/usePhases';
 import { getRolePermissions } from '../../utils/rolePermissions';
-import { UserRole } from '../App';
 import { useProject } from '../../contexts/ProjectContext';
+import { usePreset } from '../../hooks/usePreset';
+import { useFilterSpec } from '../../hooks/useFilterSpec';
+import { PresetSwitcher } from './common/PresetSwitcher';
+import {
+  DeliverableKpiRow,
+  DeliverableFilters,
+  DELIVERABLE_FILTER_KEYS,
+  DeliverableRightPanel,
+} from './deliverables';
+import type { DeliverablePanelMode } from './deliverables';
+import type { UserRole } from '../App';
 
 interface DeliverablesPageProps {
   userRole: UserRole;
@@ -35,7 +33,6 @@ interface AggregatedDeliverable {
   phaseName: string;
 }
 
-// Phase type with deliverables for this component
 interface PhaseWithDeliverables {
   id: string;
   name: string;
@@ -57,18 +54,21 @@ export default function DeliverablesPage({ userRole }: DeliverablesPageProps) {
   const { currentProject } = useProject();
   const projectId = currentProject?.id;
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('');
-  const [filterPhase, setFilterPhase] = useState<string>('');
-
   // API hooks - use project-specific phases and deliverables
   const { data: phasesData = [], isLoading: isPhasesLoading } = usePhases(projectId);
   const { data: deliverables = [], isLoading: isDeliverablesLoading } = useProjectDeliverables(projectId);
-  const phases = phasesData as PhaseWithDeliverables[];
+  const _phases = phasesData as PhaseWithDeliverables[];
 
   // Role permissions
-  const permissions = getRolePermissions(userRole);
-  const canEdit = permissions.canEdit;
+  const { canEdit } = getRolePermissions(userRole);
+
+  // Preset and filter systems
+  const { currentPreset, switchPreset } = usePreset(userRole.toUpperCase());
+  const { filters, setFilters } = useFilterSpec({ keys: DELIVERABLE_FILTER_KEYS, syncUrl: false });
+
+  // Right panel state
+  const [selectedDeliverableId, setSelectedDeliverableId] = useState<string | null>(null);
+  const [panelMode, setPanelMode] = useState<DeliverablePanelMode>('none');
 
   // Map deliverables to the expected format
   const aggregatedDeliverables = useMemo(() => {
@@ -88,38 +88,38 @@ export default function DeliverablesPage({ userRole }: DeliverablesPageProps) {
     }));
   }, [deliverables]);
 
-  // Filter deliverables
+  // Filter deliverables using FilterSpec values
   const filteredDeliverables = useMemo(() => {
     let filtered = aggregatedDeliverables;
 
-    if (filterStatus) {
-      filtered = filtered.filter((d) => d.status === filterStatus);
+    const statusFilter = filters.status as string | undefined;
+    if (statusFilter) {
+      filtered = filtered.filter((d) => d.status === statusFilter);
     }
 
-    if (filterPhase) {
-      filtered = filtered.filter((d) => d.phaseId === filterPhase);
+    const phaseFilter = filters.phaseId as string | undefined;
+    if (phaseFilter) {
+      filtered = filtered.filter((d) => d.phaseId === phaseFilter);
     }
 
+    const searchQuery = (filters.q as string) || '';
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
         (d) =>
           d.name.toLowerCase().includes(query) ||
-          d.phaseName.toLowerCase().includes(query)
+          d.phaseName.toLowerCase().includes(query) ||
+          (d.description && d.description.toLowerCase().includes(query))
       );
     }
 
-    return filtered;
-  }, [aggregatedDeliverables, filterStatus, filterPhase, searchQuery]);
+    const categoryFilter = filters.category as string | undefined;
+    if (categoryFilter) {
+      filtered = filtered.filter((d) => d.type === categoryFilter);
+    }
 
-  // Calculate statistics
-  const stats = {
-    total: aggregatedDeliverables.length,
-    pending: aggregatedDeliverables.filter((d) => d.status === 'PENDING').length,
-    inReview: aggregatedDeliverables.filter((d) => d.status === 'IN_REVIEW').length,
-    approved: aggregatedDeliverables.filter((d) => d.status === 'APPROVED').length,
-    rejected: aggregatedDeliverables.filter((d) => d.status === 'REJECTED').length,
-  };
+    return filtered;
+  }, [aggregatedDeliverables, filters]);
 
   // Map to DeliverableManagement format
   const deliverableForList = filteredDeliverables.map((d) => ({
@@ -134,6 +134,36 @@ export default function DeliverablesPage({ userRole }: DeliverablesPageProps) {
     phaseName: d.phaseName,
   }));
 
+  // Selected deliverable for right panel
+  const selectedDeliverable = useMemo(
+    () => aggregatedDeliverables.find((d) => d.id === selectedDeliverableId),
+    [aggregatedDeliverables, selectedDeliverableId]
+  );
+
+  // Handle row selection for right panel
+  const handleRowSelect = (id: string) => {
+    setSelectedDeliverableId(id);
+    if (panelMode === 'none') {
+      // Determine default panel mode based on current preset
+      const presetDefaults: Record<string, DeliverablePanelMode> = {
+        EXEC_SUMMARY: 'none',
+        DEV_EXECUTION: 'preview',
+        PM_WORK: 'approval',
+        PMO_CONTROL: 'approval',
+        CUSTOMER_APPROVAL: 'approval',
+        AUDIT_EVIDENCE: 'detail',
+      };
+      const defaultMode = presetDefaults[currentPreset] || 'preview';
+      setPanelMode(defaultMode);
+    }
+  };
+
+  // Handle upload button click
+  const handleUploadClick = () => {
+    setPanelMode('upload');
+    setSelectedDeliverableId(null);
+  };
+
   if (isPhasesLoading || isDeliverablesLoading) {
     return (
       <div className="flex-1 p-6 flex items-center justify-center">
@@ -146,16 +176,21 @@ export default function DeliverablesPage({ userRole }: DeliverablesPageProps) {
   }
 
   return (
-    <div className="flex-1 p-6 space-y-6">
+    <div className="flex-1 p-6 space-y-6 flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">산출물 관리</h1>
-          <p className="text-gray-500 mt-1">프로젝트 산출물 현황 및 승인 관리</p>
+        <div className="flex items-center gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">산출물 관리</h1>
+            <p className="text-gray-500 mt-1">프로젝트 산출물 현황 및 승인 관리</p>
+          </div>
+          <div className="mx-3 h-8 w-px bg-gray-200" />
+          <PresetSwitcher currentPreset={currentPreset} onSwitch={switchPreset} compact />
         </div>
         {canEdit && (
           <button
             type="button"
+            onClick={handleUploadClick}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
           >
             <Upload size={18} />
@@ -164,116 +199,45 @@ export default function DeliverablesPage({ userRole }: DeliverablesPageProps) {
         )}
       </div>
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-5 gap-4">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <FileText size={20} className="text-gray-600" />
-              <span className="text-sm text-gray-500">전체</span>
-            </div>
-            <span className="text-2xl font-bold text-gray-900">{stats.total}</span>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Clock size={20} className="text-gray-500" />
-              <span className="text-sm text-gray-500">대기</span>
-            </div>
-            <span className="text-2xl font-bold text-gray-600">{stats.pending}</span>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Eye size={20} className="text-blue-600" />
-              <span className="text-sm text-gray-500">검토중</span>
-            </div>
-            <span className="text-2xl font-bold text-blue-600">{stats.inReview}</span>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CheckCircle size={20} className="text-green-600" />
-              <span className="text-sm text-gray-500">승인</span>
-            </div>
-            <span className="text-2xl font-bold text-green-600">{stats.approved}</span>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <AlertCircle size={20} className="text-red-600" />
-              <span className="text-sm text-gray-500">반려</span>
-            </div>
-            <span className="text-2xl font-bold text-red-600">{stats.rejected}</span>
-          </div>
-        </div>
-      </div>
+      {/* KPI Row */}
+      <DeliverableKpiRow deliverables={aggregatedDeliverables} preset={currentPreset} />
 
       {/* Filters */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-        <div className="flex items-center gap-4">
-          {/* Search */}
-          <div className="relative flex-1 max-w-sm">
-            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="산출물 검색..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+      <DeliverableFilters values={filters} onChange={setFilters} preset={currentPreset} />
 
-          {/* Phase Filter */}
-          <div className="flex items-center gap-2">
-            <FolderOpen size={16} className="text-gray-400" />
-            <select
-              value={filterPhase}
-              onChange={(e) => setFilterPhase(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">전체 단계</option>
-              {phases.map((phase) => (
-                <option key={phase.id} value={phase.id}>
-                  {phase.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Status Filter */}
-          <div className="flex items-center gap-2">
-            <Filter size={16} className="text-gray-400" />
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">전체 상태</option>
-              <option value="PENDING">대기</option>
-              <option value="IN_REVIEW">검토중</option>
-              <option value="APPROVED">승인</option>
-              <option value="REJECTED">반려</option>
-            </select>
-          </div>
+      {/* Deliverable List + Right Panel */}
+      <div className="flex gap-4 flex-1 min-h-0">
+        <div
+          className="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 p-6 overflow-auto cursor-pointer"
+          onClick={(e) => {
+            // Delegate click to row items
+            const target = e.target as HTMLElement;
+            const row = target.closest('[data-deliverable-id]');
+            if (row) {
+              const id = (row as HTMLElement).dataset.deliverableId;
+              if (id) handleRowSelect(id);
+            }
+          }}
+        >
+          <DeliverableManagement
+            deliverables={deliverableForList}
+            isLoading={false}
+            canEdit={canEdit}
+          />
         </div>
-      </div>
-
-      {/* Deliverable List */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <DeliverableManagement
-          deliverables={deliverableForList}
-          isLoading={false}
-          canEdit={canEdit}
-        />
+        {panelMode !== 'none' && (
+          <DeliverableRightPanel
+            mode={panelMode}
+            deliverable={selectedDeliverable}
+            preset={currentPreset}
+            onClose={() => {
+              setPanelMode('none');
+              setSelectedDeliverableId(null);
+            }}
+            onModeChange={setPanelMode}
+            canEdit={canEdit}
+          />
+        )}
       </div>
     </div>
   );
