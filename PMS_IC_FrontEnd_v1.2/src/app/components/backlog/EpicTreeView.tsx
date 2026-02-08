@@ -36,7 +36,6 @@ interface EpicTreeViewProps {
 
 interface EpicItemProps {
   epic: Epic;
-  features: Feature[];
   stories: UserStory[];
   isExpanded: boolean;
   onToggle: () => void;
@@ -198,7 +197,6 @@ function FeatureItem({
 
 function EpicItem({
   epic,
-  features,
   stories,
   isExpanded,
   onToggle,
@@ -209,8 +207,7 @@ function EpicItem({
   canEdit,
 }: EpicItemProps) {
   const [expandedFeatures, setExpandedFeatures] = useState<Set<string>>(new Set());
-
-  const epicFeatures = features.filter((f) => f.epicId === epic.id);
+  const { data: epicFeatures = [] } = useFeatures(epic.id);
   const epicStories = stories.filter((s) => s.epicId === epic.id);
   const directStories = epicStories.filter((s) => !s.featureId); // Stories without feature
   const totalPoints = epicStories.reduce((sum, s) => sum + (s.storyPoints || 0), 0);
@@ -363,7 +360,6 @@ export default function EpicTreeView({
   canEdit,
 }: EpicTreeViewProps) {
   const { data: epics = [] } = useEpics(projectId);
-  const { data: features = [] } = useFeatures();
   const [expandedEpics, setExpandedEpics] = useState<Set<string>>(() => {
     // Default expand first epic
     return new Set(epics.length > 0 ? [epics[0].id] : []);
@@ -389,7 +385,7 @@ export default function EpicTreeView({
         <div>
           <h3 className="font-semibold text-gray-900 flex items-center gap-2">
             <Target className="text-blue-600" size={20} />
-            제품 백로그
+            Epic 목록
           </h3>
           <p className="text-xs text-gray-500 mt-0.5">
             Epic → Feature → User Story 계층 구조
@@ -428,7 +424,6 @@ export default function EpicTreeView({
             <EpicItem
               key={epic.id}
               epic={epic}
-              features={features}
               stories={stories}
               isExpanded={expandedEpics.has(epic.id)}
               onToggle={() => toggleEpic(epic.id)}

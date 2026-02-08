@@ -272,6 +272,8 @@ export default function BacklogManagement({ userRole }: BacklogManagementProps) 
     title: s.title,
     description: s.description,
     epicId: s.epicId || '',
+    featureId: s.featureId || undefined,
+    wbsItemId: s.wbsItemId || undefined,
     partId: s.partId,
     priority: s.priority <= 1 ? 'CRITICAL' : s.priority === 2 ? 'HIGH' : s.priority === 3 ? 'MEDIUM' : 'LOW',
     status: mapStatus(s.status) as BacklogStory['status'],

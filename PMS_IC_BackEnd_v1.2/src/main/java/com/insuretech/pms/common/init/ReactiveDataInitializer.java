@@ -52,27 +52,14 @@ public class ReactiveDataInitializer {
     /**
      * Data initializer - Loads sample data after schema creation
      * Active only in dev profile (not test to avoid polluting test data)
+     * Always runs since data.sql uses ON CONFLICT DO UPDATE (idempotent)
      */
     @Bean
     @Profile("dev")
     public CommandLineRunner dataInitializer(DatabaseClient databaseClient) {
         return args -> {
-            log.info("Starting sample data initialization...");
-
-            // Check if data already exists
-            databaseClient.sql("SELECT COUNT(*) as cnt FROM auth.users")
-                .map(row -> row.get("cnt", Long.class))
-                .one()
-                .defaultIfEmpty(0L)
-                .flatMap(count -> {
-                    if (count != null && count > 0) {
-                        log.info("Database already contains {} users, skipping data initialization", count);
-                        return Mono.empty();
-                    }
-
-                    log.info("No existing data found, loading sample data...");
-                    return loadSampleData(databaseClient);
-                })
+            log.info("Starting sample data initialization (idempotent - ON CONFLICT DO UPDATE)...");
+            loadSampleData(databaseClient)
                 .doOnSuccess(v -> log.info("Data initialization completed"))
                 .doOnError(e -> log.error("Data initialization failed: {}", e.getMessage()))
                 .subscribe();
