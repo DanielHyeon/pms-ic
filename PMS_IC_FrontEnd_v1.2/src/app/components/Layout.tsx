@@ -15,6 +15,7 @@ import { useIsMobile } from './ui/use-mobile';
 // Map menu ontology nodeIds to router paths
 const NODE_TO_PATH: Record<string, string> = {
   'dashboard': '/',
+  'rfp': '/rfp',
   'requirements': '/requirements',
   'backlog': '/backlog',
   'wbs': '/wbs',
@@ -36,6 +37,10 @@ const NODE_TO_PATH: Record<string, string> = {
   'announcements': '/announcements',
   'ai-assistant': '/ai-assistant',
   'education': '/education',
+  'projects': '/projects',
+  'parts': '/parts',
+  'roles': '/roles',
+  'user-management': '/user-management',
   'admin-project': '/settings',
   'admin-system': '/system-settings',
 };

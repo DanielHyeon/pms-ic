@@ -1,4 +1,4 @@
-// Menu Ontology Nodes — 25 domain nodes organized across 11 zones.
+// Menu Ontology Nodes — 30 domain nodes organized across 11 zones.
 // Each node carries intent, entity, keyword, metric, deep-link, and
 // preset policy metadata for AI-driven navigation.
 
@@ -74,6 +74,43 @@ export const dashboardNode: MenuOntologyNode = {
 };
 
 // ─── Zone 2: Plan & Structure ───────────────────────────────────
+
+export const rfpNode: MenuOntologyNode = {
+  nodeId: 'rfp',
+  label: 'RFP 관리',
+  route: '/rfp',
+  icon: 'FileSearch',
+  domain: 'plan',
+  requiredCaps: ['view_rfp'],
+  intents: ['ask_requirement_status'],
+  canonicalQuestions: [
+    'RFP 문서를 업로드하고 싶어요.',
+    'RFP에서 요구사항을 추출해 주세요.',
+    'RFP 현황을 보여주세요.',
+    'AI로 요구사항을 분석해 주세요.',
+  ],
+  entities: ['requirement', 'project'],
+  keywords: [
+    'RFP', '제안요청서', '요청서', '업로드', 'upload',
+    '추출', 'extract', '분석', 'analysis', '문서',
+  ],
+  metrics: ['rfp_count', 'extraction_rate'],
+  defaultPreset: 'PM_WORK',
+  presetPolicies: [
+    {
+      preset: 'PM_WORK',
+      ui: {
+        density: 'standard',
+        defaultRightPanel: 'closed',
+      },
+      suggestedActions: [
+        { key: 'upload_rfp', label: 'RFP 업로드', capability: 'manage_rfp' },
+      ],
+    },
+  ],
+  priority: 4,
+  scopeHints: ['projectId'],
+};
 
 export const requirementsNode: MenuOntologyNode = {
   nodeId: 'requirements',
@@ -1233,6 +1270,161 @@ export const educationNode: MenuOntologyNode = {
 
 // ─── Zone 11: Admin ─────────────────────────────────────────────
 
+export const projectsNode: MenuOntologyNode = {
+  nodeId: 'projects',
+  label: '프로젝트 관리',
+  route: '/projects',
+  icon: 'Briefcase',
+  domain: 'admin',
+  requiredCaps: ['view_projects'],
+  intents: ['ask_overall_status'],
+  canonicalQuestions: [
+    '프로젝트 목록을 보여주세요.',
+    '새 프로젝트를 생성하고 싶어요.',
+    '프로젝트를 수정하고 싶어요.',
+    '프로젝트를 삭제하고 싶어요.',
+  ],
+  entities: ['project'],
+  keywords: [
+    '프로젝트', 'project', '생성', 'create', '삭제', 'delete',
+    '수정', 'edit', '목록', 'list', '관리', 'manage',
+  ],
+  metrics: ['project_count'],
+  defaultPreset: 'PM_WORK',
+  presetPolicies: [
+    {
+      preset: 'PM_WORK',
+      ui: {
+        density: 'standard',
+        defaultRightPanel: 'closed',
+      },
+      suggestedActions: [
+        { key: 'create_project', label: '프로젝트 생성', capability: 'manage_projects' },
+      ],
+    },
+    {
+      preset: 'PMO_CONTROL',
+      ui: {
+        density: 'standard',
+        defaultRightPanel: 'closed',
+      },
+    },
+  ],
+  priority: 25,
+  scopeHints: [],
+};
+
+export const partsNode: MenuOntologyNode = {
+  nodeId: 'parts',
+  label: '파트 관리',
+  route: '/parts',
+  icon: 'Users',
+  domain: 'admin',
+  requiredCaps: ['view_parts'],
+  intents: ['ask_overall_status'],
+  canonicalQuestions: [
+    '파트 목록을 보여주세요.',
+    '파트에 멤버를 추가하고 싶어요.',
+    '파트 리더를 지정하고 싶어요.',
+    '파트별 역할 권한을 설정하고 싶어요.',
+  ],
+  entities: ['project', 'user'],
+  keywords: [
+    '파트', 'part', '팀', 'team', '멤버', 'member',
+    '리더', 'leader', '구성', 'organization',
+  ],
+  metrics: ['part_count', 'member_count'],
+  defaultPreset: 'PM_WORK',
+  presetPolicies: [
+    {
+      preset: 'PM_WORK',
+      ui: {
+        density: 'standard',
+        defaultRightPanel: 'closed',
+      },
+      suggestedActions: [
+        { key: 'create_part', label: '파트 생성', capability: 'manage_parts' },
+      ],
+    },
+  ],
+  priority: 26,
+  scopeHints: ['projectId'],
+};
+
+export const rolesNode: MenuOntologyNode = {
+  nodeId: 'roles',
+  label: '역할 및 권한',
+  route: '/roles',
+  icon: 'ShieldCheck',
+  domain: 'admin',
+  requiredCaps: ['view_roles'],
+  intents: ['ask_overall_status'],
+  canonicalQuestions: [
+    'PM을 프로젝트에 배정하고 싶어요.',
+    '역할 권한을 관리하고 싶어요.',
+    '프로젝트 멤버 역할을 변경하고 싶어요.',
+    '사용자 권한 매트릭스를 보여주세요.',
+  ],
+  entities: ['user', 'project'],
+  keywords: [
+    '역할', 'role', '권한', 'permission', 'PM 배정', 'assign',
+    'RBAC', '멤버', 'member', '직무분리', 'SoD',
+  ],
+  metrics: ['role_assignment_count'],
+  defaultPreset: 'PM_WORK',
+  presetPolicies: [
+    {
+      preset: 'PM_WORK',
+      ui: {
+        density: 'standard',
+        defaultRightPanel: 'closed',
+      },
+      suggestedActions: [
+        { key: 'assign_pm', label: 'PM 배정', capability: 'manage_roles' },
+      ],
+    },
+  ],
+  priority: 27,
+  scopeHints: ['projectId'],
+};
+
+export const userManagementNode: MenuOntologyNode = {
+  nodeId: 'user-management',
+  label: '사용자 관리',
+  route: '/user-management',
+  icon: 'UserPlus',
+  domain: 'admin',
+  requiredCaps: ['view_users'],
+  intents: ['ask_overall_status'],
+  canonicalQuestions: [
+    '사용자 계정을 생성하고 싶어요.',
+    '사용자 목록을 보여주세요.',
+    '계정을 비활성화하고 싶어요.',
+    '사용자 역할을 변경하고 싶어요.',
+  ],
+  entities: ['user'],
+  keywords: [
+    '사용자', 'user', '계정', 'account', '생성', 'create',
+    '비활성', 'inactive', '잠금', 'lock', '패스워드', 'password',
+  ],
+  metrics: ['user_count', 'active_user_count'],
+  defaultPreset: 'PMO_CONTROL',
+  presetPolicies: [
+    {
+      preset: 'PMO_CONTROL',
+      ui: {
+        density: 'standard',
+        defaultRightPanel: 'closed',
+      },
+      suggestedActions: [
+        { key: 'create_user', label: '사용자 생성', capability: 'manage_users' },
+      ],
+    },
+  ],
+  priority: 28,
+  scopeHints: [],
+};
+
 export const adminProjectNode: MenuOntologyNode = {
   nodeId: 'admin-project',
   label: '프로젝트 설정',
@@ -1315,11 +1507,12 @@ export const adminSystemNode: MenuOntologyNode = {
 
 // ─── Aggregated export ──────────────────────────────────────────
 
-/** All 25 menu ontology nodes in a flat array */
+/** All 30 menu ontology nodes in a flat array */
 export const allOntologyNodes: MenuOntologyNode[] = [
   // Zone 1: Overview
   dashboardNode,
   // Zone 2: Plan & Structure
+  rfpNode,
   requirementsNode,
   backlogNode,
   wbsNode,
@@ -1350,6 +1543,10 @@ export const allOntologyNodes: MenuOntologyNode[] = [
   aiAssistantNode,
   educationNode,
   // Zone 11: Admin
+  projectsNode,
+  partsNode,
+  rolesNode,
+  userManagementNode,
   adminProjectNode,
   adminSystemNode,
 ];

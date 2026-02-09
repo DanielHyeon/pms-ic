@@ -1,5 +1,5 @@
 // Menu configuration — ontology-based, capability-driven menu system.
-// Organises 25 MenuOntologyNodes into 11 zones and provides helpers
+// Organises 30 MenuOntologyNodes into 11 zones and provides helpers
 // for filtering by capability, intent search, and backward-compat
 // role-based access checks.
 
@@ -28,6 +28,11 @@ import {
   GraduationCap,
   Settings,
   UserCog,
+  Briefcase,
+  FileSearch,
+  Users,
+  ShieldCheck,
+  UserPlus,
   ChevronDown,
   ChevronRight,
   LucideIcon,
@@ -42,6 +47,7 @@ import type {
 
 import {
   dashboardNode,
+  rfpNode,
   requirementsNode,
   backlogNode,
   wbsNode,
@@ -63,6 +69,10 @@ import {
   announcementsNode,
   aiAssistantNode,
   educationNode,
+  projectsNode,
+  partsNode,
+  rolesNode,
+  userManagementNode,
   adminProjectNode,
   adminSystemNode,
   allOntologyNodes,
@@ -77,6 +87,7 @@ export { allOntologyNodes, ontologyNodeMap };
 /** Maps nodeId to its Lucide icon component */
 export const nodeIconMap: Record<string, LucideIcon> = {
   dashboard: LayoutDashboard,
+  rfp: FileSearch,
   requirements: ClipboardList,
   backlog: ListTodo,
   wbs: CalendarDays,
@@ -98,6 +109,10 @@ export const nodeIconMap: Record<string, LucideIcon> = {
   announcements: Megaphone,
   'ai-assistant': Bot,
   education: GraduationCap,
+  projects: Briefcase,
+  parts: Users,
+  roles: ShieldCheck,
+  'user-management': UserPlus,
   'admin-project': Settings,
   'admin-system': UserCog,
 };
@@ -168,7 +183,7 @@ export const menuZones: MenuZone[] = [
     label: '계획 및 구조',
     icon: ClipboardList,
     domain: 'plan',
-    nodes: [requirementsNode, backlogNode, wbsNode, phasesNode],
+    nodes: [rfpNode, requirementsNode, backlogNode, wbsNode, phasesNode],
     defaultExpanded: false,
   },
   {
@@ -240,7 +255,7 @@ export const menuZones: MenuZone[] = [
     label: '관리',
     icon: Settings,
     domain: 'admin',
-    nodes: [adminProjectNode, adminSystemNode],
+    nodes: [projectsNode, partsNode, rolesNode, userManagementNode, adminProjectNode, adminSystemNode],
     defaultExpanded: false,
   },
 ];
@@ -312,18 +327,20 @@ const menuAccessByRole: Record<UserRole, string[]> = {
     'deliverables', 'decisions', 'meetings', 'announcements',
   ],
   pmo_head: [
-    'dashboard', 'requirements', 'backlog', 'wbs', 'phases',
+    'dashboard', 'rfp', 'requirements', 'backlog', 'wbs', 'phases',
     'kanban', 'sprints', 'issues', 'tests', 'deliverables',
     'decisions', 'lineage', 'reports', 'statistics', 'pmo',
     'health-matrix', 'audit-evidence', 'meetings', 'announcements',
-    'ai-assistant', 'education', 'admin-project', 'admin-system',
+    'ai-assistant', 'education', 'projects', 'parts', 'roles',
+    'user-management', 'admin-project', 'admin-system',
   ],
   pm: [
-    'dashboard', 'requirements', 'backlog', 'wbs', 'phases',
+    'dashboard', 'rfp', 'requirements', 'backlog', 'wbs', 'phases',
     'kanban', 'sprints', 'my-work', 'issues', 'tests',
     'deliverables', 'decisions', 'lineage', 'reports', 'statistics',
     'pmo', 'health-matrix', 'meetings', 'announcements',
-    'ai-assistant', 'education', 'admin-project',
+    'ai-assistant', 'education', 'projects', 'parts', 'roles',
+    'admin-project',
   ],
   developer: [
     'dashboard', 'requirements', 'backlog', 'wbs', 'phases',
@@ -337,7 +354,7 @@ const menuAccessByRole: Record<UserRole, string[]> = {
     'meetings', 'announcements', 'ai-assistant', 'education',
   ],
   business_analyst: [
-    'dashboard', 'requirements', 'backlog', 'phases', 'issues',
+    'dashboard', 'rfp', 'requirements', 'backlog', 'phases', 'issues',
     'lineage', 'reports', 'statistics', 'meetings', 'announcements',
     'ai-assistant', 'education',
   ],
@@ -347,12 +364,13 @@ const menuAccessByRole: Record<UserRole, string[]> = {
     'announcements',
   ],
   admin: [
-    'dashboard', 'requirements', 'backlog', 'wbs', 'phases',
+    'dashboard', 'rfp', 'requirements', 'backlog', 'wbs', 'phases',
     'kanban', 'sprints', 'my-work', 'issues', 'tests',
     'deliverables', 'decisions', 'lineage', 'reports', 'statistics',
     'pmo', 'health-matrix', 'audit-evidence', 'meetings',
-    'announcements', 'ai-assistant', 'education', 'admin-project',
-    'admin-system',
+    'announcements', 'ai-assistant', 'education', 'projects',
+    'parts', 'roles', 'user-management',
+    'admin-project', 'admin-system',
   ],
 };
 

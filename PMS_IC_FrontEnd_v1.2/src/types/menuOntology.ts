@@ -60,6 +60,16 @@ export type Capability =
   | 'view_ai_assistant'
   | 'view_education'
   | 'view_stats'
+  | 'view_projects'
+  | 'manage_projects'
+  | 'view_roles'
+  | 'manage_roles'
+  | 'view_parts'
+  | 'manage_parts'
+  | 'view_users'
+  | 'manage_users'
+  | 'view_rfp'
+  | 'manage_rfp'
   | 'admin_project'
   | 'admin_system';
 
