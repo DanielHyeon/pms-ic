@@ -65,4 +65,35 @@ public class R2dbcRfp extends R2dbcBaseEntity {
 
     @Column("tenant_id")
     private String tenantId;
+
+    // --- New columns from V20260236_05 ---
+
+    @Nullable
+    @Column("origin_type")
+    private String originType;
+
+    @Nullable
+    @Column("version_label")
+    @Builder.Default
+    private String versionLabel = "v1.0";
+
+    @Nullable
+    @Column("checksum")
+    private String checksum;
+
+    @Nullable
+    @Column("previous_status")
+    private String previousStatus;
+
+    @Nullable
+    @Column("failure_reason")
+    private String failureReason;
+
+    @Nullable
+    @Column("source_name")
+    private String sourceName;
+
+    @Nullable
+    @Column("rfp_type")
+    private String rfpType;
 }

@@ -5,14 +5,17 @@ import com.insuretech.pms.rfp.dto.CreateRfpRequest;
 import com.insuretech.pms.rfp.dto.RfpDto;
 import com.insuretech.pms.rfp.dto.UpdateRfpRequest;
 import com.insuretech.pms.rfp.service.ReactiveRfpService;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @RestController
@@ -63,12 +66,46 @@ public class ReactiveRfpController {
                 .then(Mono.just(ResponseEntity.ok(ApiResponse.success("RFP deleted", null))));
     }
 
+    @Operation(summary = "Transition RFP status (state machine validated)")
     @PatchMapping("/{rfpId}/status")
+    @PreAuthorize("isAuthenticated()")
     public Mono<ResponseEntity<ApiResponse<Void>>> updateRfpStatus(
             @PathVariable String projectId,
             @PathVariable String rfpId,
             @RequestParam String status) {
         return rfpService.updateStatus(rfpId, status)
                 .then(Mono.just(ResponseEntity.ok(ApiResponse.success("Status updated", null))));
+    }
+
+    @Operation(summary = "Get allowed next status transitions")
+    @GetMapping("/{rfpId}/transitions")
+    @PreAuthorize("isAuthenticated()")
+    public Mono<ResponseEntity<ApiResponse<Map<String, Object>>>> getAllowedTransitions(
+            @PathVariable String projectId,
+            @PathVariable String rfpId) {
+        return rfpService.getAllowedTransitions(rfpId)
+                .map(transitions -> ResponseEntity.ok(ApiResponse.success(
+                        Map.of("rfpId", rfpId, "allowedTransitions", transitions))));
+    }
+
+    @Operation(summary = "Mark RFP as failed with reason")
+    @PostMapping("/{rfpId}/fail")
+    @PreAuthorize("isAuthenticated()")
+    public Mono<ResponseEntity<ApiResponse<Void>>> failRfp(
+            @PathVariable String projectId,
+            @PathVariable String rfpId,
+            @RequestParam String reason) {
+        return rfpService.failRfp(rfpId, reason)
+                .then(Mono.just(ResponseEntity.ok(ApiResponse.success("RFP marked as failed", null))));
+    }
+
+    @Operation(summary = "Resume RFP from ON_HOLD (restore previous status)")
+    @PostMapping("/{rfpId}/resume")
+    @PreAuthorize("isAuthenticated()")
+    public Mono<ResponseEntity<ApiResponse<Void>>> resumeFromHold(
+            @PathVariable String projectId,
+            @PathVariable String rfpId) {
+        return rfpService.resumeFromHold(rfpId)
+                .then(Mono.just(ResponseEntity.ok(ApiResponse.success("RFP resumed", null))));
     }
 }

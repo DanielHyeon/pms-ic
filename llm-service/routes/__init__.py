@@ -18,6 +18,7 @@ report_bp = Blueprint('report', __name__)
 db_admin_bp = Blueprint('db_admin', __name__)
 wbs_bp = Blueprint('wbs', __name__)
 briefing_bp = Blueprint('briefing', __name__)
+rfp_bp = Blueprint('rfp', __name__)
 
 
 def register_blueprints(app):
@@ -34,6 +35,7 @@ def register_blueprints(app):
     from . import db_admin_routes
     from . import wbs_routes
     from . import briefing_routes
+    from . import rfp_routes
     from .normalization_admin_routes import normalization_admin_bp
 
     app.register_blueprint(chat_bp)
@@ -47,4 +49,5 @@ def register_blueprints(app):
     app.register_blueprint(db_admin_bp)
     app.register_blueprint(wbs_bp)
     app.register_blueprint(briefing_bp)
+    app.register_blueprint(rfp_bp)
     app.register_blueprint(normalization_admin_bp)

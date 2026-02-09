@@ -28,6 +28,14 @@ public class RfpDto {
     private LocalDateTime updatedAt;
     private int requirementCount;
 
+    // New fields from V20260236_05
+    private String originType;
+    private String versionLabel;
+    private String previousStatus;
+    private String failureReason;
+    private String sourceName;
+    private String rfpType;
+
     public static RfpDto fromEntity(R2dbcRfp rfp) {
         RfpStatus rfpStatus = null;
         ProcessingStatus procStatus = null;
@@ -52,6 +60,12 @@ public class RfpDto {
                 .createdAt(rfp.getCreatedAt())
                 .updatedAt(rfp.getUpdatedAt())
                 .requirementCount(0)
+                .originType(rfp.getOriginType())
+                .versionLabel(rfp.getVersionLabel())
+                .previousStatus(rfp.getPreviousStatus())
+                .failureReason(rfp.getFailureReason())
+                .sourceName(rfp.getSourceName())
+                .rfpType(rfp.getRfpType())
                 .build();
     }
 }
