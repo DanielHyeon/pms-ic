@@ -29,10 +29,10 @@ export type PmoPanelMode =
 // ─── Tab definition ─────────────────────────────────────
 
 const PANEL_TABS: { mode: PmoPanelMode; label: string; icon: typeof LayoutDashboard }[] = [
-  { mode: 'project-summary', label: '\uC694\uC57D', icon: LayoutDashboard },
-  { mode: 'health-detail', label: '\uAC74\uAC15', icon: Radar },
-  { mode: 'resource', label: '\uC790\uC6D0', icon: Users },
-  { mode: 'milestone', label: '\uB9C8\uC77C\uC2A4\uD1A4', icon: Milestone },
+  { mode: 'project-summary', label: '요약', icon: LayoutDashboard },
+  { mode: 'health-detail', label: '건강', icon: Radar },
+  { mode: 'resource', label: '자원', icon: Users },
+  { mode: 'milestone', label: '마일스톤', icon: Milestone },
 ];
 
 // ─── Grade badge color ──────────────────────────────────
@@ -56,10 +56,10 @@ interface TeamResource {
 }
 
 const MOCK_TEAMS: TeamResource[] = [
-  { team: '\uD504\uB860\uD2B8\uC5D4\uB4DC', allocated: 6, available: 8, utilization: 75 },
-  { team: '\uBC31\uC5D4\uB4DC', allocated: 5, available: 6, utilization: 83 },
+  { team: '프론트엔드', allocated: 6, available: 8, utilization: 75 },
+  { team: '백엔드', allocated: 5, available: 6, utilization: 83 },
   { team: 'QA', allocated: 3, available: 4, utilization: 75 },
-  { team: '\uB514\uC790\uC778', allocated: 2, available: 3, utilization: 67 },
+  { team: '디자인', allocated: 2, available: 3, utilization: 67 },
 ];
 
 interface MilestoneItem {
@@ -71,21 +71,21 @@ interface MilestoneItem {
 }
 
 const MOCK_MILESTONES: MilestoneItem[] = [
-  { id: 'ms-1', title: 'UI \uB514\uC790\uC778 \uC644\uB8CC', project: '\uACE0\uAC1D \uD3EC\uD138 \uAC1C\uD3B8', date: '2026-02-15', status: 'upcoming' },
-  { id: 'ms-2', title: 'API \uC5F0\uB3D9 \uD14C\uC2A4\uD2B8', project: '\uBCF4\uD5D8 \uCCAD\uAD6C \uC2DC\uC2A4\uD15C', date: '2026-02-20', status: 'upcoming' },
-  { id: 'ms-3', title: '\uC131\uB2A5 \uD14C\uC2A4\uD2B8 \uC644\uB8CC', project: '\uB370\uC774\uD130 \uBD84\uC11D \uD50C\uB7AB\uD3FC', date: '2026-02-25', status: 'planned' },
-  { id: 'ms-4', title: '\uBCA0\uD0C0 \uBC30\uD3EC', project: '\uBAA8\uBC14\uC77C \uC571 v2.0', date: '2026-03-01', status: 'planned' },
-  { id: 'ms-5', title: '\uBCF4\uC548 \uAC10\uC0AC \uC644\uB8CC', project: '\uBCF4\uC548 \uC778\uD504\uB77C \uAC1C\uC120', date: '2026-01-30', status: 'completed' },
+  { id: 'ms-1', title: 'UI 디자인 완료', project: '고객 포털 개편', date: '2026-02-15', status: 'upcoming' },
+  { id: 'ms-2', title: 'API 연동 테스트', project: '보험 청구 시스템', date: '2026-02-20', status: 'upcoming' },
+  { id: 'ms-3', title: '성능 테스트 완료', project: '데이터 분석 플랫폼', date: '2026-02-25', status: 'planned' },
+  { id: 'ms-4', title: '베타 배포', project: '모바일 앱 v2.0', date: '2026-03-01', status: 'planned' },
+  { id: 'ms-5', title: '보안 감사 완료', project: '보안 인프라 개선', date: '2026-01-30', status: 'completed' },
 ];
 
 // ─── Score dimension labels ─────────────────────────────
 
 const DIMENSION_LABELS: Record<string, string> = {
-  schedule: '\uC77C\uC815',
-  cost: '\uBE44\uC6A9',
-  quality: '\uD488\uC9C8',
-  risk: '\uB9AC\uC2A4\uD06C',
-  resource: '\uC790\uC6D0',
+  schedule: '일정',
+  cost: '비용',
+  quality: '품질',
+  risk: '리스크',
+  resource: '자원',
 };
 
 const DIMENSIONS = ['schedule', 'cost', 'quality', 'risk', 'resource'] as const;
@@ -112,7 +112,7 @@ export function PmoRightPanel({
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-900 truncate">
-          {selectedProject?.name || '\uD504\uB85C\uC81D\uD2B8 \uC0C1\uC138'}
+          {selectedProject?.name || '프로젝트 상세'}
         </h3>
         <button
           type="button"
@@ -170,7 +170,7 @@ function ProjectSummaryContent({ project }: { project?: ProjectHealth | null }) 
     return (
       <div className="text-center text-gray-400 py-8">
         <LayoutDashboard size={32} className="mx-auto mb-2 opacity-50" />
-        <p className="text-sm">\uD504\uB85C\uC81D\uD2B8\uB97C \uC120\uD0DD\uD574\uC8FC\uC138\uC694</p>
+        <p className="text-sm">프로젝트를 선택해주세요</p>
       </div>
     );
   }
@@ -204,7 +204,7 @@ function ProjectSummaryContent({ project }: { project?: ProjectHealth | null }) 
           <div className="flex items-center gap-2 mt-0.5">
             <TrendIcon size={14} className={trendColor} />
             <span className="text-xs text-gray-500">
-              {project.trend === 'up' ? '\uAC1C\uC120 \uCD94\uC138' : project.trend === 'down' ? '\uD558\uB77D \uCD94\uC138' : '\uC720\uC9C0'}
+              {project.trend === 'up' ? '개선 추세' : project.trend === 'down' ? '하락 추세' : '유지'}
             </span>
           </div>
         </div>
@@ -217,11 +217,11 @@ function ProjectSummaryContent({ project }: { project?: ProjectHealth | null }) 
           <span className="font-medium text-gray-900">{project.pm}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-gray-500">\uB2E8\uACC4</span>
+          <span className="text-gray-500">단계</span>
           <span className="font-medium text-gray-900">{project.phase}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-gray-500">\uC0C1\uD0DC</span>
+          <span className="text-gray-500">상태</span>
           <StatusBadge status={project.status} />
         </div>
       </div>
@@ -229,7 +229,7 @@ function ProjectSummaryContent({ project }: { project?: ProjectHealth | null }) 
       {/* Dimension score bars */}
       <div className="space-y-2.5">
         <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
-          \uCC28\uC6D0\uBCC4 \uC810\uC218
+          차원별 점수
         </h4>
         {DIMENSIONS.map((dim) => {
           const score = project[dim];
@@ -255,12 +255,12 @@ function ProjectSummaryContent({ project }: { project?: ProjectHealth | null }) 
       {/* Quick action links */}
       <div className="pt-2 border-t border-gray-100 space-y-1.5">
         <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
-          \uBE60\uB978 \uC791\uC5C5
+          빠른 작업
         </h4>
         {[
-          { label: '\uD504\uB85C\uC81D\uD2B8 \uB300\uC2DC\uBCF4\uB4DC', href: '#' },
-          { label: '\uC774\uC288 \uBAA9\uB85D', href: '#' },
-          { label: '\uC0B0\uCD9C\uBB3C \uD604\uD669', href: '#' },
+          { label: '프로젝트 대시보드', href: '#' },
+          { label: '이슈 목록', href: '#' },
+          { label: '산출물 현황', href: '#' },
         ].map((link) => (
           <a
             key={link.label}
@@ -283,7 +283,7 @@ function HealthDetailContent({ project }: { project?: ProjectHealth | null }) {
     return (
       <div className="text-center text-gray-400 py-8">
         <Radar size={32} className="mx-auto mb-2 opacity-50" />
-        <p className="text-sm">\uD504\uB85C\uC81D\uD2B8\uB97C \uC120\uD0DD\uD574\uC8FC\uC138\uC694</p>
+        <p className="text-sm">프로젝트를 선택해주세요</p>
       </div>
     );
   }
@@ -338,8 +338,8 @@ function HealthDetailContent({ project }: { project?: ProjectHealth | null }) {
           {project.overallGrade}
         </span>
         <div>
-          <p className="text-sm font-medium text-gray-900">\uC885\uD569 \uAC74\uAC15 \uC810\uC218</p>
-          <p className="text-xs text-gray-500">\uD3C9\uADE0 {avgScore.toFixed(1)} / 5.0</p>
+          <p className="text-sm font-medium text-gray-900">종합 건강 점수</p>
+          <p className="text-xs text-gray-500">평균 {avgScore.toFixed(1)} / 5.0</p>
         </div>
       </div>
 
@@ -452,17 +452,17 @@ function ResourceContent() {
     <>
       {/* Overall utilization */}
       <div className="bg-gray-50 rounded-lg p-3 text-center">
-        <p className="text-xs text-gray-500 mb-1">\uC804\uCCB4 \uC790\uC6D0 \uD65C\uC6A9\uB960</p>
+        <p className="text-xs text-gray-500 mb-1">전체 자원 활용률</p>
         <p className="text-3xl font-bold text-gray-900">{overallUtilization}%</p>
         <p className="text-xs text-gray-400 mt-0.5">
-          {totalAllocated}\uBA85 / {totalAvailable}\uBA85 \uBC30\uC815
+          {totalAllocated}명 / {totalAvailable}명 배정
         </p>
       </div>
 
       {/* Team breakdown bars */}
       <div className="space-y-3">
         <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
-          \uD300\uBCC4 \uC790\uC6D0 \uBC30\uBD84
+          팀별 자원 배분
         </h4>
         {MOCK_TEAMS.map((team) => {
           const pct = team.utilization;
@@ -473,7 +473,7 @@ function ResourceContent() {
               <div className="flex justify-between text-xs">
                 <span className="text-gray-700 font-medium">{team.team}</span>
                 <span className="text-gray-500">
-                  {team.allocated}/{team.available}\uBA85 ({pct}%)
+                  {team.allocated}/{team.available}명 ({pct}%)
                 </span>
               </div>
               <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
@@ -510,17 +510,17 @@ function ResourceContent() {
 
 function MilestoneContent() {
   const statusConfig: Record<string, { icon: typeof CheckCircle2; color: string; label: string }> = {
-    completed: { icon: CheckCircle2, color: 'text-green-500', label: '\uC644\uB8CC' },
-    upcoming: { icon: Clock, color: 'text-blue-500', label: '\uC608\uC815' },
-    in_progress: { icon: Clock, color: 'text-amber-500', label: '\uC9C4\uD589\uC911' },
-    overdue: { icon: AlertCircle, color: 'text-red-500', label: '\uC9C0\uC5F0' },
-    planned: { icon: Calendar, color: 'text-gray-400', label: '\uACC4\uD68D' },
+    completed: { icon: CheckCircle2, color: 'text-green-500', label: '완료' },
+    upcoming: { icon: Clock, color: 'text-blue-500', label: '예정' },
+    in_progress: { icon: Clock, color: 'text-amber-500', label: '진행중' },
+    overdue: { icon: AlertCircle, color: 'text-red-500', label: '지연' },
+    planned: { icon: Calendar, color: 'text-gray-400', label: '계획' },
   };
 
   return (
     <>
       <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
-        \uC608\uC815 \uB9C8\uC77C\uC2A4\uD1A4
+        예정 마일스톤
       </h4>
 
       <div className="relative">
@@ -575,10 +575,10 @@ function MilestoneContent() {
 
 function StatusBadge({ status }: { status: string }) {
   const config: Record<string, { label: string; color: string }> = {
-    on_track: { label: '\uC815\uC0C1', color: 'bg-green-100 text-green-700' },
-    at_risk: { label: '\uC8FC\uC758', color: 'bg-amber-100 text-amber-700' },
-    delayed: { label: '\uC9C0\uC5F0', color: 'bg-orange-100 text-orange-700' },
-    critical: { label: '\uC704\uD5D8', color: 'bg-red-100 text-red-700' },
+    on_track: { label: '정상', color: 'bg-green-100 text-green-700' },
+    at_risk: { label: '주의', color: 'bg-amber-100 text-amber-700' },
+    delayed: { label: '지연', color: 'bg-orange-100 text-orange-700' },
+    critical: { label: '위험', color: 'bg-red-100 text-red-700' },
   };
 
   const c = config[status] || config.on_track;

@@ -7,6 +7,8 @@ import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 import org.springframework.lang.Nullable;
 
+import java.math.BigDecimal;
+
 @Table(name = "kpis", schema = "project")
 @Getter
 @Setter
@@ -19,18 +21,23 @@ public class R2dbcKpi extends R2dbcBaseEntity {
     @Column("id")
     private String id;
 
-    @Column("phase_id")
-    private String phaseId;
+    @Column("project_id")
+    private String projectId;
 
     @Column("name")
     private String name;
 
+    @Nullable
+    @Column("category")
+    private String category;
+
+    @Nullable
     @Column("target")
-    private String target;
+    private BigDecimal target;
 
     @Nullable
     @Column("current")
-    private String current;
+    private BigDecimal current;
 
     @Column("status")
     @Builder.Default

@@ -1036,6 +1036,54 @@ export const healthMatrixNode: MenuOntologyNode = {
   scopeHints: ['projectId'],
 };
 
+export const projectManagementNode: MenuOntologyNode = {
+  nodeId: 'project-management',
+  label: '프로젝트 관리',
+  route: '/project-management',
+  icon: 'Crown',
+  domain: 'governance',
+  requiredCaps: ['view_projects'],
+  intents: ['ask_overall_status'],
+  canonicalQuestions: [
+    '프로젝트 PM이 누구인가요?',
+    '프로젝트 책임자 정보를 보여주세요.',
+  ],
+  entities: ['project', 'user'],
+  keywords: ['프로젝트 관리', 'PM', '책임자', 'accountability', '프로젝트 매니저'],
+  metrics: [],
+  defaultPreset: 'PM_WORK',
+  presetPolicies: [],
+  priority: 3,
+  scopeHints: ['projectId'],
+};
+
+export const rolePermissionNode: MenuOntologyNode = {
+  nodeId: 'role-permission',
+  label: '역할 및 권한 관리',
+  route: '/role-permission',
+  icon: 'ShieldCheck',
+  domain: 'governance',
+  requiredCaps: ['view_roles'],
+  intents: ['ask_overall_status'],
+  canonicalQuestions: [
+    '역할별 권한이 어떻게 되나요?',
+    '위임 현황을 보여주세요.',
+    'SoD 위반이 있나요?',
+  ],
+  entities: ['user'],
+  keywords: ['역할', '권한', '위임', 'delegation', 'role', 'capability', 'SoD', '거버넌스'],
+  defaultPreset: 'PM_WORK',
+  presetPolicies: [
+    {
+      preset: 'PM_WORK',
+      ui: {
+        density: 'standard',
+        defaultRightPanel: 'open',
+      },
+    },
+  ],
+};
+
 // ─── Zone 8: Audit ──────────────────────────────────────────────
 
 export const auditEvidenceNode: MenuOntologyNode = {
@@ -1534,6 +1582,8 @@ export const allOntologyNodes: MenuOntologyNode[] = [
   // Zone 7: PMO / Governance
   pmoNode,
   healthMatrixNode,
+  projectManagementNode,
+  rolePermissionNode,
   // Zone 8: Audit
   auditEvidenceNode,
   // Zone 9: Collaboration

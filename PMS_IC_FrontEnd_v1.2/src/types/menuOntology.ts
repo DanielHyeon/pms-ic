@@ -66,12 +66,18 @@ export type Capability =
   | 'manage_roles'
   | 'view_parts'
   | 'manage_parts'
+  | 'manage_part_members'
   | 'view_users'
   | 'manage_users'
   | 'view_rfp'
   | 'manage_rfp'
   | 'admin_project'
-  | 'admin_system';
+  | 'admin_system'
+  | 'edit_project_accountability'
+  | 'view_role_permission'
+  | 'manage_delegations'
+  | 'manage_capabilities'
+  | 'audit_governance';
 
 export type EntityType =
   | 'project'

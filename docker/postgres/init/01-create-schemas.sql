@@ -36,6 +36,12 @@ CREATE SCHEMA IF NOT EXISTS lineage;
 -- Audit schema (audit trails, evidence, compliance)
 CREATE SCHEMA IF NOT EXISTS audit;
 
+-- Governance schema (roles, capabilities, delegations, SoD, authority orchestration)
+CREATE SCHEMA IF NOT EXISTS governance;
+
+-- Organization schema (parts with membership types, co-leaders, assignment tracking)
+CREATE SCHEMA IF NOT EXISTS organization;
+
 -- ============================================
 -- Grant Privileges
 -- ============================================
@@ -49,6 +55,8 @@ GRANT ALL PRIVILEGES ON SCHEMA rfp TO pms_user;
 GRANT ALL PRIVILEGES ON SCHEMA education TO pms_user;
 GRANT ALL PRIVILEGES ON SCHEMA lineage TO pms_user;
 GRANT ALL PRIVILEGES ON SCHEMA audit TO pms_user;
+GRANT ALL PRIVILEGES ON SCHEMA governance TO pms_user;
+GRANT ALL PRIVILEGES ON SCHEMA organization TO pms_user;
 
 -- ============================================
 -- Extensions

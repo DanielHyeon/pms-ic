@@ -68,10 +68,10 @@ const SCORE_COLORS: Record<number, string> = {
 };
 
 const STATUS_LABELS: Record<ProjectStatus, { label: string; color: string }> = {
-  on_track: { label: '\uC815\uC0C1', color: 'bg-green-100 text-green-700' },
-  at_risk: { label: '\uC8FC\uC758', color: 'bg-amber-100 text-amber-700' },
-  delayed: { label: '\uC9C0\uC5F0', color: 'bg-orange-100 text-orange-700' },
-  critical: { label: '\uC704\uD5D8', color: 'bg-red-100 text-red-700' },
+  on_track: { label: '정상', color: 'bg-green-100 text-green-700' },
+  at_risk: { label: '주의', color: 'bg-amber-100 text-amber-700' },
+  delayed: { label: '지연', color: 'bg-orange-100 text-orange-700' },
+  critical: { label: '위험', color: 'bg-red-100 text-red-700' },
 };
 
 const GRADE_ORDER: Record<HealthGrade, number> = { A: 5, B: 4, C: 3, D: 2, F: 1 };
@@ -156,25 +156,25 @@ export function HealthMatrixTable({ projects, selectedProjectId, onSelect }: Hea
   };
 
   const columns: { key: SortKey; label: string; width?: string }[] = [
-    { key: 'name', label: '\uD504\uB85C\uC81D\uD2B8\uBA85', width: 'w-[200px]' },
-    { key: 'overallGrade', label: '\uC885\uD569 \uB4F1\uAE09' },
-    { key: 'schedule', label: '\uC77C\uC815' },
-    { key: 'cost', label: '\uBE44\uC6A9' },
-    { key: 'quality', label: '\uD488\uC9C8' },
-    { key: 'risk', label: '\uB9AC\uC2A4\uD06C' },
-    { key: 'resource', label: '\uC790\uC6D0' },
-    { key: 'status', label: '\uC0C1\uD0DC' },
-    { key: 'trend', label: '\uCD94\uC138' },
+    { key: 'name', label: '프로젝트명', width: 'w-[200px]' },
+    { key: 'overallGrade', label: '종합 등급' },
+    { key: 'schedule', label: '일정' },
+    { key: 'cost', label: '비용' },
+    { key: 'quality', label: '품질' },
+    { key: 'risk', label: '리스크' },
+    { key: 'resource', label: '자원' },
+    { key: 'status', label: '상태' },
+    { key: 'trend', label: '추세' },
   ];
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-100">
         <h3 className="text-sm font-semibold text-gray-900">
-          \uD504\uB85C\uC81D\uD2B8 \uAC74\uAC15 \uB9E4\uD2B8\uB9AD\uC2A4
+          프로젝트 건강 매트릭스
         </h3>
         <p className="text-xs text-gray-500 mt-0.5">
-          \uD504\uB85C\uC81D\uD2B8\uBCC4 5\uAC1C \uCC28\uC6D0 \uAC74\uAC15 \uC810\uC218 \uD604\uD669
+          프로젝트별 5개 차원 건강 점수 현황
         </p>
       </div>
 

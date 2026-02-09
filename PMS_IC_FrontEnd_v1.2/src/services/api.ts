@@ -3877,6 +3877,280 @@ export class ApiService {
     });
   }
 
+  // ==================== Accountability API (#20) ====================
+
+  async getAccountability(projectId: string) {
+    return this.fetchWithFallback(
+      `${V2}/projects/${projectId}/accountability`,
+      {},
+      { projectId, pmUserId: '', pmUserName: '', coPmUserId: null, coPmUserName: null, sponsorUserId: null, sponsorUserName: null, updatedAt: null, updatedBy: null }
+    );
+  }
+
+  async updateAccountability(projectId: string, data: { changeType: string; newUserId: string; changeReason: string }) {
+    return this.fetchWithFallback(
+      `${V2}/projects/${projectId}/accountability`,
+      { method: 'PUT', body: JSON.stringify(data) },
+      {}
+    );
+  }
+
+  async getAccountabilityChangelog(projectId: string) {
+    return this.fetchWithFallback<any[]>(
+      `${V2}/projects/${projectId}/accountability/changelog`,
+      {},
+      []
+    );
+  }
+
+  async getAccountabilityConnections(projectId: string) {
+    return this.fetchWithFallback(
+      `${V2}/projects/${projectId}/accountability/connections`,
+      {},
+      { partCount: 0, totalUserCount: 0, activeDelegationCount: 0 }
+    );
+  }
+
+  // ==================== Organization Parts API (#21) ====================
+
+  async getOrgParts(projectId: string, activeOnly = false) {
+    return this.fetchWithFallback<any[]>(
+      `${V2}/projects/${projectId}/org/parts${activeOnly ? '?activeOnly=true' : ''}`,
+      {},
+      []
+    );
+  }
+
+  async createOrgPart(projectId: string, data: { name: string; partType: string; customTypeName?: string; leaderUserId: string }) {
+    return this.fetchStrict<any>(
+      `${V2}/projects/${projectId}/org/parts`,
+      { method: 'POST', body: JSON.stringify(data) }
+    );
+  }
+
+  async getOrgPartDetail(partId: string) {
+    return this.fetchWithFallback<any>(
+      `${V2}/org/parts/${partId}`,
+      {},
+      null
+    );
+  }
+
+  async updateOrgPart(partId: string, data: { name?: string; partType?: string; customTypeName?: string }) {
+    return this.fetchStrict<any>(
+      `${V2}/org/parts/${partId}`,
+      { method: 'PUT', body: JSON.stringify(data) }
+    );
+  }
+
+  async closeOrgPart(partId: string) {
+    return this.fetchStrict<any>(
+      `${V2}/org/parts/${partId}/close`,
+      { method: 'PUT' }
+    );
+  }
+
+  async reopenOrgPart(partId: string) {
+    return this.fetchStrict<any>(
+      `${V2}/org/parts/${partId}/reopen`,
+      { method: 'PUT' }
+    );
+  }
+
+  async changeOrgPartLeader(partId: string, data: { newLeaderUserId: string; reason: string }) {
+    return this.fetchStrict<any>(
+      `${V2}/org/parts/${partId}/leader`,
+      { method: 'PUT', body: JSON.stringify(data) }
+    );
+  }
+
+  async getLeaderWarning(partId: string) {
+    return this.fetchWithFallback<any>(
+      `${V2}/org/parts/${partId}/leader-warning`,
+      {},
+      { hasWarning: false, missingCapabilities: [] }
+    );
+  }
+
+  async addOrgPartMember(partId: string, data: { userId: string; membershipType: string }) {
+    return this.fetchStrict<any>(
+      `${V2}/org/parts/${partId}/members`,
+      { method: 'POST', body: JSON.stringify(data) }
+    );
+  }
+
+  async removeOrgPartMember(partId: string, userId: string) {
+    return this.fetchStrict<void>(
+      `${V2}/org/parts/${partId}/members/${userId}`,
+      { method: 'DELETE' }
+    );
+  }
+
+  async switchOrgMemberType(partId: string, userId: string) {
+    return this.fetchStrict<any>(
+      `${V2}/org/parts/${partId}/members/${userId}/switch-type`,
+      { method: 'PUT' }
+    );
+  }
+
+  async getUserPartSummary(projectId: string, userId: string) {
+    return this.fetchWithFallback<any>(
+      `${V2}/projects/${projectId}/org/user-summary/${userId}`,
+      {},
+      { userId, memberships: [] }
+    );
+  }
+
+  // ==================== Authority / Governance API (#22) ====================
+
+  // Roles
+  async getRoles(projectId: string) {
+    return this.fetchWithFallback<any[]>(
+      `${V2}/projects/${projectId}/roles`,
+      {},
+      []
+    );
+  }
+
+  // Capabilities
+  async getCapabilities(projectId: string, category?: string) {
+    const params = category ? `?category=${category}` : '';
+    return this.fetchWithFallback<any[]>(
+      `${V2}/projects/${projectId}/capabilities${params}`,
+      {},
+      []
+    );
+  }
+
+  // User Roles
+  async getUserRoles(projectId: string) {
+    return this.fetchWithFallback<any[]>(
+      `${V2}/projects/${projectId}/user-roles`,
+      {},
+      []
+    );
+  }
+
+  async grantUserRole(projectId: string, data: { userId: string; roleId: string; reason?: string }) {
+    return this.fetchStrict<any>(
+      `${V2}/projects/${projectId}/user-roles`,
+      { method: 'POST', body: JSON.stringify(data) }
+    );
+  }
+
+  async revokeUserRole(projectId: string, userRoleId: string) {
+    return this.fetchStrict<void>(
+      `${V2}/projects/${projectId}/user-roles/${userRoleId}`,
+      { method: 'DELETE' }
+    );
+  }
+
+  // User Capabilities (direct grants)
+  async getUserCapabilities(projectId: string) {
+    return this.fetchWithFallback<any[]>(
+      `${V2}/projects/${projectId}/user-capabilities`,
+      {},
+      []
+    );
+  }
+
+  async grantUserCapability(projectId: string, data: { userId: string; capabilityId: string; reason?: string }) {
+    return this.fetchStrict<any>(
+      `${V2}/projects/${projectId}/user-capabilities`,
+      { method: 'POST', body: JSON.stringify(data) }
+    );
+  }
+
+  async revokeUserCapability(projectId: string, userCapId: string) {
+    return this.fetchStrict<void>(
+      `${V2}/projects/${projectId}/user-capabilities/${userCapId}`,
+      { method: 'DELETE' }
+    );
+  }
+
+  // Delegations
+  async getDelegations(projectId: string) {
+    return this.fetchWithFallback<any[]>(
+      `${V2}/projects/${projectId}/delegations`,
+      {},
+      []
+    );
+  }
+
+  async createDelegation(projectId: string, data: {
+    delegateeId: string;
+    capabilityId: string;
+    scopeType: string;
+    scopePartId?: string;
+    scopeFunctionDescription?: string;
+    durationType: string;
+    startAt: string;
+    endAt?: string;
+    approverId: string;
+    reason?: string;
+    parentDelegationId?: string;
+  }) {
+    return this.fetchStrict<any>(
+      `${V2}/projects/${projectId}/delegations`,
+      { method: 'POST', body: JSON.stringify(data) }
+    );
+  }
+
+  async approveDelegation(delegationId: string) {
+    return this.fetchStrict<any>(
+      `${V2}/delegations/${delegationId}/approve`,
+      { method: 'PUT' }
+    );
+  }
+
+  async revokeDelegation(delegationId: string, reason?: string) {
+    return this.fetchStrict<any>(
+      `${V2}/delegations/${delegationId}/revoke`,
+      { method: 'PUT', body: JSON.stringify({ reason: reason || '' }) }
+    );
+  }
+
+  async getDelegationMap(projectId: string) {
+    return this.fetchWithFallback<any[]>(
+      `${V2}/projects/${projectId}/delegation-map`,
+      {},
+      []
+    );
+  }
+
+  // Effective Capabilities
+  async getEffectiveCapabilities(projectId: string, userId: string) {
+    return this.fetchWithFallback<any[]>(
+      `${V2}/projects/${projectId}/users/${userId}/effective-capabilities`,
+      {},
+      []
+    );
+  }
+
+  // Governance
+  async runGovernanceCheck(projectId: string) {
+    return this.fetchStrict<any>(
+      `${V2}/projects/${projectId}/governance/check`,
+      { method: 'POST' }
+    );
+  }
+
+  async getGovernanceFindings(projectId: string) {
+    return this.fetchWithFallback<any[]>(
+      `${V2}/projects/${projectId}/governance/findings`,
+      {},
+      []
+    );
+  }
+
+  async getGovernanceCheckRuns(projectId: string) {
+    return this.fetchWithFallback<any[]>(
+      `${V2}/projects/${projectId}/governance/check-runs`,
+      {},
+      []
+    );
+  }
+
 }
 
 export const apiService = new ApiService();

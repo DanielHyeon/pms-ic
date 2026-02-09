@@ -1073,8 +1073,9 @@ public final class R2dbcTestDataFactory {
 
     public static class KpiBuilder {
         private String id = UUID.randomUUID().toString();
-        private String phaseId;
+        private String projectId;
         private String name;
+        private String category;
         private String target;
         private String current;
         private String status = "ON_TRACK";
@@ -1089,8 +1090,11 @@ public final class R2dbcTestDataFactory {
         }
 
         public KpiBuilder id(String id) { this.id = id; return this; }
-        public KpiBuilder phaseId(String phaseId) { this.phaseId = phaseId; return this; }
+        /** @deprecated Use {@link #projectId(String)} instead */
+        public KpiBuilder phaseId(String phaseId) { this.projectId = phaseId; return this; }
+        public KpiBuilder projectId(String projectId) { this.projectId = projectId; return this; }
         public KpiBuilder name(String name) { this.name = name; return this; }
+        public KpiBuilder category(String category) { this.category = category; return this; }
         public KpiBuilder target(String target) { this.target = target; return this; }
         public KpiBuilder current(String current) { this.current = current; return this; }
         public KpiBuilder status(String status) { this.status = status; return this; }
@@ -1098,10 +1102,11 @@ public final class R2dbcTestDataFactory {
         public R2dbcKpi build() {
             R2dbcKpi kpi = R2dbcKpi.builder()
                     .id(id)
-                    .phaseId(phaseId)
+                    .projectId(projectId)
                     .name(name)
-                    .target(target)
-                    .current(current)
+                    .category(category)
+                    .target(target != null ? new java.math.BigDecimal(target) : null)
+                    .current(current != null ? new java.math.BigDecimal(current) : null)
                     .status(status)
                     .build();
             kpi.setCreatedAt(createdAt);

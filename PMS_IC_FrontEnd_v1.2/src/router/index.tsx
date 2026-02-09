@@ -8,6 +8,7 @@ import { useAuthStore, UserRole } from '../stores/authStore';
 const Dashboard = lazy(() => import('../app/components/Dashboard'));
 const ProjectManagement = lazy(() => import('../app/components/ProjectManagement'));
 const PartManagement = lazy(() => import('../app/components/PartManagement'));
+const PartManagementV2 = lazy(() => import('../app/components/PartManagementV2'));
 const RfpManagement = lazy(() => import('../app/components/RfpManagement'));
 const RequirementManagement = lazy(() => import('../app/components/RequirementManagement'));
 const LineageManagement = lazy(() => import('../app/components/lineage').then(m => ({ default: m.LineageManagement })));
@@ -47,6 +48,8 @@ const MyWorkPage = lazy(() => import('../app/components/MyWorkPage'));
 const DecisionRiskPage = lazy(() => import('../app/components/DecisionRiskPage'));
 const AuditEvidencePage = lazy(() => import('../app/components/AuditEvidencePage'));
 const PlaceholderPage = lazy(() => import('../app/components/PlaceholderPage'));
+const ProjectAccountabilityPage = lazy(() => import('../app/components/ProjectAccountabilityPage'));
+const RolePermissionPage = lazy(() => import('../app/components/RolePermissionPage'));
 
 // Wrapper component to inject userRole from store
 function withUserRole<P extends { userRole: UserRole }>(
@@ -64,6 +67,7 @@ function withUserRole<P extends { userRole: UserRole }>(
 const DashboardWithRole = withUserRole(Dashboard);
 const ProjectManagementWithRole = withUserRole(ProjectManagement);
 const PartManagementWithRole = withUserRole(PartManagement);
+const PartManagementV2WithRole = withUserRole(PartManagementV2);
 const RfpManagementWithRole = withUserRole(RfpManagement);
 const RequirementManagementWithRole = withUserRole(RequirementManagement);
 const LineageManagementWithRole = withUserRole(LineageManagement);
@@ -92,6 +96,8 @@ const SprintManagementWithRole = withUserRole(SprintManagement);
 const MyWorkPageWithRole = withUserRole(MyWorkPage);
 const DecisionRiskPageWithRole = withUserRole(DecisionRiskPage);
 const AuditEvidencePageWithRole = withUserRole(AuditEvidencePage);
+const ProjectAccountabilityPageWithRole = withUserRole(ProjectAccountabilityPage);
+const RolePermissionPageWithRole = withUserRole(RolePermissionPage);
 
 function Loading() {
   return (
@@ -145,10 +151,18 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: 'project-management',
+        element: (
+          <SuspenseWrapper>
+            <ProjectAccountabilityPageWithRole />
+          </SuspenseWrapper>
+        ),
+      },
+      {
         path: 'parts',
         element: (
           <SuspenseWrapper>
-            <PartManagementWithRole />
+            <PartManagementV2WithRole />
           </SuspenseWrapper>
         ),
       },
@@ -167,6 +181,14 @@ export const router = createBrowserRouter([
         element: (
           <SuspenseWrapper>
             <RoleManagementWithRole />
+          </SuspenseWrapper>
+        ),
+      },
+      {
+        path: 'role-permission',
+        element: (
+          <SuspenseWrapper>
+            <RolePermissionPageWithRole />
           </SuspenseWrapper>
         ),
       },
@@ -407,7 +429,23 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: 'admin-system',
+        element: (
+          <SuspenseWrapper>
+            <SystemSettingsWithRole />
+          </SuspenseWrapper>
+        ),
+      },
+      {
         path: 'settings',
+        element: (
+          <SuspenseWrapper>
+            <SettingsWithRole />
+          </SuspenseWrapper>
+        ),
+      },
+      {
+        path: 'admin-project',
         element: (
           <SuspenseWrapper>
             <SettingsWithRole />

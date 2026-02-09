@@ -8,7 +8,7 @@ import reactor.core.publisher.Flux;
 @Repository
 public interface ReactiveKpiRepository extends ReactiveCrudRepository<R2dbcKpi, String> {
 
-    Flux<R2dbcKpi> findByPhaseId(String phaseId);
+    Flux<R2dbcKpi> findByProjectId(String projectId);
 
-    Flux<R2dbcKpi> findByPhaseIdAndStatus(String phaseId, String status);
+    Flux<R2dbcKpi> findByProjectIdAndStatus(String projectId, String status);
 }

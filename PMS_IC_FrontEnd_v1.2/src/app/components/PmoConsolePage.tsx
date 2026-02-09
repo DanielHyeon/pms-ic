@@ -129,9 +129,9 @@ export default function PmoConsolePage({ userRole, projectId = 'proj-001' }: Pmo
           <div>
             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
               <Gauge className="text-purple-600" />
-              PMO \uB300\uC2DC\uBCF4\uB4DC
+              PMO 대시보드
             </h1>
-            <p className="text-gray-500 mt-1">\uD504\uB85C\uC81D\uD2B8 \uACF5\uD1B5\uAD00\uB9AC \uD604\uD669 \uC885\uD569</p>
+            <p className="text-gray-500 mt-1">프로젝트 공통관리 현황 종합</p>
           </div>
           <div className="flex items-center gap-3">
             <PresetSwitcher
@@ -145,7 +145,7 @@ export default function PmoConsolePage({ userRole, projectId = 'proj-001' }: Pmo
               className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             >
               <RefreshCw size={16} />
-              \uC0C8\uB85C\uACE0\uCE68
+              새로고침
             </button>
           </div>
         </div>

@@ -33,6 +33,7 @@ import {
   Users,
   ShieldCheck,
   UserPlus,
+  Crown,
   ChevronDown,
   ChevronRight,
   LucideIcon,
@@ -75,6 +76,8 @@ import {
   userManagementNode,
   adminProjectNode,
   adminSystemNode,
+  projectManagementNode,
+  rolePermissionNode,
   allOntologyNodes,
   ontologyNodeMap,
 } from './menuOntologyNodes';
@@ -113,6 +116,8 @@ export const nodeIconMap: Record<string, LucideIcon> = {
   parts: Users,
   roles: ShieldCheck,
   'user-management': UserPlus,
+  'project-management': Crown,
+  'role-permission': ShieldCheck,
   'admin-project': Settings,
   'admin-system': UserCog,
 };
@@ -223,7 +228,7 @@ export const menuZones: MenuZone[] = [
     label: 'PMO / 거버넌스',
     icon: Gauge,
     domain: 'governance',
-    nodes: [pmoNode, healthMatrixNode],
+    nodes: [pmoNode, healthMatrixNode, projectManagementNode, rolePermissionNode],
     defaultExpanded: false,
   },
   {
@@ -325,6 +330,7 @@ const menuAccessByRole: Record<UserRole, string[]> = {
     'reports', 'statistics', 'pmo', 'education', 'settings',
     'backlog', 'wbs', 'kanban', 'issues', 'tests',
     'deliverables', 'decisions', 'meetings', 'announcements',
+    'project-management',
   ],
   pmo_head: [
     'dashboard', 'rfp', 'requirements', 'backlog', 'wbs', 'phases',
@@ -333,6 +339,8 @@ const menuAccessByRole: Record<UserRole, string[]> = {
     'health-matrix', 'audit-evidence', 'meetings', 'announcements',
     'ai-assistant', 'education', 'projects', 'parts', 'roles',
     'user-management', 'admin-project', 'admin-system',
+    'project-management',
+    'role-permission',
   ],
   pm: [
     'dashboard', 'rfp', 'requirements', 'backlog', 'wbs', 'phases',
@@ -340,7 +348,8 @@ const menuAccessByRole: Record<UserRole, string[]> = {
     'deliverables', 'decisions', 'lineage', 'reports', 'statistics',
     'pmo', 'health-matrix', 'meetings', 'announcements',
     'ai-assistant', 'education', 'projects', 'parts', 'roles',
-    'admin-project',
+    'admin-project', 'project-management',
+    'role-permission',
   ],
   developer: [
     'dashboard', 'requirements', 'backlog', 'wbs', 'phases',
@@ -370,7 +379,8 @@ const menuAccessByRole: Record<UserRole, string[]> = {
     'pmo', 'health-matrix', 'audit-evidence', 'meetings',
     'announcements', 'ai-assistant', 'education', 'projects',
     'parts', 'roles', 'user-management',
-    'admin-project', 'admin-system',
+    'admin-project', 'admin-system', 'project-management',
+    'role-permission',
   ],
 };
 

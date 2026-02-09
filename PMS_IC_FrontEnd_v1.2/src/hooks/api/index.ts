@@ -113,3 +113,12 @@ export * from './useViews';
 
 // Project Authorization hooks
 export * from './useProjectAuth';
+
+// Accountability hooks (Authority Anchor #20)
+export * from './useAccountability';
+
+// Organization Parts hooks (Part Management Enhanced #21)
+export * from './useOrgParts';
+
+// Authority hooks (Role & Permission Management #22)
+export * from './useAuthority';

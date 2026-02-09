@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @Slf4j
@@ -22,13 +23,24 @@ public class ReactiveKpiService {
     private final ReactiveKpiRepository kpiRepository;
     private final ReactivePhaseRepository phaseRepository;
 
+    /**
+     * Resolve phaseId to projectId via the phases table.
+     */
+    private Mono<String> resolveProjectId(String phaseId) {
+        return phaseRepository.findById(phaseId)
+                .switchIfEmpty(Mono.error(CustomException.notFound("Phase not found: " + phaseId)))
+                .map(phase -> phase.getProjectId());
+    }
+
     public Flux<KpiDto> getKpisByPhase(String phaseId) {
-        return kpiRepository.findByPhaseId(phaseId)
+        return resolveProjectId(phaseId)
+                .flatMapMany(projectId -> kpiRepository.findByProjectId(projectId))
                 .map(KpiDto::from);
     }
 
     public Flux<KpiDto> getKpisByPhaseAndStatus(String phaseId, String status) {
-        return kpiRepository.findByPhaseIdAndStatus(phaseId, status)
+        return resolveProjectId(phaseId)
+                .flatMapMany(projectId -> kpiRepository.findByProjectIdAndStatus(projectId, status))
                 .map(KpiDto::from);
     }
 
@@ -40,15 +52,15 @@ public class ReactiveKpiService {
 
     @Transactional
     public Mono<KpiDto> createKpi(String phaseId, KpiDto request) {
-        return phaseRepository.findById(phaseId)
-                .switchIfEmpty(Mono.error(CustomException.notFound("Phase not found: " + phaseId)))
-                .flatMap(phase -> {
+        return resolveProjectId(phaseId)
+                .flatMap(projectId -> {
                     R2dbcKpi kpi = R2dbcKpi.builder()
                             .id(UUID.randomUUID().toString())
-                            .phaseId(phaseId)
+                            .projectId(projectId)
                             .name(request.getName())
-                            .target(request.getTarget())
-                            .current(request.getCurrent())
+                            .category(request.getCategory())
+                            .target(request.getTarget() != null ? new BigDecimal(request.getTarget()) : null)
+                            .current(request.getCurrent() != null ? new BigDecimal(request.getCurrent()) : null)
                             .status(request.getStatus() != null ? request.getStatus() : "ON_TRACK")
                             .build();
                     return kpiRepository.save(kpi);
@@ -63,9 +75,10 @@ public class ReactiveKpiService {
                 .switchIfEmpty(Mono.error(CustomException.notFound("KPI not found: " + kpiId)))
                 .flatMap(kpi -> {
                     if (request.getName() != null) kpi.setName(request.getName());
-                    if (request.getTarget() != null) kpi.setTarget(request.getTarget());
-                    if (request.getCurrent() != null) kpi.setCurrent(request.getCurrent());
+                    if (request.getTarget() != null) kpi.setTarget(new BigDecimal(request.getTarget()));
+                    if (request.getCurrent() != null) kpi.setCurrent(new BigDecimal(request.getCurrent()));
                     if (request.getStatus() != null) kpi.setStatus(request.getStatus());
+                    if (request.getCategory() != null) kpi.setCategory(request.getCategory());
                     return kpiRepository.save(kpi);
                 })
                 .map(KpiDto::from)
@@ -89,7 +102,7 @@ public class ReactiveKpiService {
         return kpiRepository.findById(kpiId)
                 .switchIfEmpty(Mono.error(CustomException.notFound("KPI not found: " + kpiId)))
                 .flatMap(kpi -> {
-                    kpi.setCurrent(currentValue);
+                    kpi.setCurrent(currentValue != null ? new BigDecimal(currentValue) : null);
                     return kpiRepository.save(kpi);
                 })
                 .map(KpiDto::from)
