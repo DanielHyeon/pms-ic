@@ -41,6 +41,8 @@ const NODE_TO_PATH: Record<string, string> = {
   'parts': '/parts',
   'roles': '/roles',
   'user-management': '/user-management',
+  'project-management': '/project-management',
+  'role-permission': '/role-permission',
   'admin-project': '/settings',
   'admin-system': '/system-settings',
 };

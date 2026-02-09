@@ -42,37 +42,37 @@ function PreviewPanel({ report }: { report: ReportCatalogType }) {
       {/* Last generated */}
       <div className="flex items-center gap-2 text-sm text-gray-500">
         <Clock size={14} />
-        <span>Last generated: {report.lastGenerated || 'Never'}</span>
+        <span>마지막 생성: {report.lastGenerated || '없음'}</span>
       </div>
 
       {/* Chart placeholder */}
       <div className="h-48 bg-gray-100 rounded-lg border border-dashed border-gray-300 flex items-center justify-center">
         <div className="text-center text-gray-400">
           <BarChart3 size={32} className="mx-auto mb-2" />
-          <p className="text-sm">Chart Preview</p>
-          <p className="text-xs mt-1">Generated on demand</p>
+          <p className="text-sm">차트 미리보기</p>
+          <p className="text-xs mt-1">요청 시 생성</p>
         </div>
       </div>
 
       {/* Filter controls */}
       <div className="space-y-3">
-        <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Filters</p>
+        <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">필터</p>
         <div>
-          <label className="block text-sm text-gray-600 mb-1">Phase</label>
+          <label className="block text-sm text-gray-600 mb-1">단계</label>
           <select className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <option value="">All Phases</option>
+            <option value="">전체 단계</option>
             {/* TODO: Replace with real API - dynamic phase list */}
           </select>
         </div>
         <div>
           <label className="block text-sm text-gray-600 mb-1">Sprint</label>
           <select className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <option value="">All Sprints</option>
+            <option value="">전체 Sprint</option>
             {/* TODO: Replace with real API - dynamic sprint list */}
           </select>
         </div>
         <div>
-          <label className="block text-sm text-gray-600 mb-1">Date Range</label>
+          <label className="block text-sm text-gray-600 mb-1">기간</label>
           <input
             type="date"
             className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -82,7 +82,7 @@ function PreviewPanel({ report }: { report: ReportCatalogType }) {
 
       {/* Export format buttons */}
       <div className="space-y-2">
-        <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Quick Export</p>
+        <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">빠른 내보내기</p>
         <div className="flex gap-2">
           <button className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium border border-gray-300 rounded-lg bg-white hover:bg-red-50 hover:border-red-300 hover:text-red-700 transition-colors">
             <FileText size={14} />
@@ -115,34 +115,34 @@ function SchedulePanel({ report }: { report: ReportCatalogType }) {
       <div>
         <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
           <Calendar size={16} className="text-blue-600" />
-          Schedule: {report.label}
+          예약: {report.label}
         </h3>
       </div>
 
       {/* Frequency selector */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">Frequency</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">반복 주기</label>
         <select
           value={frequency}
           onChange={(e) => setFrequency(e.target.value)}
           className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
-          <option value="daily">Daily</option>
-          <option value="weekly">Weekly</option>
-          <option value="monthly">Monthly</option>
+          <option value="daily">매일</option>
+          <option value="weekly">매주</option>
+          <option value="monthly">매월</option>
         </select>
       </div>
 
       {/* Day of week selector (for weekly) */}
       {frequency === 'weekly' && (
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Day of Week</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">요일</label>
           <select
             value={dayOfWeek}
             onChange={(e) => setDayOfWeek(e.target.value)}
             className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(
+            {['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'].map(
               (day, i) => (
                 <option key={i} value={String(i)}>
                   {day}
@@ -156,7 +156,7 @@ function SchedulePanel({ report }: { report: ReportCatalogType }) {
       {/* Day of month selector (for monthly) */}
       {frequency === 'monthly' && (
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Day of Month</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">일자</label>
           <select
             value={dayOfMonth}
             onChange={(e) => setDayOfMonth(e.target.value)}
@@ -173,7 +173,7 @@ function SchedulePanel({ report }: { report: ReportCatalogType }) {
 
       {/* Time picker */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">Time</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">시간</label>
         <input
           type="time"
           value={time}
@@ -186,8 +186,8 @@ function SchedulePanel({ report }: { report: ReportCatalogType }) {
       <div className="space-y-3 border-t pt-4">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium text-gray-700">Auto-publish</p>
-            <p className="text-xs text-gray-500">Automatically publish when generated</p>
+            <p className="text-sm font-medium text-gray-700">자동 발행</p>
+            <p className="text-xs text-gray-500">생성 시 자동으로 발행</p>
           </div>
           <button
             onClick={() => setAutoPublish(!autoPublish)}
@@ -204,8 +204,8 @@ function SchedulePanel({ report }: { report: ReportCatalogType }) {
         </div>
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium text-gray-700">Notification</p>
-            <p className="text-xs text-gray-500">Notify on completion</p>
+            <p className="text-sm font-medium text-gray-700">알림</p>
+            <p className="text-xs text-gray-500">완료 시 알림 받기</p>
           </div>
           <button
             onClick={() => setNotifyOnComplete(!notifyOnComplete)}
@@ -231,7 +231,7 @@ function SchedulePanel({ report }: { report: ReportCatalogType }) {
         }}
       >
         <Bell size={14} />
-        Save Schedule
+        예약 저장
       </button>
     </div>
   );
@@ -266,18 +266,18 @@ function ExportPanel({ report }: { report: ReportCatalogType }) {
       <div>
         <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
           <Download size={16} className="text-green-600" />
-          Export: {report.label}
+          내보내기: {report.label}
         </h3>
       </div>
 
       {/* Format radio buttons */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Format</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">형식</label>
         <div className="space-y-2">
           {[
-            { value: 'pdf' as const, label: 'PDF Document', icon: <FileText size={16} />, color: 'text-red-600' },
-            { value: 'excel' as const, label: 'Excel Spreadsheet', icon: <FileSpreadsheet size={16} />, color: 'text-green-600' },
-            { value: 'pptx' as const, label: 'PowerPoint Presentation', icon: <Presentation size={16} />, color: 'text-orange-600' },
+            { value: 'pdf' as const, label: 'PDF 문서', icon: <FileText size={16} />, color: 'text-red-600' },
+            { value: 'excel' as const, label: 'Excel 스프레드시트', icon: <FileSpreadsheet size={16} />, color: 'text-green-600' },
+            { value: 'pptx' as const, label: 'PowerPoint 프레젠테이션', icon: <Presentation size={16} />, color: 'text-orange-600' },
           ].map((fmt) => (
             <button
               key={fmt.value}
@@ -297,21 +297,21 @@ function ExportPanel({ report }: { report: ReportCatalogType }) {
 
       {/* Scope selector */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">Scope</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">범위</label>
         <select
           value={scope}
           onChange={(e) => setScope(e.target.value as 'current_project' | 'all_data')}
           className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
-          <option value="current_project">Current Project</option>
-          <option value="all_data">All Data</option>
+          <option value="current_project">현재 프로젝트</option>
+          <option value="all_data">전체 데이터</option>
         </select>
       </div>
 
       {/* Date range */}
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="block text-sm text-gray-600 mb-1">From</label>
+          <label className="block text-sm text-gray-600 mb-1">시작일</label>
           <input
             type="date"
             value={dateRangeStart}
@@ -320,7 +320,7 @@ function ExportPanel({ report }: { report: ReportCatalogType }) {
           />
         </div>
         <div>
-          <label className="block text-sm text-gray-600 mb-1">To</label>
+          <label className="block text-sm text-gray-600 mb-1">종료일</label>
           <input
             type="date"
             value={dateRangeEnd}
@@ -335,9 +335,9 @@ function ExportPanel({ report }: { report: ReportCatalogType }) {
         <div>
           <p className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
             <Sparkles size={14} className="text-purple-500" />
-            Include AI Summary
+            AI 요약 포함
           </p>
-          <p className="text-xs text-gray-500">Add AI-generated analysis</p>
+          <p className="text-xs text-gray-500">AI 생성 분석 포함</p>
         </div>
         <button
           onClick={() => setIncludeAiSummary(!includeAiSummary)}
@@ -362,12 +362,12 @@ function ExportPanel({ report }: { report: ReportCatalogType }) {
         {isExporting ? (
           <>
             <Loader2 size={14} className="animate-spin" />
-            Exporting... {exportProgress}%
+            내보내는 중... {exportProgress}%
           </>
         ) : (
           <>
             <Download size={14} />
-            Generate Export
+            내보내기 생성
           </>
         )}
       </button>
@@ -397,16 +397,16 @@ export function ReportRightPanel({
   if (mode === 'none') return null;
 
   const tabs: { mode: ReportPanelMode; label: string; icon: React.ReactNode }[] = [
-    { mode: 'preview', label: 'Preview', icon: <Eye size={14} /> },
-    { mode: 'schedule', label: 'Schedule', icon: <Calendar size={14} /> },
-    { mode: 'export', label: 'Export', icon: <Download size={14} /> },
+    { mode: 'preview', label: '미리보기', icon: <Eye size={14} /> },
+    { mode: 'schedule', label: '예약', icon: <Calendar size={14} /> },
+    { mode: 'export', label: '내보내기', icon: <Download size={14} /> },
   ];
 
   const renderContent = () => {
     if (!selectedReport) {
       return (
         <div className="flex items-center justify-center h-32 text-sm text-gray-400">
-          Select a report type to view details
+          보고서 유형을 선택하면 상세 정보를 볼 수 있습니다
         </div>
       );
     }
@@ -427,7 +427,7 @@ export function ReportRightPanel({
     <div className="w-[380px] border-l border-gray-200 bg-white flex flex-col h-full shrink-0">
       {/* Panel header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-200">
-        <h2 className="text-sm font-semibold text-gray-700">Report Details</h2>
+        <h2 className="text-sm font-semibold text-gray-700">보고서 상세</h2>
         <button
           onClick={onClose}
           className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"

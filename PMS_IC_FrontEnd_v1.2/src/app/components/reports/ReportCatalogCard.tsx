@@ -105,7 +105,7 @@ export function ReportCatalogCard({
         {/* Last generated */}
         <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-3">
           <Calendar size={11} />
-          <span>{report.lastGenerated || 'Not generated yet'}</span>
+          <span>{report.lastGenerated || '아직 생성되지 않음'}</span>
         </div>
 
         {/* Quick metric */}
@@ -130,7 +130,7 @@ export function ReportCatalogCard({
               title="Generate"
             >
               <Play size={11} />
-              Generate
+              생성
             </button>
           )}
           {report.capabilities.export && (
@@ -140,10 +140,10 @@ export function ReportCatalogCard({
                 onExport(report);
               }}
               className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium bg-green-50 text-green-700 rounded-md hover:bg-green-100 transition-colors"
-              title="Export"
+              title="내보내기"
             >
               <Download size={11} />
-              Export
+              내보내기
             </button>
           )}
           {report.capabilities.schedule && (
@@ -153,10 +153,10 @@ export function ReportCatalogCard({
                 onSchedule(report);
               }}
               className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium bg-amber-50 text-amber-700 rounded-md hover:bg-amber-100 transition-colors"
-              title="Schedule"
+              title="예약"
             >
               <Calendar size={11} />
-              Schedule
+              예약
             </button>
           )}
         </div>
@@ -171,74 +171,74 @@ export function ReportCatalogCard({
 export const REPORT_CATALOG: ReportCatalogType[] = [
   {
     id: 'project_status',
-    label: 'Project Status Report',
-    description: 'Overall project health including scope, schedule, budget, and risk summary.',
+    label: '프로젝트 현황 보고서',
+    description: '범위, 일정, 예산, 리스크 요약을 포함한 전체 프로젝트 상태',
     lastGenerated: '2026-01-28',
-    quickMetric: { label: 'Health', value: 'Good' },
+    quickMetric: { label: '상태', value: '양호' },
     capabilities: { generate: true, export: true, schedule: true },
   },
   {
     id: 'sprint_burndown',
     label: 'Sprint Burndown',
-    description: 'Remaining work vs. ideal trend for the active sprint.',
+    description: '활성 Sprint의 잔여 작업량 대비 이상적 추세',
     lastGenerated: '2026-01-27',
-    quickMetric: { label: 'Remaining', value: '12 SP' },
+    quickMetric: { label: '잔여', value: '12 SP' },
     capabilities: { generate: true, export: true, schedule: true },
   },
   {
     id: 'velocity_trend',
     label: 'Velocity Trend',
-    description: 'Story points completed per sprint over the last N sprints.',
+    description: '최근 N개 Sprint의 Sprint당 완료 스토리 포인트',
     lastGenerated: '2026-01-24',
-    quickMetric: { label: 'Trend', value: 'Improving' },
+    quickMetric: { label: '추세', value: '개선 중' },
     capabilities: { generate: true, export: true, schedule: true },
   },
   {
     id: 'evm_spi_cpi',
-    label: 'EVM (SPI/CPI) Report',
-    description: 'Earned value analysis with Schedule and Cost Performance Indices.',
+    label: 'EVM (SPI/CPI) 보고서',
+    description: '일정 및 원가 성과 지수를 포함한 획득가치 분석',
     lastGenerated: '2026-01-20',
     quickMetric: { label: 'SPI/CPI', value: '0.92 / 0.87' },
     capabilities: { generate: true, export: true, schedule: true },
   },
   {
     id: 'quality_dashboard',
-    label: 'Quality Dashboard',
-    description: 'Defect density, test coverage, and code quality metrics.',
+    label: '품질 대시보드',
+    description: '결함 밀도, 테스트 커버리지 및 코드 품질 지표',
     lastGenerated: null,
-    quickMetric: { label: 'Defect Density', value: '2.1/KLOC' },
+    quickMetric: { label: '결함 밀도', value: '2.1/KLOC' },
     capabilities: { generate: true, export: true, schedule: false },
   },
   {
     id: 'resource_utilization',
-    label: 'Resource Utilization',
-    description: 'Team allocation, workload distribution, and utilization rates.',
+    label: '리소스 활용도',
+    description: '팀 배정, 업무량 분배 및 활용률',
     lastGenerated: '2026-01-25',
-    quickMetric: { label: 'Utilization', value: '78%' },
+    quickMetric: { label: '활용률', value: '78%' },
     capabilities: { generate: true, export: true, schedule: true },
   },
   {
     id: 'risk_heatmap',
-    label: 'Risk Heatmap',
-    description: 'Risk matrix showing probability vs impact for active risks.',
+    label: '리스크 히트맵',
+    description: '활성 리스크의 발생 확률 대비 영향도 매트릭스',
     lastGenerated: null,
-    quickMetric: { label: 'Active Risks', value: '7' },
+    quickMetric: { label: '활성 리스크', value: '7' },
     capabilities: { generate: true, export: true, schedule: false },
   },
   {
     id: 'phase_gate_status',
-    label: 'Phase Gate Status',
-    description: 'Phase completion criteria and gate review readiness.',
+    label: '단계 게이트 현황',
+    description: '단계 완료 기준 및 게이트 리뷰 준비 현황',
     lastGenerated: '2026-01-22',
-    quickMetric: { label: 'Status', value: 'On Track' },
+    quickMetric: { label: '상태', value: '정상' },
     capabilities: { generate: true, export: true, schedule: true },
   },
   {
     id: 'requirement_traceability',
-    label: 'Requirement Traceability Matrix',
-    description: 'Requirements to design, implementation, and test case mapping.',
+    label: '요구사항 추적 매트릭스',
+    description: '요구사항-설계-구현-테스트 케이스 매핑',
     lastGenerated: null,
-    quickMetric: { label: 'Coverage', value: '85%' },
+    quickMetric: { label: '커버리지', value: '85%' },
     capabilities: { generate: true, export: true, schedule: false },
   },
 ];

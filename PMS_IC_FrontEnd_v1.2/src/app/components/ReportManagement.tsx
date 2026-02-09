@@ -393,12 +393,12 @@ export default function ReportManagement({ userRole }: ReportManagementProps) {
           <TabsContent value="reports" className="space-y-6">
             {/* Report Catalog Grid (9 report types) */}
             <div>
-              <h2 className="text-lg font-semibold text-gray-800 mb-3">Report Catalog</h2>
+              <h2 className="text-lg font-semibold text-gray-800 mb-3">보고서 카탈로그</h2>
               {filteredCatalog.length === 0 ? (
                 <Card>
                   <CardContent className="py-8 text-center">
                     <FileBarChart className="h-10 w-10 mx-auto text-gray-300 mb-3" />
-                    <p className="text-sm text-gray-500">No report types match the current filters.</p>
+                    <p className="text-sm text-gray-500">현재 필터에 일치하는 보고서 유형이 없습니다.</p>
                   </CardContent>
                 </Card>
               ) : (

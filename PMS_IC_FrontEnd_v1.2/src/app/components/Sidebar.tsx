@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, memo, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef, memo, useMemo } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { UserRole } from '../../stores/authStore';
 import { useCapabilities } from '../../hooks/useCapabilities';
@@ -170,6 +170,7 @@ const StandaloneNodeButton = memo(function StandaloneNodeButton({
     <button
       type="button"
       onClick={onClick}
+      data-node-id={node.nodeId}
       aria-current={isActive ? 'page' : undefined}
       aria-label={node.label}
       className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${
@@ -220,6 +221,7 @@ const SubMenuNodeButton = memo(function SubMenuNodeButton({
       <button
         type="button"
         onClick={onClick}
+        data-node-id={node.nodeId}
         aria-current={isActive ? 'page' : undefined}
         aria-label={node.label}
         className={`flex-1 flex items-center gap-2.5 ml-10 pl-3 pr-3 py-2 rounded-lg transition-all text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50 ${
@@ -340,6 +342,8 @@ export default function Sidebar({
   currentView = 'dashboard',
   onViewChange,
 }: SidebarProps) {
+  const navRef = useRef<HTMLElement>(null);
+
   // Derive capabilities and preset from role
   const capRoleKey = userRole.toUpperCase();
   const { capabilities } = useCapabilities(capRoleKey);
@@ -384,6 +388,17 @@ export default function Sidebar({
       }
     });
   }, [currentView, visibleZones]);
+
+  // Auto-scroll active item into view after zone expansion settles
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const el = navRef.current?.querySelector(`[data-node-id="${currentView}"]`);
+      if (el) {
+        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [currentView]);
 
   const toggleZone = useCallback((zoneId: string) => {
     setExpandedZones((prev) => {
@@ -435,7 +450,7 @@ export default function Sidebar({
       </div>
 
       {/* Navigation */}
-      <nav aria-label="Main navigation" className="flex-1 p-3 space-y-1 overflow-y-auto sidebar-scrollbar">
+      <nav ref={navRef} aria-label="Main navigation" className="flex-1 p-3 space-y-1 overflow-y-auto sidebar-scrollbar">
         {/* Dashboard (standalone from overview zone) */}
         {overviewZone && overviewZone.nodes.map((node) => (
           <StandaloneNodeButton
