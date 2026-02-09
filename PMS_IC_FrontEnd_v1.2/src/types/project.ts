@@ -32,26 +32,8 @@ export interface ProjectSummary {
   isDefault?: boolean;
 }
 
-// RFP 관련 타입
-export type RfpStatus = 'DRAFT' | 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED';
-export type ProcessingStatus = 'PENDING' | 'EXTRACTING' | 'COMPLETED' | 'FAILED';
-
-export interface Rfp {
-  id: string;
-  projectId: string;
-  title: string;
-  content: string;
-  status: RfpStatus;
-  processingStatus: ProcessingStatus;
-  processingMessage?: string;
-  submittedBy: string;
-  submittedAt?: string;
-  reviewedBy?: string;
-  reviewedAt?: string;
-  reviewComments?: string;
-  createdAt: string;
-  updatedAt: string;
-}
+// RFP types — re-exported from rfp.ts for backward compatibility
+export type { RfpStatus, RfpDetail as Rfp, OriginType } from './rfp';
 
 // 요구사항 관련 타입
 export type RequirementPriority = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';

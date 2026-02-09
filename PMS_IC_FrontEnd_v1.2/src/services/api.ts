@@ -1748,6 +1748,195 @@ export class ApiService {
     return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
   }
 
+  // ========== RFP Origin API (v2.2) ==========
+
+  async getProjectOrigin(projectId: string) {
+    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/origin`, {}, { data: null });
+    const raw = response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+    return raw;
+  }
+
+  async setProjectOrigin(projectId: string, originType: string) {
+    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/origin`, {
+      method: 'POST',
+      body: JSON.stringify({ originType }),
+    }, {
+      data: {
+        originType,
+        originTypeLabel: { EXTERNAL_RFP: '외부 고객 RFP 기반', INTERNAL_INITIATIVE: '내부 기획 프로젝트', MODERNIZATION: '기존 시스템 고도화', MIXED: '혼합' }[originType] || originType,
+        policy: { requireSourceRfpId: true, evidenceLevel: 'FULL', changeApprovalRequired: true, autoAnalysisEnabled: true, lineageEnforcement: 'STRICT' },
+        kpi: { activeRfpCount: 0, totalRequirements: 0, confirmedRequirements: 0, epicLinkRate: 0, lastChangeImpact: { level: 'NONE', impactedEpics: 0, impactedTasks: 0 } },
+        asOf: new Date().toISOString(),
+      }
+    });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async getOriginSummary(projectId: string) {
+    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/origin/summary`, {}, {
+      data: {
+        originType: 'EXTERNAL_RFP',
+        originTypeLabel: '외부 고객 RFP 기반',
+        policy: { requireSourceRfpId: true, evidenceLevel: 'FULL', changeApprovalRequired: true, autoAnalysisEnabled: true, lineageEnforcement: 'STRICT' },
+        kpi: { activeRfpCount: 2, totalRequirements: 47, confirmedRequirements: 42, epicLinkRate: 0.89, lastChangeImpact: { level: 'MEDIUM', impactedEpics: 3, impactedTasks: 12 } },
+        asOf: new Date().toISOString(),
+      }
+    });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  // ========== RFP v2.2 Enhanced APIs ==========
+
+  async getRfpsV2(projectId: string, params?: { search?: string; status?: string; sort?: string; page?: number; size?: number }) {
+    const searchParams = new URLSearchParams();
+    if (params?.search) searchParams.set('search', params.search);
+    if (params?.status) searchParams.set('status', params.status);
+    if (params?.sort) searchParams.set('sort', params.sort);
+    if (params?.page !== undefined) searchParams.set('page', String(params.page));
+    if (params?.size !== undefined) searchParams.set('size', String(params.size));
+    const qs = searchParams.toString();
+
+    const mockRfps = [
+      {
+        id: 'rfp-001', projectId, title: 'AI 보험심사 처리 시스템 RFP', originType: 'EXTERNAL_RFP',
+        status: 'CONFIRMED', statusLabel: '분석완료', previousStatus: null, failureReason: null,
+        content: 'AI 기반 보험 청구 처리 시스템 개발을 위한 제안요청서.',
+        currentVersion: { id: 'v-001', versionLabel: 'v1.2', fileName: 'insurance_rfp_v1.2.pdf', fileSize: 2458624, checksum: 'sha256:a1b2c3', uploadedBy: { id: 'u-001', name: 'Kim PM' }, uploadedAt: '2026-02-08T14:30:00Z' },
+        versionCount: 3,
+        kpi: { derivedRequirements: 47, confirmedRequirements: 42, epicLinkRate: 0.89, changeImpact: { level: 'MEDIUM', impactedEpics: 3, impactedTasks: 12 } },
+        latestRun: { id: 'run-001', modelName: 'gemma-3-12b', modelVersion: 'Q5_K_M', status: 'COMPLETED', startedAt: '2026-02-08T14:35:00Z', finishedAt: '2026-02-08T14:42:00Z', stats: { totalCandidates: 52, ambiguityCount: 7, avgConfidence: 0.83 } },
+        createdBy: { id: 'u-001', name: 'Kim PM' }, createdAt: '2026-02-01T09:00:00Z', updatedAt: '2026-02-08T14:42:00Z',
+      },
+      {
+        id: 'rfp-002', projectId, title: '모바일 보험 플랫폼 RFP', originType: 'EXTERNAL_RFP',
+        status: 'EXTRACTING', statusLabel: '분석중', previousStatus: null, failureReason: null,
+        content: '보험 서비스를 위한 종합 모바일 플랫폼 구축 제안요청서.',
+        currentVersion: { id: 'v-002', versionLabel: 'v1.0', fileName: 'mobile_platform_rfp.pdf', fileSize: 1834567, checksum: 'sha256:d4e5f6', uploadedBy: { id: 'u-001', name: 'Kim PM' }, uploadedAt: '2026-02-09T10:00:00Z' },
+        versionCount: 1,
+        kpi: { derivedRequirements: 0, confirmedRequirements: 0, epicLinkRate: 0, changeImpact: { level: 'NONE', impactedEpics: 0, impactedTasks: 0 } },
+        latestRun: { id: 'run-002', modelName: 'gemma-3-12b', modelVersion: 'Q5_K_M', status: 'RUNNING', startedAt: '2026-02-09T10:05:00Z', stats: { totalCandidates: 0, ambiguityCount: 0, avgConfidence: 0 } },
+        createdBy: { id: 'u-001', name: 'Kim PM' }, createdAt: '2026-02-09T10:00:00Z', updatedAt: '2026-02-09T10:05:00Z',
+      },
+      {
+        id: 'rfp-003', projectId, title: '보험 규정 준수 시스템 RFP', originType: 'EXTERNAL_RFP',
+        status: 'NEEDS_REANALYSIS', statusLabel: '재분석필요', previousStatus: 'CONFIRMED', failureReason: null,
+        content: '보험 규정 준수 관리 시스템 구축 제안요청서.',
+        currentVersion: { id: 'v-003', versionLabel: 'v2.0', fileName: 'compliance_rfp_v2.0.pdf', fileSize: 3145728, checksum: 'sha256:g7h8i9', uploadedBy: { id: 'u-002', name: 'Lee BA' }, uploadedAt: '2026-02-10T08:00:00Z' },
+        versionCount: 2,
+        kpi: { derivedRequirements: 23, confirmedRequirements: 20, epicLinkRate: 0.65, changeImpact: { level: 'HIGH', impactedEpics: 5, impactedTasks: 18 } },
+        latestRun: { id: 'run-003', modelName: 'gemma-3-12b', modelVersion: 'Q5_K_M', status: 'COMPLETED', startedAt: '2026-02-05T14:00:00Z', finishedAt: '2026-02-05T14:10:00Z', stats: { totalCandidates: 28, ambiguityCount: 3, avgConfidence: 0.88 } },
+        createdBy: { id: 'u-002', name: 'Lee BA' }, createdAt: '2026-01-15T09:00:00Z', updatedAt: '2026-02-10T08:00:00Z',
+      },
+    ];
+
+    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/rfps${qs ? '?' + qs : ''}`, {}, { data: mockRfps });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async triggerRfpAnalysis(projectId: string, rfpId: string) {
+    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/rfps/${rfpId}/analyze`, {
+      method: 'POST',
+    }, {
+      data: { id: `run-${Date.now()}`, rfpId, modelName: 'gemma-3-12b', status: 'PENDING', startedAt: new Date().toISOString() }
+    });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async getExtractionRuns(projectId: string, rfpId: string) {
+    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/rfps/${rfpId}/extractions`, {}, {
+      data: [
+        { id: 'run-001', rfpVersionId: 'v-001', modelName: 'gemma-3-12b', modelVersion: 'Q5_K_M', promptVersion: 'v2.1', schemaVersion: 'v1.0', generationParams: { temperature: 0.3, top_p: 0.9 }, status: 'COMPLETED', isActive: true, startedAt: '2026-02-08T14:35:00Z', finishedAt: '2026-02-08T14:42:00Z', stats: { totalCount: 52, ambiguityCount: 7, avgConfidence: 0.83, categoryBreakdown: { FUNCTIONAL: 35, NON_FUNCTIONAL: 12, CONSTRAINT: 5 } } },
+      ]
+    });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async getLatestExtraction(projectId: string, rfpId: string) {
+    const candidates = Array.from({ length: 10 }, (_, i) => ({
+      id: `cand-${i + 1}`, reqKey: `RFP-REQ-${String(i + 1).padStart(3, '0')}`,
+      text: [`보험 청구 자동 분석 기능`, `사기 탐지 AI 모델 연동`, `실시간 알림 시스템`, `보안 인증 모듈`, `오프라인 동기화`, `보험증권 관리 기능`, `고객 상담 이력 관리`, `규정 준수 점검 자동화`, `대시보드 통합 뷰`, `데이터 백업 및 복구`][i],
+      category: (['FUNCTIONAL', 'FUNCTIONAL', 'FUNCTIONAL', 'NON_FUNCTIONAL', 'NON_FUNCTIONAL', 'FUNCTIONAL', 'FUNCTIONAL', 'CONSTRAINT', 'FUNCTIONAL', 'NON_FUNCTIONAL'] as const)[i],
+      priorityHint: (['MUST', 'MUST', 'SHOULD', 'MUST', 'COULD', 'MUST', 'SHOULD', 'MUST', 'COULD', 'SHOULD'] as const)[i],
+      confidence: [0.95, 0.88, 0.82, 0.91, 0.67, 0.93, 0.78, 0.96, 0.71, 0.85][i],
+      sourceParagraphId: `3.${i + 1}.1-p1`, sourceQuote: `관련 요구사항 원문 발췌...`,
+      isAmbiguous: [false, false, true, false, true, false, true, false, true, false][i],
+      ambiguityQuestions: [false, false, true, false, true, false, true, false, true, false][i] ? ['명확한 기준이 필요합니다'] : [],
+      duplicateRefs: [], status: 'PROPOSED', editedText: null, reviewedBy: null, reviewedAt: null,
+    }));
+
+    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/rfps/${rfpId}/extractions/latest`, {}, {
+      data: {
+        run: { id: 'run-001', rfpVersionId: 'v-001', modelName: 'gemma-3-12b', modelVersion: 'Q5_K_M', promptVersion: 'v2.1', schemaVersion: 'v1.0', generationParams: { temperature: 0.3, top_p: 0.9 }, status: 'COMPLETED', isActive: true, startedAt: '2026-02-08T14:35:00Z', finishedAt: '2026-02-08T14:42:00Z', stats: { totalCount: 10, ambiguityCount: 4, avgConfidence: 0.85, categoryBreakdown: { FUNCTIONAL: 6, NON_FUNCTIONAL: 3, CONSTRAINT: 1 } } },
+        candidates,
+        summary: { proposed: 10, accepted: 0, rejected: 0, edited: 0, lowConfidenceTop5: ['RFP-REQ-005', 'RFP-REQ-009'], ambiguousTop5: ['RFP-REQ-003', 'RFP-REQ-005', 'RFP-REQ-007', 'RFP-REQ-009'] },
+      }
+    });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async confirmCandidates(projectId: string, rfpId: string, candidateIds: string[]) {
+    return this.fetchWithFallback(`${V2}/projects/${projectId}/rfps/${rfpId}/candidates/confirm`, {
+      method: 'POST',
+      body: JSON.stringify({ candidateIds }),
+    }, { message: 'Candidates confirmed', count: candidateIds.length });
+  }
+
+  async rejectCandidates(projectId: string, rfpId: string, candidateIds: string[]) {
+    return this.fetchWithFallback(`${V2}/projects/${projectId}/rfps/${rfpId}/candidates/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ candidateIds }),
+    }, { message: 'Candidates rejected', count: candidateIds.length });
+  }
+
+  async updateCandidate(projectId: string, rfpId: string, candidateId: string, updates: Record<string, unknown>) {
+    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/rfps/${rfpId}/candidates/${candidateId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    }, { data: { id: candidateId, ...updates } });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async getRfpDiff(projectId: string, rfpId: string, fromVersion: string, toVersion: string) {
+    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/rfps/${rfpId}/diff?from=${fromVersion}&to=${toVersion}`, {}, {
+      data: {
+        fromVersion, toVersion,
+        items: [
+          { type: 'NEW', requirementKey: 'RFP-REQ-048', text: '실시간 모니터링 대시보드 추가' },
+          { type: 'MODIFIED', requirementKey: 'RFP-REQ-012', text: '사기 탐지 정확도 95% 이상 (변경: 90% → 95%)', previousText: '사기 탐지 정확도 90% 이상' },
+          { type: 'REMOVED', requirementKey: 'RFP-REQ-005', text: '오프라인 동기화 기능 (삭제됨)' },
+        ],
+        impactSummary: { affectedEpics: 3, affectedWbs: 8, affectedSprints: 2, affectedTests: 5 },
+      }
+    });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async getRfpImpact(projectId: string, rfpId: string) {
+    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/rfps/${rfpId}/impact`, {}, {
+      data: {
+        changeEvents: [
+          { id: 'ce-001', changeType: 'EDIT', reason: 'Version 2.0 uploaded with updated requirements', changedBy: { id: 'u-002', name: 'Lee BA' }, changedAt: '2026-02-10T08:00:00Z' },
+        ],
+        impactSnapshot: { affectedEpics: 5, affectedWbs: 18, affectedSprints: 3, affectedTests: 12 },
+      }
+    });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
+  async getRfpEvidence(projectId: string, rfpId: string, requirementId?: string) {
+    const qs = requirementId ? `?requirementId=${requirementId}` : '';
+    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/rfps/${rfpId}/evidence${qs}`, {}, {
+      data: [{
+        requirementId: 'req-001', requirementTitle: '보험 청구 자동 분석 기능', requirementStatus: 'CONFIRMED',
+        sourceEvidence: { rfpTitle: 'AI 보험심사 처리 시스템 RFP', rfpVersionLabel: 'v1.2', section: '3.2.1', paragraphId: '3.2.1-p2', snippet: '보험 청구 건에 대해 AI 기반 자동 분석을 수행하여...', fileUri: 's3://bucket/rfp.pdf', fileChecksum: 'sha256:a1b2c3', integrityStatus: 'VERIFIED' },
+        aiEvidence: { extractionRunId: 'run-001', modelName: 'gemma-3-12b', modelVersion: 'Q5_K_M', promptVersion: 'v2.1', schemaVersion: 'v1.0', generationParams: { temperature: 0.3, top_p: 0.9 }, confidence: 0.95, originalCandidateText: '보험 청구 자동 분석 기능', wasEdited: false },
+        changeEvidence: [{ id: 'ch-001', changeType: 'CREATE', reason: 'Initial extraction', changedBy: { id: 'system', name: 'AI System' }, changedAt: '2026-02-08T14:42:00Z' }],
+        impactEvidence: { impactedEpics: [{ id: 'epic-001', title: '청구 처리 자동화' }], impactedWbs: [{ id: 'wbs-001', title: '자동 분석 모듈 개발' }], impactedTests: [{ id: 'test-001', title: '자동 분석 정확도 테스트' }], impactedSprints: [{ id: 'sprint-003', name: 'Sprint 3' }] },
+      }]
+    });
+    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+  }
+
   // ========== Lineage API ==========
   // Backend uses /api/v2/projects/{projectId}/lineage/* pattern
   async getLineageGraph(projectId: string) {
