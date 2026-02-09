@@ -81,10 +81,10 @@ type TabId = 'delegation-map' | 'role-capability' | 'governance';
 
 function DelegationStatusBadge({ status }: { status: string }) {
   const config: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; label: string }> = {
-    ACTIVE: { variant: 'default', label: 'Active' },
-    PENDING: { variant: 'secondary', label: 'Pending' },
-    EXPIRED: { variant: 'outline', label: 'Expired' },
-    REVOKED: { variant: 'destructive', label: 'Revoked' },
+    ACTIVE: { variant: 'default', label: '활성' },
+    PENDING: { variant: 'secondary', label: '대기' },
+    EXPIRED: { variant: 'outline', label: '만료' },
+    REVOKED: { variant: 'destructive', label: '철회' },
   };
   const c = config[status] || { variant: 'outline' as const, label: status };
   return <Badge variant={c.variant}>{c.label}</Badge>;
@@ -103,9 +103,9 @@ function SeverityBadge({ severity }: { severity: string }) {
 
 function SourceBadge({ sourceType }: { sourceType: string }) {
   const config: Record<string, { className: string; label: string }> = {
-    DELEGATION: { className: 'bg-purple-100 text-purple-800', label: 'Delegation' },
-    DIRECT: { className: 'bg-blue-100 text-blue-800', label: 'Direct' },
-    ROLE: { className: 'bg-green-100 text-green-800', label: 'Role' },
+    DELEGATION: { className: 'bg-purple-100 text-purple-800', label: '위임' },
+    DIRECT: { className: 'bg-blue-100 text-blue-800', label: '직접' },
+    ROLE: { className: 'bg-green-100 text-green-800', label: '역할' },
   };
   const c = config[sourceType] || { className: 'bg-gray-100 text-gray-600', label: sourceType };
   return <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${c.className}`}>{c.label}</span>;
@@ -140,8 +140,8 @@ function DelegationMapTab({
     return (
       <div className="text-center text-gray-500 py-12">
         <GitBranch className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-        <p>No delegation map data available.</p>
-        <p className="text-sm mt-1">Create delegations in the Role/Capability tab to see the map.</p>
+        <p>위임 맵 데이터가 없습니다.</p>
+        <p className="text-sm mt-1">역할/권한 탭에서 위임을 생성하면 맵이 표시됩니다.</p>
       </div>
     );
   }
@@ -169,7 +169,7 @@ function DelegationMapTab({
           </div>
           {node.delegations?.length > 0 && (
             <Badge variant="outline" className="text-xs">
-              {node.delegations.length} delegation{node.delegations.length > 1 ? 's' : ''}
+              위임 {node.delegations.length}건
             </Badge>
           )}
         </div>
@@ -185,7 +185,7 @@ function DelegationMapTab({
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <GitBranch className="h-4 w-4" />
-              Delegation Map
+              위임 맵
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -202,7 +202,7 @@ function DelegationMapTab({
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <Eye className="h-4 w-4" />
-                User Detail
+                사용자 상세
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -213,9 +213,9 @@ function DelegationMapTab({
               ) : (
                 <>
                   <div>
-                    <h4 className="text-sm font-medium mb-2">Effective Capabilities</h4>
+                    <h4 className="text-sm font-medium mb-2">유효 권한</h4>
                     {(!effectiveCaps.data || effectiveCaps.data.length === 0) ? (
-                      <p className="text-xs text-gray-500">No effective capabilities found.</p>
+                      <p className="text-xs text-gray-500">유효 권한이 없습니다.</p>
                     ) : (
                       <div className="space-y-1.5">
                         {(effectiveCaps.data as EffectiveCapabilityDto[]).map((cap, idx) => (
@@ -237,7 +237,7 @@ function DelegationMapTab({
           <Card>
             <CardContent className="py-8 text-center text-gray-500 text-sm">
               <Eye className="h-8 w-8 mx-auto mb-2 text-gray-300" />
-              Click a user in the map to see their details.
+              맵에서 사용자를 클릭하면 상세 정보를 확인할 수 있습니다.
             </CardContent>
           </Card>
         )}
@@ -298,7 +298,7 @@ function RoleCapabilityTab({
       setShowGrantRole(false);
       setGrantRoleForm({ userId: '', roleId: '', reason: '' });
     } catch (e: any) {
-      alert(e?.message || 'Failed to grant role');
+      alert(e?.message || '역할 부여에 실패했습니다');
     }
   };
 
@@ -309,7 +309,7 @@ function RoleCapabilityTab({
       setShowGrantCap(false);
       setGrantCapForm({ userId: '', capabilityId: '', reason: '' });
     } catch (e: any) {
-      alert(e?.message || 'Failed to grant capability');
+      alert(e?.message || '권한 부여에 실패했습니다');
     }
   };
 
@@ -327,7 +327,7 @@ function RoleCapabilityTab({
         endAt: '', approverId: '', reason: '',
       });
     } catch (e: any) {
-      alert(e?.message || 'Failed to create delegation');
+      alert(e?.message || '위임 생성에 실패했습니다');
     }
   };
 
@@ -349,27 +349,27 @@ function RoleCapabilityTab({
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
               <Users className="h-4 w-4" />
-              User Roles
+              사용자 역할
             </CardTitle>
             {canManage && (
               <Button size="sm" variant="outline" onClick={() => setShowGrantRole(true)}>
-                <Plus className="h-3 w-3 mr-1" /> Grant Role
+                <Plus className="h-3 w-3 mr-1" /> 역할 부여
               </Button>
             )}
           </div>
         </CardHeader>
         <CardContent>
           {(!userRoles.data || (userRoles.data as UserRoleDto[]).length === 0) ? (
-            <p className="text-sm text-gray-500 text-center py-4">No role assignments yet.</p>
+            <p className="text-sm text-gray-500 text-center py-4">아직 역할 배정이 없습니다.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-gray-500">
-                    <th className="pb-2 font-medium">User</th>
-                    <th className="pb-2 font-medium">Role</th>
-                    <th className="pb-2 font-medium">Granted By</th>
-                    <th className="pb-2 font-medium">Date</th>
+                    <th className="pb-2 font-medium">사용자</th>
+                    <th className="pb-2 font-medium">역할</th>
+                    <th className="pb-2 font-medium">권한 설정자</th>
+                    <th className="pb-2 font-medium">날짜</th>
                     {canManage && <th className="pb-2 font-medium w-16"></th>}
                   </tr>
                 </thead>
@@ -387,7 +387,7 @@ function RoleCapabilityTab({
                             variant="ghost"
                             className="h-7 w-7 p-0 text-red-500 hover:text-red-700"
                             onClick={() => {
-                              if (confirm('Revoke this role assignment?')) {
+                              if (confirm('이 역할 배정을 철회하시겠습니까?')) {
                                 revokeRole.mutate(ur.id);
                               }
                             }}
@@ -411,27 +411,27 @@ function RoleCapabilityTab({
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
               <ShieldCheck className="h-4 w-4" />
-              Direct Capability Grants
+              직접 권한 부여
             </CardTitle>
             {canManage && (
               <Button size="sm" variant="outline" onClick={() => setShowGrantCap(true)}>
-                <Plus className="h-3 w-3 mr-1" /> Grant Capability
+                <Plus className="h-3 w-3 mr-1" /> 권한 부여
               </Button>
             )}
           </div>
         </CardHeader>
         <CardContent>
           {(!userCaps.data || (userCaps.data as UserCapabilityDto[]).length === 0) ? (
-            <p className="text-sm text-gray-500 text-center py-4">No direct capability grants.</p>
+            <p className="text-sm text-gray-500 text-center py-4">직접 부여된 권한이 없습니다.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-gray-500">
-                    <th className="pb-2 font-medium">User</th>
-                    <th className="pb-2 font-medium">Capability</th>
-                    <th className="pb-2 font-medium">Granted By</th>
-                    <th className="pb-2 font-medium">Date</th>
+                    <th className="pb-2 font-medium">사용자</th>
+                    <th className="pb-2 font-medium">권한</th>
+                    <th className="pb-2 font-medium">권한 설정자</th>
+                    <th className="pb-2 font-medium">날짜</th>
                     {canManage && <th className="pb-2 font-medium w-16"></th>}
                   </tr>
                 </thead>
@@ -451,7 +451,7 @@ function RoleCapabilityTab({
                             variant="ghost"
                             className="h-7 w-7 p-0 text-red-500 hover:text-red-700"
                             onClick={() => {
-                              if (confirm('Revoke this capability?')) {
+                              if (confirm('이 권한을 철회하시겠습니까?')) {
                                 revokeCap.mutate(uc.id);
                               }
                             }}
@@ -475,29 +475,29 @@ function RoleCapabilityTab({
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
               <ArrowRight className="h-4 w-4" />
-              Delegations
+              위임
             </CardTitle>
             {canManage && (
               <Button size="sm" variant="outline" onClick={() => setShowCreateDelegation(true)}>
-                <Plus className="h-3 w-3 mr-1" /> Create Delegation
+                <Plus className="h-3 w-3 mr-1" /> 위임 생성
               </Button>
             )}
           </div>
         </CardHeader>
         <CardContent>
           {(!delegations.data || (delegations.data as DelegationDto[]).length === 0) ? (
-            <p className="text-sm text-gray-500 text-center py-4">No delegations.</p>
+            <p className="text-sm text-gray-500 text-center py-4">위임 내역이 없습니다.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-gray-500">
-                    <th className="pb-2 font-medium">From</th>
-                    <th className="pb-2 font-medium">To</th>
-                    <th className="pb-2 font-medium">Capability</th>
-                    <th className="pb-2 font-medium">Scope</th>
-                    <th className="pb-2 font-medium">Duration</th>
-                    <th className="pb-2 font-medium">Status</th>
+                    <th className="pb-2 font-medium">위임자</th>
+                    <th className="pb-2 font-medium">수임자</th>
+                    <th className="pb-2 font-medium">권한</th>
+                    <th className="pb-2 font-medium">범위</th>
+                    <th className="pb-2 font-medium">기간</th>
+                    <th className="pb-2 font-medium">상태</th>
                     {canManage && <th className="pb-2 font-medium w-24"></th>}
                   </tr>
                 </thead>
@@ -509,7 +509,7 @@ function RoleCapabilityTab({
                       <td className="py-2"><Badge variant="outline">{d.capabilityName || d.capabilityCode}</Badge></td>
                       <td className="py-2 text-gray-500 text-xs">{d.scopeType}{d.scopePartName ? ` (${d.scopePartName})` : ''}</td>
                       <td className="py-2 text-gray-500 text-xs">
-                        {d.durationType === 'PERMANENT' ? 'Permanent' : `${d.startAt?.slice(0, 10)} ~ ${d.endAt?.slice(0, 10) || ''}`}
+                        {d.durationType === 'PERMANENT' ? '영구' : `${d.startAt?.slice(0, 10)} ~ ${d.endAt?.slice(0, 10) || ''}`}
                       </td>
                       <td className="py-2"><DelegationStatusBadge status={d.status} /></td>
                       {canManage && (
@@ -530,7 +530,7 @@ function RoleCapabilityTab({
                               variant="ghost"
                               className="h-7 px-2 text-red-500 hover:text-red-700"
                               onClick={() => {
-                                const reason = prompt('Revoke reason (optional):');
+                                const reason = prompt('철회 사유 (선택사항):');
                                 if (reason !== null) {
                                   revokeDelegation.mutate({ delegationId: d.id, reason });
                                 }
@@ -554,14 +554,14 @@ function RoleCapabilityTab({
       <Dialog open={showGrantRole} onOpenChange={setShowGrantRole}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Grant Role</DialogTitle>
-            <DialogDescription>Assign a role to a user in this project.</DialogDescription>
+            <DialogTitle>역할 부여</DialogTitle>
+            <DialogDescription>이 프로젝트의 사용자에게 역할을 배정합니다.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div>
-              <label className="text-sm font-medium">User</label>
+              <label className="text-sm font-medium">사용자</label>
               <Select value={grantRoleForm.userId} onValueChange={v => setGrantRoleForm(f => ({ ...f, userId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select user..." /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="사용자 선택..." /></SelectTrigger>
                 <SelectContent>
                   {userList.map((u: any) => (
                     <SelectItem key={u.id} value={u.id}>{u.name || u.email || u.id}</SelectItem>
@@ -570,9 +570,9 @@ function RoleCapabilityTab({
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium">Role</label>
+              <label className="text-sm font-medium">역할</label>
               <Select value={grantRoleForm.roleId} onValueChange={v => setGrantRoleForm(f => ({ ...f, roleId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select role..." /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="역할 선택..." /></SelectTrigger>
                 <SelectContent>
                   {(roles.data as RoleDto[] || []).map(r => (
                     <SelectItem key={r.id} value={r.id}>{r.name} ({r.code})</SelectItem>
@@ -581,18 +581,18 @@ function RoleCapabilityTab({
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium">Reason (optional)</label>
+              <label className="text-sm font-medium">사유 (선택사항)</label>
               <Input
                 value={grantRoleForm.reason}
                 onChange={e => setGrantRoleForm(f => ({ ...f, reason: e.target.value }))}
-                placeholder="Reason for granting..."
+                placeholder="부여 사유..."
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowGrantRole(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setShowGrantRole(false)}>취소</Button>
             <Button onClick={handleGrantRole} disabled={grantRole.isPending}>
-              {grantRole.isPending ? 'Granting...' : 'Grant Role'}
+              {grantRole.isPending ? '부여 중...' : '역할 부여'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -602,14 +602,14 @@ function RoleCapabilityTab({
       <Dialog open={showGrantCap} onOpenChange={setShowGrantCap}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Grant Capability</DialogTitle>
-            <DialogDescription>Directly grant a capability to a user.</DialogDescription>
+            <DialogTitle>권한 부여</DialogTitle>
+            <DialogDescription>사용자에게 직접 권한을 부여합니다.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div>
-              <label className="text-sm font-medium">User</label>
+              <label className="text-sm font-medium">사용자</label>
               <Select value={grantCapForm.userId} onValueChange={v => setGrantCapForm(f => ({ ...f, userId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select user..." /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="사용자 선택..." /></SelectTrigger>
                 <SelectContent>
                   {userList.map((u: any) => (
                     <SelectItem key={u.id} value={u.id}>{u.name || u.email || u.id}</SelectItem>
@@ -618,9 +618,9 @@ function RoleCapabilityTab({
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium">Capability</label>
+              <label className="text-sm font-medium">권한</label>
               <Select value={grantCapForm.capabilityId} onValueChange={v => setGrantCapForm(f => ({ ...f, capabilityId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select capability..." /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="권한 선택..." /></SelectTrigger>
                 <SelectContent>
                   {(capabilities.data as CapabilityDto[] || []).map(c => (
                     <SelectItem key={c.id} value={c.id}>{c.name} ({c.code})</SelectItem>
@@ -629,18 +629,18 @@ function RoleCapabilityTab({
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium">Reason (optional)</label>
+              <label className="text-sm font-medium">사유 (선택사항)</label>
               <Input
                 value={grantCapForm.reason}
                 onChange={e => setGrantCapForm(f => ({ ...f, reason: e.target.value }))}
-                placeholder="Reason for granting..."
+                placeholder="부여 사유..."
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowGrantCap(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setShowGrantCap(false)}>취소</Button>
             <Button onClick={handleGrantCap} disabled={grantCap.isPending}>
-              {grantCap.isPending ? 'Granting...' : 'Grant Capability'}
+              {grantCap.isPending ? '부여 중...' : '권한 부여'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -650,14 +650,14 @@ function RoleCapabilityTab({
       <Dialog open={showCreateDelegation} onOpenChange={setShowCreateDelegation}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Create Delegation</DialogTitle>
-            <DialogDescription>Delegate a capability to another user.</DialogDescription>
+            <DialogTitle>위임 생성</DialogTitle>
+            <DialogDescription>다른 사용자에게 권한을 위임합니다.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2 max-h-[60vh] overflow-y-auto">
             <div>
-              <label className="text-sm font-medium">Delegatee (To)</label>
+              <label className="text-sm font-medium">수임자</label>
               <Select value={delegationForm.delegateeId} onValueChange={v => setDelegationForm(f => ({ ...f, delegateeId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select user..." /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="사용자 선택..." /></SelectTrigger>
                 <SelectContent>
                   {userList.map((u: any) => (
                     <SelectItem key={u.id} value={u.id}>{u.name || u.email || u.id}</SelectItem>
@@ -666,9 +666,9 @@ function RoleCapabilityTab({
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium">Capability</label>
+              <label className="text-sm font-medium">권한</label>
               <Select value={delegationForm.capabilityId} onValueChange={v => setDelegationForm(f => ({ ...f, capabilityId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select capability..." /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="권한 선택..." /></SelectTrigger>
                 <SelectContent>
                   {(capabilities.data as CapabilityDto[] || []).filter(c => c.isDelegatable).map(c => (
                     <SelectItem key={c.id} value={c.id}>{c.name} ({c.code})</SelectItem>
@@ -677,30 +677,30 @@ function RoleCapabilityTab({
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium">Scope</label>
+              <label className="text-sm font-medium">범위</label>
               <Select value={delegationForm.scopeType} onValueChange={v => setDelegationForm(f => ({ ...f, scopeType: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="PROJECT">Project</SelectItem>
-                  <SelectItem value="PART">Part</SelectItem>
-                  <SelectItem value="FUNCTION">Function</SelectItem>
+                  <SelectItem value="PROJECT">프로젝트</SelectItem>
+                  <SelectItem value="PART">파트</SelectItem>
+                  <SelectItem value="FUNCTION">기능</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium">Duration</label>
+              <label className="text-sm font-medium">기간</label>
               <Select value={delegationForm.durationType} onValueChange={v => setDelegationForm(f => ({ ...f, durationType: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="PERMANENT">Permanent</SelectItem>
-                  <SelectItem value="TEMPORARY">Temporary</SelectItem>
+                  <SelectItem value="PERMANENT">영구</SelectItem>
+                  <SelectItem value="TEMPORARY">임시</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             {delegationForm.durationType === 'TEMPORARY' && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-sm font-medium">Start Date</label>
+                  <label className="text-sm font-medium">시작일</label>
                   <Input
                     type="date"
                     value={delegationForm.startAt}
@@ -708,7 +708,7 @@ function RoleCapabilityTab({
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium">End Date</label>
+                  <label className="text-sm font-medium">종료일</label>
                   <Input
                     type="date"
                     value={delegationForm.endAt}
@@ -718,9 +718,9 @@ function RoleCapabilityTab({
               </div>
             )}
             <div>
-              <label className="text-sm font-medium">Approver</label>
+              <label className="text-sm font-medium">승인자</label>
               <Select value={delegationForm.approverId} onValueChange={v => setDelegationForm(f => ({ ...f, approverId: v }))}>
-                <SelectTrigger><SelectValue placeholder="Select approver..." /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="승인자 선택..." /></SelectTrigger>
                 <SelectContent>
                   {userList.map((u: any) => (
                     <SelectItem key={u.id} value={u.id}>{u.name || u.email || u.id}</SelectItem>
@@ -729,19 +729,19 @@ function RoleCapabilityTab({
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium">Reason (optional)</label>
+              <label className="text-sm font-medium">사유 (선택사항)</label>
               <Textarea
                 value={delegationForm.reason}
                 onChange={e => setDelegationForm(f => ({ ...f, reason: e.target.value }))}
-                placeholder="Reason for delegation..."
+                placeholder="위임 사유..."
                 rows={2}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateDelegation(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setShowCreateDelegation(false)}>취소</Button>
             <Button onClick={handleCreateDelegation} disabled={createDelegation.isPending}>
-              {createDelegation.isPending ? 'Creating...' : 'Create Delegation'}
+              {createDelegation.isPending ? '생성 중...' : '위임 생성'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -773,12 +773,15 @@ function GovernanceTab({ projectId, canAudit }: { projectId: string; canAudit: b
   }, [findingsData]);
 
   const findingTypeConfig: Record<string, { icon: typeof AlertTriangle; label: string; color: string }> = {
-    SOD_VIOLATION: { icon: Ban, label: 'SoD Violations', color: 'text-red-600' },
-    SELF_APPROVAL: { icon: AlertTriangle, label: 'Self-Approval', color: 'text-orange-600' },
-    EXPIRING_DELEGATION: { icon: Clock, label: 'Expiring Delegations', color: 'text-yellow-600' },
-    EXPIRED_DELEGATION: { icon: XCircle, label: 'Expired Delegations', color: 'text-gray-600' },
-    DUPLICATE_CAPABILITY: { icon: Info, label: 'Duplicate Capabilities', color: 'text-blue-600' },
-    POLICY_VIOLATION: { icon: Shield, label: 'Policy Violations', color: 'text-purple-600' },
+    SOD_VIOLATION: { icon: Ban, label: 'SoD 위반', color: 'text-red-600' },
+    SELF_APPROVAL: { icon: AlertTriangle, label: '자기 승인', color: 'text-orange-600' },
+    EXPIRING_SOON: { icon: Clock, label: '만료 예정 위임', color: 'text-yellow-600' },
+    EXPIRING_DELEGATION: { icon: Clock, label: '만료 예정 위임', color: 'text-yellow-600' },
+    EXPIRED: { icon: XCircle, label: '만료된 위임', color: 'text-gray-600' },
+    EXPIRED_DELEGATION: { icon: XCircle, label: '만료된 위임', color: 'text-gray-600' },
+    DUPLICATE_CAP: { icon: Info, label: '중복 권한', color: 'text-blue-600' },
+    DUPLICATE_CAPABILITY: { icon: Info, label: '중복 권한', color: 'text-blue-600' },
+    POLICY_VIOLATION: { icon: Shield, label: '정책 위반', color: 'text-purple-600' },
   };
 
   return (
@@ -789,11 +792,11 @@ function GovernanceTab({ projectId, canAudit }: { projectId: string; canAudit: b
             <div>
               <CardTitle className="text-base flex items-center gap-2">
                 <Shield className="h-4 w-4" />
-                Governance Audit
+                거버넌스 감사
               </CardTitle>
               {latestRun && (
                 <p className="text-xs text-gray-500 mt-1">
-                  Last check: {new Date(latestRun.checkedAt).toLocaleString()}
+                  마지막 검사: {new Date(latestRun.checkedAt).toLocaleString('ko-KR')}
                 </p>
               )}
             </div>
@@ -804,7 +807,7 @@ function GovernanceTab({ projectId, canAudit }: { projectId: string; canAudit: b
                 disabled={runCheck.isPending}
               >
                 <RefreshCw className={`h-3 w-3 mr-1 ${runCheck.isPending ? 'animate-spin' : ''}`} />
-                {runCheck.isPending ? 'Running...' : 'Run Check'}
+                {runCheck.isPending ? '실행 중...' : '검사 실행'}
               </Button>
             )}
           </div>
@@ -817,9 +820,9 @@ function GovernanceTab({ projectId, canAudit }: { projectId: string; canAudit: b
           ) : findingsData.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <CheckCircle className="h-12 w-12 mx-auto mb-3 text-green-300" />
-              <p className="font-medium text-green-600">All Clear</p>
-              <p className="text-sm mt-1">No governance findings detected.</p>
-              {!latestRun && <p className="text-xs mt-2">Run a governance check to scan for issues.</p>}
+              <p className="font-medium text-green-600">이상 없음</p>
+              <p className="text-sm mt-1">거버넌스 위반 사항이 없습니다.</p>
+              {!latestRun && <p className="text-xs mt-2">거버넌스 검사를 실행하여 이슈를 스캔하세요.</p>}
             </div>
           ) : (
             <div className="space-y-4">
@@ -842,7 +845,7 @@ function GovernanceTab({ projectId, canAudit }: { projectId: string; canAudit: b
                             <SeverityBadge severity={finding.severity} />
                           </div>
                           {finding.userId && (
-                            <p className="text-xs text-gray-500 mt-1">User: {finding.userId}</p>
+                            <p className="text-xs text-gray-500 mt-1">사용자: {finding.userId}</p>
                           )}
                         </div>
                       ))}
@@ -859,7 +862,7 @@ function GovernanceTab({ projectId, canAudit }: { projectId: string; canAudit: b
       {checkRunsData.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Check Run History</CardTitle>
+            <CardTitle className="text-base">검사 실행 이력</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
@@ -869,13 +872,13 @@ function GovernanceTab({ projectId, canAudit }: { projectId: string; canAudit: b
                 return (
                   <div key={run.id} className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
                     <div>
-                      <span className="font-medium">{new Date(run.checkedAt).toLocaleString()}</span>
-                      <span className="text-gray-500 ml-2">by {run.checkedBy}</span>
+                      <span className="font-medium">{new Date(run.checkedAt).toLocaleString('ko-KR')}</span>
+                      <span className="text-gray-500 ml-2">{run.checkedBy}</span>
                     </div>
                     <div className="flex gap-2 text-xs">
                       {summary.totalFindings !== undefined && (
                         <Badge variant={summary.totalFindings > 0 ? 'destructive' : 'secondary'}>
-                          {summary.totalFindings} finding{summary.totalFindings !== 1 ? 's' : ''}
+                          {summary.totalFindings}건
                         </Badge>
                       )}
                     </div>
@@ -910,9 +913,9 @@ export default function RolePermissionPage({ userRole }: Props) {
   }
 
   const tabs = [
-    { id: 'delegation-map' as TabId, label: 'Delegation Map', icon: GitBranch },
-    { id: 'role-capability' as TabId, label: 'Roles / Capabilities', icon: ShieldCheck },
-    { id: 'governance' as TabId, label: 'Governance Audit', icon: Shield },
+    { id: 'delegation-map' as TabId, label: '위임 맵', icon: GitBranch },
+    { id: 'role-capability' as TabId, label: '역할 / 권한', icon: ShieldCheck },
+    { id: 'governance' as TabId, label: '거버넌스 감사', icon: Shield },
   ];
 
   return (
@@ -920,7 +923,7 @@ export default function RolePermissionPage({ userRole }: Props) {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold flex items-center gap-2">
           <Shield className="h-5 w-5" />
-          Role & Permission Management
+          역할 및 권한 관리
         </h1>
       </div>
 

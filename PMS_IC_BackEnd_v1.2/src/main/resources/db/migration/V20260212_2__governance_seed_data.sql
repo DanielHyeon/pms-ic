@@ -167,11 +167,11 @@ ON CONFLICT (role_id, capability_id) DO NOTHING;
 -- ============================================================
 INSERT INTO governance.sod_rules (id, capability_a_id, capability_b_id, description, severity, is_blocking) VALUES
     ('SOD-001', 'cap-approve-code', 'cap-approve-test',
-     'Same person cannot approve both code and test results', 'HIGH', true),
+     '동일인이 코드 승인과 테스트 결과 승인을 동시에 수행할 수 없음', 'HIGH', true),
     ('SOD-002', 'cap-approve-deliv', 'cap-approve-req',
-     'Same person cannot approve both deliverables and requirements', 'MEDIUM', false),
+     '동일인이 산출물 승인과 요건 승인을 동시에 수행할 수 없음', 'MEDIUM', false),
     ('SOD-003', 'cap-manage-roles', 'cap-audit-gov',
-     'Role manager should not be the sole governance auditor', 'LOW', false)
+     '역할 관리자가 유일한 거버넌스 감사자가 될 수 없음', 'LOW', false)
 ON CONFLICT (id) DO NOTHING;
 
 -- ============================================================
