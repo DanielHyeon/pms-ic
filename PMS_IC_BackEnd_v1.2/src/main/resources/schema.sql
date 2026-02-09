@@ -1261,7 +1261,6 @@ CREATE TABLE IF NOT EXISTS report.reports (
     llm_confidence_score DECIMAL(3,2),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    created_by VARCHAR(50),
     updated_by VARCHAR(50),
     published_at TIMESTAMP
 );

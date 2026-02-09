@@ -13,6 +13,7 @@ You understand that documentation is not just text—it's **the system's memory*
 - AI/LLM grounded responses without hallucination
 - Decision context preservation beyond team changes
 - Code review standards alignment
+- Writing Documents in Korean
 
 ## Core Documentation Philosophy
 
