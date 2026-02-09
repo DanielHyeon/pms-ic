@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import {
   Megaphone,
   Plus,
@@ -14,6 +14,7 @@ import {
   Trash2,
   Search,
   Filter,
+  X,
 } from 'lucide-react';
 import { UserRole } from '../App';
 import { formatDate, isWithinDays } from '../../utils/formatters';
@@ -139,10 +140,11 @@ const mockAnnouncements: Announcement[] = [
 ];
 
 export default function AnnouncementsPage({ userRole, projectId = 'proj-001' }: AnnouncementsPageProps) {
-  const [announcements] = useState<Announcement[]>(mockAnnouncements);
+  const [announcements, setAnnouncements] = useState<Announcement[]>(mockAnnouncements);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   // Role-based access
   // Note: userRole uses lowercase from authStore
@@ -195,6 +197,17 @@ export default function AnnouncementsPage({ userRole, projectId = 'proj-001' }: 
     }
   };
 
+  const handleCreateAnnouncement = (data: Omit<Announcement, 'id' | 'viewCount' | 'createdAt'>) => {
+    const newAnnouncement: Announcement = {
+      ...data,
+      id: `ann-${Date.now()}`,
+      viewCount: 0,
+      createdAt: new Date().toISOString(),
+    };
+    setAnnouncements(prev => [newAnnouncement, ...prev]);
+    setShowCreateModal(false);
+  };
+
 
   return (
     <div className="flex-1 p-6 space-y-6">
@@ -207,6 +220,7 @@ export default function AnnouncementsPage({ userRole, projectId = 'proj-001' }: 
         {canManage && (
           <button
             type="button"
+            onClick={() => setShowCreateModal(true)}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
           >
             <Plus size={18} />
@@ -395,6 +409,143 @@ export default function AnnouncementsPage({ userRole, projectId = 'proj-001' }: 
             })}
           </div>
         )}
+      </div>
+
+      {showCreateModal && (
+        <AnnouncementModal
+          onSave={handleCreateAnnouncement}
+          onClose={() => setShowCreateModal(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function AnnouncementModal({
+  onSave,
+  onClose,
+}: {
+  onSave: (data: Omit<Announcement, 'id' | 'viewCount' | 'createdAt'>) => void;
+  onClose: () => void;
+}) {
+  const [formData, setFormData] = useState({
+    title: '',
+    content: '',
+    category: 'NOTICE' as AnnouncementCategory,
+    priority: 'MEDIUM' as AnnouncementPriority,
+    isPinned: false,
+    authorId: '',
+    authorName: '',
+  });
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    onSave({
+      ...formData,
+      status: 'PUBLISHED' as AnnouncementStatus,
+      publishedAt: new Date().toISOString(),
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-gray-900">공지 등록</h3>
+          <button type="button" onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded" title="닫기">
+            <X size={20} />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label htmlFor="ann-title" className="block text-sm font-medium text-gray-700 mb-1">제목 *</label>
+            <input
+              id="ann-title"
+              type="text"
+              value={formData.title}
+              onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="ann-category" className="block text-sm font-medium text-gray-700 mb-1">분류 *</label>
+              <select
+                id="ann-category"
+                value={formData.category}
+                onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value as AnnouncementCategory }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="NOTICE">공지</option>
+                <option value="UPDATE">업데이트</option>
+                <option value="MAINTENANCE">점검</option>
+                <option value="EVENT">이벤트</option>
+                <option value="POLICY">정책</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="ann-priority" className="block text-sm font-medium text-gray-700 mb-1">중요도 *</label>
+              <select
+                id="ann-priority"
+                value={formData.priority}
+                onChange={(e) => setFormData(prev => ({ ...prev, priority: e.target.value as AnnouncementPriority }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="HIGH">높음</option>
+                <option value="MEDIUM">보통</option>
+                <option value="LOW">낮음</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label htmlFor="ann-content" className="block text-sm font-medium text-gray-700 mb-1">내용 *</label>
+            <textarea
+              id="ann-content"
+              value={formData.content}
+              onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              rows={5}
+              required
+            />
+          </div>
+          <div>
+            <label htmlFor="ann-author" className="block text-sm font-medium text-gray-700 mb-1">작성자 *</label>
+            <input
+              id="ann-author"
+              type="text"
+              value={formData.authorName}
+              onChange={(e) => setFormData(prev => ({ ...prev, authorName: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="isPinned"
+              checked={formData.isPinned}
+              onChange={(e) => setFormData(prev => ({ ...prev, isPinned: e.target.checked }))}
+              className="h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
+            />
+            <label htmlFor="isPinned" className="text-sm text-gray-700">상단 고정</label>
+          </div>
+          <div className="flex gap-3 pt-4">
+            <button
+              type="submit"
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              등록
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              취소
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

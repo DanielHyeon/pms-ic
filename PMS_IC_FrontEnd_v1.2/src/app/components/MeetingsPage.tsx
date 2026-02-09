@@ -9,7 +9,8 @@ import {
   AlertCircle,
   CalendarDays,
 } from 'lucide-react';
-import MeetingManagement from './common/MeetingManagement';
+import MeetingManagement, { MeetingModal } from './common/MeetingManagement';
+import type { Meeting } from './common/types';
 import { useMeetings, useCreateMeeting } from '../../hooks/api/useCommon';
 import { getRolePermissions } from '../../utils/rolePermissions';
 import { UserRole } from '../App';
@@ -34,6 +35,16 @@ export default function MeetingsPage({ userRole }: MeetingsPageProps) {
   // Role permissions
   const permissions = getRolePermissions(userRole);
   const canManage = permissions.canEdit;
+
+  const handleCreateMeeting = async (meetingData: Partial<Meeting>) => {
+    if (!projectId) return;
+    try {
+      await createMeetingMutation.mutateAsync({ projectId, data: meetingData });
+      setShowCreateModal(false);
+    } catch (error) {
+      console.warn('Failed to create meeting:', error);
+    }
+  };
 
   // Calculate statistics
   const stats = {
@@ -167,6 +178,14 @@ export default function MeetingsPage({ userRole }: MeetingsPageProps) {
         searchQuery={searchQuery}
         filter={filterStatus}
       />
+
+      {showCreateModal && (
+        <MeetingModal
+          meeting={null}
+          onSave={handleCreateMeeting}
+          onClose={() => setShowCreateModal(false)}
+        />
+      )}
     </div>
   );
 }
