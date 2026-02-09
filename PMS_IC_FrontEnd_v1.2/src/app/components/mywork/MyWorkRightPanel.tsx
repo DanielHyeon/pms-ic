@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   Ban,
 } from 'lucide-react';
+import { getPriorityColor } from '../../../constants/statusMaps';
 import type { MyWorkTask } from './MyWorkTaskCard';
 
 // ── Types ──────────────────────────────────────────────────
@@ -31,13 +32,6 @@ const STATUS_COLORS: Record<string, string> = {
   IN_REVIEW: 'bg-purple-100 text-purple-700',
   DONE: 'bg-green-100 text-green-700',
   BLOCKED: 'bg-red-100 text-red-700',
-};
-
-const PRIORITY_COLORS: Record<string, string> = {
-  CRITICAL: 'bg-red-100 text-red-700',
-  HIGH: 'bg-orange-100 text-orange-700',
-  MEDIUM: 'bg-yellow-100 text-yellow-700',
-  LOW: 'bg-gray-100 text-gray-600',
 };
 
 // ── Sub-panels ─────────────────────────────────────────────
@@ -73,7 +67,7 @@ function TaskDetailPanel({ task, canEdit: _canEdit }: { task: MyWorkTask; canEdi
         </div>
         <div>
           <p className="text-xs text-gray-500 mb-1">Priority</p>
-          <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${PRIORITY_COLORS[task.priority] || 'bg-gray-100 text-gray-600'}`}>
+          <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${getPriorityColor(task.priority)}`}>
             {task.priority}
           </span>
         </div>

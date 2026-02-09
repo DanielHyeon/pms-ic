@@ -18,22 +18,11 @@ import { Badge } from '../ui/badge';
 import type { WbsGroupWithItems, WbsItemWithTasks, PhaseWithWbs } from '../../../types/wbs';
 import { getWbsStatusColor, getWbsStatusLabel, calculateWeightedProgress } from '../../../types/wbs';
 import type { ViewModePreset } from '../../../types/menuOntology';
+import StatusBadge from '../common/StatusBadge';
 
 // ─── Types ──────────────────────────────────────────────
 
 export type WbsPanelMode = 'none' | 'context' | 'detail' | 'analysis';
-
-// ─── Status badge helper ────────────────────────────────
-
-function StatusBadge({ status }: { status: string }) {
-  const colorClass = getWbsStatusColor(status as any) || 'bg-gray-100 text-gray-700';
-  const label = getWbsStatusLabel(status as any) || status;
-  return (
-    <span className={`px-2 py-0.5 rounded text-xs font-medium ${colorClass}`}>
-      {label}
-    </span>
-  );
-}
 
 // ─── Progress bar helper ────────────────────────────────
 
@@ -108,7 +97,7 @@ function GroupContext({ group, phase }: { group: WbsGroupWithItems; phase?: Phas
         <div className="text-[10px] text-gray-400 font-mono mb-1">{group.code}</div>
         <h3 className="text-sm font-semibold text-gray-900 mb-2 line-clamp-2">{group.name}</h3>
         <div className="flex items-center gap-2 flex-wrap">
-          <StatusBadge status={group.status} />
+          <StatusBadge status={group.status} className={getWbsStatusColor(group.status as any)} label={getWbsStatusLabel(group.status as any)} />
           {group.linkedEpicId && (
             <span className="px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-700 flex items-center gap-1">
               <Link2 className="h-3 w-3" />
@@ -231,7 +220,7 @@ function ItemDetail({ item }: { item: WbsItemWithTasks }) {
         <div className="text-[10px] text-gray-400 font-mono mb-1">{item.code}</div>
         <h3 className="text-sm font-semibold text-gray-900 mb-2 line-clamp-2">{item.name}</h3>
         <div className="flex items-center gap-2 flex-wrap">
-          <StatusBadge status={item.status} />
+          <StatusBadge status={item.status} className={getWbsStatusColor(item.status as any)} label={getWbsStatusLabel(item.status as any)} />
           {item.weight > 0 && (
             <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
               Weight: {item.weight}%
@@ -352,7 +341,7 @@ function ItemDetail({ item }: { item: WbsItemWithTasks }) {
                 <span className="text-gray-700 truncate flex-1">{task.name}</span>
                 <div className="flex items-center gap-2 ml-2">
                   <span className="text-gray-400">{task.progress}%</span>
-                  <StatusBadge status={task.status} />
+                  <StatusBadge status={task.status} className={getWbsStatusColor(task.status as any)} label={getWbsStatusLabel(task.status as any)} />
                 </div>
               </div>
             ))}
@@ -406,7 +395,7 @@ function PhaseContext({ phase }: { phase: PhaseWithWbs }) {
       <div>
         <h3 className="text-sm font-semibold text-gray-900 mb-2 line-clamp-2">{phase.name}</h3>
         <div className="flex items-center gap-2 flex-wrap">
-          <StatusBadge status={phase.status} />
+          <StatusBadge status={phase.status} className={getWbsStatusColor(phase.status as any)} label={getWbsStatusLabel(phase.status as any)} />
         </div>
       </div>
 
@@ -469,7 +458,7 @@ function PhaseContext({ phase }: { phase: PhaseWithWbs }) {
                   <span className="text-gray-400">
                     {child.calculatedProgress || child.progress || 0}%
                   </span>
-                  <StatusBadge status={child.status} />
+                  <StatusBadge status={child.status} className={getWbsStatusColor(child.status as any)} label={getWbsStatusLabel(child.status as any)} />
                 </div>
               </div>
             ))}

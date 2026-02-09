@@ -9,6 +9,8 @@ import { useIssues } from '../../hooks/api/useCommon';
 import { useStories } from '../../hooks/api/useStories';
 import { useActiveSprint } from '../../hooks/api/useSprints';
 import { canEdit as checkCanEdit } from '../../utils/rolePermissions';
+import { ISSUE_SEVERITY_COLORS } from '../../constants/statusMaps';
+import { computeDaysRemaining } from '../../utils/formatters';
 import type { UserRole } from '../App';
 import {
   MyWorkKpiRow,
@@ -36,13 +38,6 @@ interface MappedIssue {
 }
 
 // ── Helpers ────────────────────────────────────────────────
-
-const SEVERITY_COLORS: Record<string, string> = {
-  blocker: 'bg-red-100 text-red-700',
-  critical: 'bg-orange-100 text-orange-700',
-  major: 'bg-yellow-100 text-yellow-700',
-  minor: 'bg-gray-100 text-gray-600',
-};
 
 const TAB_CONFIG: { key: MyWorkTab; label: string }[] = [
   { key: 'today', label: 'Today' },
@@ -91,14 +86,10 @@ function mapIssueSeverity(issueType: string): string {
   return severityMap[issueType] || 'minor';
 }
 
-/** Compute days remaining from a due date string. Returns undefined if no date. */
-function computeDaysRemaining(dueDate?: string): number | undefined {
+/** Wrap shared computeDaysRemaining to return undefined when no date is provided */
+function computeDaysRemainingOrUndefined(dueDate?: string): number | undefined {
   if (!dueDate) return undefined;
-  const due = new Date(dueDate);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  due.setHours(0, 0, 0, 0);
-  return Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  return computeDaysRemaining(dueDate);
 }
 
 function applyFilters(tasks: MyWorkTask[], filters: Record<string, string | boolean | undefined>): MyWorkTask[] {
@@ -204,7 +195,7 @@ export default function MyWorkPage({ userRole }: MyWorkPageProps) {
     );
 
     return myKanbanTasks.map((task): MyWorkTask => {
-      const days = computeDaysRemaining(task.dueDate || undefined);
+      const days = computeDaysRemainingOrUndefined(task.dueDate || undefined);
       const taskDueDate = task.dueDate || undefined;
       const isOverdue = days !== undefined && days < 0 && task.status !== 'DONE';
       const isBlocked = task.status === 'BLOCKED';
@@ -415,7 +406,7 @@ export default function MyWorkPage({ userRole }: MyWorkPageProps) {
               <td className="py-2 px-3 font-mono text-xs text-gray-500">{issue.id}</td>
               <td className="py-2 px-3 text-gray-700">{issue.title}</td>
               <td className="py-2 px-3">
-                <span className={`px-2 py-0.5 rounded text-xs ${SEVERITY_COLORS[issue.severity] || 'bg-gray-100 text-gray-600'}`}>
+                <span className={`px-2 py-0.5 rounded text-xs ${ISSUE_SEVERITY_COLORS[issue.severity] || 'bg-gray-100 text-gray-600'}`}>
                   {issue.severity}
                 </span>
               </td>

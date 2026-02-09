@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import { Clock, AlertTriangle, User } from 'lucide-react';
-import type { DecisionItem, DecisionStatus } from './types';
+import { DECISION_STATUS_LABELS } from '../../../constants/statusMaps';
+import type { DecisionStatus } from '../../../constants/statusMaps';
+import type { DecisionItem } from './types';
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -18,14 +20,6 @@ const DECISION_STATUS_COLORS: Record<DecisionStatus, string> = {
   APPROVED: 'bg-green-100 text-green-700',
   REJECTED: 'bg-red-100 text-red-700',
   DEFERRED: 'bg-gray-100 text-gray-700',
-};
-
-const DECISION_STATUS_LABELS: Record<DecisionStatus, string> = {
-  PROPOSED: 'Proposed',
-  UNDER_REVIEW: 'Under Review',
-  APPROVED: 'Approved',
-  REJECTED: 'Rejected',
-  DEFERRED: 'Deferred',
 };
 
 // ── Helpers ────────────────────────────────────────────────

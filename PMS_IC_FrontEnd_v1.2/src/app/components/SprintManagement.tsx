@@ -30,6 +30,7 @@ import {
 } from '../../hooks/api/useSprints';
 import { useBurndown, useSprintVelocity } from '../../hooks/api/useDashboard';
 import { canEdit as checkCanEdit } from '../../utils/rolePermissions';
+import { computeDaysRemaining } from '../../utils/formatters';
 import { PresetSwitcher } from './common/PresetSwitcher';
 import {
   SprintKpiRow,
@@ -63,12 +64,6 @@ const STATUS_SORT_ORDER: Record<string, number> = {
 function computeProgress(sprint: Sprint): number {
   if (!sprint.plannedPoints || sprint.plannedPoints === 0) return 0;
   return Math.round(((sprint.velocity || 0) / sprint.plannedPoints) * 100);
-}
-
-function getDaysRemaining(endDate: string): number {
-  const end = new Date(endDate);
-  const today = new Date();
-  return Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 function getStatusLabel(status: string): string {
@@ -285,7 +280,7 @@ export default function SprintManagement({ userRole }: SprintManagementProps) {
           <div className="space-y-3">
             {filteredSprints.map((sprint) => {
               const progress = computeProgress(sprint);
-              const daysLeft = getDaysRemaining(sprint.endDate);
+              const daysLeft = computeDaysRemaining(sprint.endDate);
               const isSelected = selectedSprintId === sprint.id;
 
               return (

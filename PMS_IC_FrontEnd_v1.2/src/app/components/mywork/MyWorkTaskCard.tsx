@@ -1,4 +1,5 @@
 import { Clock, MessageSquare, ArrowUpRight, AlertTriangle, Ban } from 'lucide-react';
+import { getPriorityColor } from '../../../constants/statusMaps';
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -29,13 +30,6 @@ interface MyWorkTaskCardProps {
 
 // ── Helpers ────────────────────────────────────────────────
 
-const PRIORITY_COLORS: Record<string, string> = {
-  CRITICAL: 'bg-red-100 text-red-700 border-red-300',
-  HIGH: 'bg-orange-100 text-orange-700 border-orange-300',
-  MEDIUM: 'bg-yellow-100 text-yellow-700 border-yellow-300',
-  LOW: 'bg-gray-100 text-gray-600 border-gray-300',
-};
-
 const STATUS_OPTIONS = [
   { value: 'TODO', label: 'TODO' },
   { value: 'IN_PROGRESS', label: 'In Progress' },
@@ -60,7 +54,7 @@ function formatDueDate(dueDate: string, daysRemaining?: number, isOverdue?: bool
 // ── Component ──────────────────────────────────────────────
 
 export function MyWorkTaskCard({ task, onSelect, onStatusChange, canEdit }: MyWorkTaskCardProps) {
-  const priorityColor = PRIORITY_COLORS[task.priority] || PRIORITY_COLORS.LOW;
+  const priorityColor = getPriorityColor(task.priority);
 
   return (
     <div

@@ -124,3 +124,24 @@ export const isThisWeek = (dateStr?: string | null): boolean => {
 
   return date >= weekStart && date < weekEnd;
 };
+
+/**
+ * Compute days remaining until a target date.
+ * Returns negative values for past dates.
+ */
+export const computeDaysRemaining = (dateStr?: string | null): number => {
+  if (!dateStr) return 0;
+  const target = new Date(dateStr);
+  const now = new Date();
+  target.setHours(0, 0, 0, 0);
+  now.setHours(0, 0, 0, 0);
+  return Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+};
+
+/**
+ * Format date string to date-only Korean locale format (no time).
+ * Shorthand for formatDate(dateStr, { includeTime: false }).
+ */
+export const formatDateOnly = (dateStr?: string | null): string => {
+  return formatDate(dateStr, { includeTime: false });
+};

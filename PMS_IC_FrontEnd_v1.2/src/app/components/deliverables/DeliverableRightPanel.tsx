@@ -18,6 +18,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import type { ViewModePreset } from '../../../types/menuOntology';
+import StatusBadge from '../common/StatusBadge';
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -36,27 +37,6 @@ export interface DeliverableRightPanelProps {
   onClose: () => void;
   onModeChange: (mode: DeliverablePanelMode) => void;
   canEdit: boolean;
-}
-
-// ── Status badge styling ────────────────────────────────────
-
-const STATUS_BADGE: Record<string, { className: string; label: string }> = {
-  DRAFT: { className: 'bg-gray-100 text-gray-700', label: '초안' },
-  SUBMITTED: { className: 'bg-blue-100 text-blue-700', label: '제출됨' },
-  IN_REVIEW: { className: 'bg-amber-100 text-amber-700', label: '검토중' },
-  APPROVED: { className: 'bg-green-100 text-green-700', label: '승인됨' },
-  LOCKED: { className: 'bg-emerald-100 text-emerald-800', label: '확정' },
-  REJECTED: { className: 'bg-red-100 text-red-700', label: '반려' },
-  PENDING: { className: 'bg-gray-100 text-gray-600', label: '대기' },
-};
-
-function StatusBadge({ status }: { status: string }) {
-  const badge = STATUS_BADGE[status] || STATUS_BADGE.PENDING;
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${badge.className}`}>
-      {badge.label}
-    </span>
-  );
 }
 
 // ── Sub-panels ─────────────────────────────────────────────

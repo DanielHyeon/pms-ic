@@ -18,6 +18,10 @@ import {
   ArrowDown,
 } from 'lucide-react';
 import type { ViewModePreset } from '../../../types/menuOntology';
+import {
+  DECISION_STATUS_LABELS,
+  RISK_STATUS_LABELS,
+} from '../../../constants/statusMaps';
 import type {
   DecisionItem,
   RiskItem,
@@ -51,28 +55,12 @@ const DECISION_STATUS_BADGE: Record<DecisionStatus, string> = {
   DEFERRED: 'bg-gray-100 text-gray-700',
 };
 
-const DECISION_STATUS_LABELS: Record<DecisionStatus, string> = {
-  PROPOSED: 'Proposed',
-  UNDER_REVIEW: 'Under Review',
-  APPROVED: 'Approved',
-  REJECTED: 'Rejected',
-  DEFERRED: 'Deferred',
-};
-
 const RISK_STATUS_BADGE: Record<string, string> = {
   IDENTIFIED: 'bg-blue-100 text-blue-700',
   ASSESSED: 'bg-amber-100 text-amber-700',
   MITIGATING: 'bg-orange-100 text-orange-700',
   RESOLVED: 'bg-green-100 text-green-700',
   ACCEPTED: 'bg-gray-100 text-gray-700',
-};
-
-const RISK_STATUS_LABELS: Record<string, string> = {
-  IDENTIFIED: 'Identified',
-  ASSESSED: 'Assessed',
-  MITIGATING: 'Mitigating',
-  RESOLVED: 'Resolved',
-  ACCEPTED: 'Accepted',
 };
 
 const SEVERITY_BADGE: Record<RiskSeverity, string> = {
