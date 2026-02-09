@@ -24,6 +24,7 @@ const roleCapabilities: Record<string, Capability[]> = {
     'view_meetings',
     'view_notices',
     'view_rfp',
+    'view_ai_assistant',
   ],
   PMO_HEAD: [
     'view_dashboard',
@@ -70,6 +71,7 @@ const roleCapabilities: Record<string, Capability[]> = {
     'manage_delegations',
     'manage_capabilities',
     'audit_governance',
+    'view_ai_assistant',
   ],
   PM: [
     'view_dashboard',

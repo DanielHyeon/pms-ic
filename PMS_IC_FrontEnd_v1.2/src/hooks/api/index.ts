@@ -122,3 +122,6 @@ export * from './useOrgParts';
 
 // Authority hooks (Role & Permission Management #22)
 export * from './useAuthority';
+
+// AI Briefing hooks (AI Decision Console #23)
+export * from './useAiBriefing';

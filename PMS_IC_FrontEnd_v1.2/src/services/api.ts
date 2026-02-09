@@ -4151,6 +4151,200 @@ export class ApiService {
     );
   }
 
+  // ========== AI Briefing ==========
+
+  async getAiBriefing(projectId: string, role: string, scope?: string) {
+    const params = new URLSearchParams({ role });
+    if (scope) params.set('scope', scope);
+    return this.fetchWithFallback(
+      `${V2}/projects/${projectId}/ai/briefing?${params}`,
+      {},
+      this.getMockAiBriefing(projectId, role, scope),
+    );
+  }
+
+  async refreshAiBriefing(projectId: string, role: string, scope?: string) {
+    return this.fetchWithFallback(
+      `${V2}/projects/${projectId}/ai/briefing/refresh`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ role, scope }),
+      },
+      this.getMockAiBriefing(projectId, role, scope),
+    );
+  }
+
+  async logDecisionTrace(projectId: string, event: Record<string, unknown>) {
+    return this.fetchWithFallback(
+      `${V2}/projects/${projectId}/ai/trace-log`,
+      {
+        method: 'POST',
+        body: JSON.stringify(event),
+      },
+      { ok: true },
+    );
+  }
+
+  private getMockAiBriefing(projectId: string, role: string, scope?: string) {
+    const now = new Date().toISOString();
+    return {
+      context: {
+        projectId,
+        role: role.toUpperCase(),
+        asOf: now,
+        scope: (scope || 'current_sprint') as 'current_sprint' | 'last_7_days' | 'last_14_days' | 'current_phase',
+        completeness: 'PARTIAL' as const,
+        missingSignals: ['commits_last_3d'],
+      },
+      summary: {
+        headline: '이번 스프린트는 일정 지연 위험이 있습니다',
+        signals: ['SCHEDULE_DELAY', 'RESOURCE_BOTTLENECK'],
+        healthStatus: 'YELLOW' as const,
+        confidence: 0.82,
+        body: '현재 스프린트에서 3개 태스크가 예정일을 초과했으며, 결제 모듈 담당자에게 업무가 집중되어 있습니다. 테스트 커버리지는 78.5%로 양호하나, 최근 3일간 커밋 데이터가 누락되어 완전한 분석이 어렵습니다. 전체 진행률은 67%로 목표 대비 약간 뒤처져 있습니다.',
+      },
+      insights: [
+        {
+          id: 'insight-delay-01',
+          type: 'DELAY' as const,
+          severity: 'HIGH' as const,
+          title: '결제 모듈 작업 지연',
+          description: '3개 태스크가 예정일을 초과했으며 모두 동일 담당자에게 할당되어 있습니다. 평균 지연일수는 4.2일입니다.',
+          confidence: 0.91,
+          evidence: {
+            asOf: now,
+            metrics: ['overdue_tasks=3', 'avg_delay_days=4.2', 'assignee_load=12'],
+            entities: ['task-101', 'task-104', 'task-107'],
+            dataSource: 'PostgreSQL',
+          },
+          actionRefs: ['create-issue', 'create-risk', 'reassign-task'],
+        },
+        {
+          id: 'insight-bottleneck-01',
+          type: 'BOTTLENECK' as const,
+          severity: 'MEDIUM' as const,
+          title: '결제팀 리소스 병목',
+          description: '결제팀 담당자 1명에게 12개 활성 태스크가 할당되어 있습니다. 단일 장애점(Single Point of Failure) 위험이 있습니다.',
+          confidence: 0.87,
+          evidence: {
+            asOf: now,
+            metrics: ['active_tasks=12', 'team_members=1', 'bottleneck_score=0.92'],
+            entities: ['part-payment', 'user-hong'],
+            dataSource: 'PostgreSQL',
+          },
+          actionRefs: ['reassign-task', 'create-meeting-agenda'],
+        },
+        {
+          id: 'insight-quality-01',
+          type: 'QUALITY' as const,
+          severity: 'MEDIUM' as const,
+          title: '테스트 커버리지 하락 추세',
+          description: '최근 7일간 테스트 커버리지가 83%에서 78.5%로 4.5%p 감소했습니다. 새로 추가된 결제 API에 대한 테스트가 부족합니다.',
+          confidence: 0.78,
+          evidence: {
+            asOf: now,
+            metrics: ['coverage_current=78.5', 'coverage_7d_ago=83.0', 'delta=-4.5'],
+            entities: ['module-payment-api'],
+            dataSource: 'PostgreSQL',
+          },
+          actionRefs: ['create-issue'],
+        },
+        {
+          id: 'insight-progress-01',
+          type: 'PROGRESS' as const,
+          severity: 'LOW' as const,
+          title: '스프린트 진행률 목표 대비 소폭 지연',
+          description: '스프린트 중간 시점 기준 진행률이 67%로, 예상 진행률 72%에 비해 5%p 뒤처져 있습니다.',
+          confidence: 0.85,
+          evidence: {
+            asOf: now,
+            metrics: ['actual_progress=67', 'expected_progress=72', 'gap=-5'],
+            entities: ['sprint-current'],
+            dataSource: 'PostgreSQL',
+          },
+          actionRefs: ['update-progress'],
+        },
+        {
+          id: 'insight-positive-01',
+          type: 'POSITIVE' as const,
+          severity: 'INFO' as const,
+          title: '인증 모듈 조기 완료',
+          description: '인증 모듈 관련 5개 태스크가 예정일보다 2일 앞서 완료되었습니다.',
+          confidence: 0.95,
+          evidence: {
+            asOf: now,
+            metrics: ['tasks_completed=5', 'days_ahead=2'],
+            entities: ['module-auth'],
+            dataSource: 'PostgreSQL',
+          },
+          actionRefs: [],
+        },
+      ],
+      recommendedActions: [
+        {
+          actionId: 'create-issue',
+          label: '이슈로 등록',
+          description: '감지된 지연 패턴을 이슈 보드에 등록합니다',
+          requiredCapability: 'manage_issues',
+          targetRoute: '/issues?action=new&sourceInsight=insight-delay-01',
+          priority: 1,
+          sourceInsightIds: ['insight-delay-01', 'insight-quality-01'],
+        },
+        {
+          actionId: 'create-risk',
+          label: '리스크 승격',
+          description: '결제 모듈 지연을 프로젝트 리스크로 등록합니다',
+          requiredCapability: 'manage_decisions',
+          targetRoute: '/decisions?tab=risk&action=new&sourceInsight=insight-delay-01',
+          priority: 2,
+          sourceInsightIds: ['insight-delay-01'],
+        },
+        {
+          actionId: 'reassign-task',
+          label: '작업 재할당',
+          description: '병목 해소를 위해 태스크를 다른 담당자에게 재할당합니다',
+          requiredCapability: 'manage_kanban',
+          targetRoute: '/kanban?action=bulk-assign&sourceInsight=insight-bottleneck-01',
+          priority: 3,
+          sourceInsightIds: ['insight-bottleneck-01'],
+        },
+        {
+          actionId: 'create-meeting-agenda',
+          label: '회의 안건 생성',
+          description: '리소스 병목 논의를 위한 회의 안건을 생성합니다',
+          requiredCapability: 'view_meetings',
+          targetRoute: '/meetings?action=new&sourceInsight=insight-bottleneck-01',
+          priority: 4,
+          sourceInsightIds: ['insight-bottleneck-01'],
+        },
+        {
+          actionId: 'update-progress',
+          label: '진행률 갱신',
+          description: '내 담당 작업의 진행률을 업데이트합니다',
+          requiredCapability: 'view_my_work',
+          targetRoute: '/my-work',
+          priority: 5,
+          sourceInsightIds: ['insight-progress-01'],
+        },
+      ],
+      explainability: {
+        dataCollectedAt: now,
+        completeness: 'PARTIAL' as const,
+        missingSignals: ['commits_last_3d'],
+        dataSources: [
+          { source: 'PostgreSQL', tables: ['project.tasks', 'project.sprints', 'task.issues'], recordCount: 247, lastSyncAt: now },
+          { source: 'Redis', tables: ['activity_stream'], recordCount: 58, lastSyncAt: now },
+        ],
+        generationMethod: 'HYBRID' as const,
+        warnings: ['최근 3일간 커밋 데이터가 수집되지 않았습니다. Git 연동 상태를 확인하세요.'],
+        changeHistoryLinks: [
+          { label: '결제 모듈 태스크 변경 이력', route: '/lineage?entity=module-payment' },
+          { label: '스프린트 번다운 추이', route: '/lineage?entity=sprint-current' },
+        ],
+      },
+    };
+  }
+
 }
 
 export const apiService = new ApiService();

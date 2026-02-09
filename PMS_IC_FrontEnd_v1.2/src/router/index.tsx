@@ -36,8 +36,8 @@ const UserManagementPage = lazy(() => import('../app/components/UserManagementPa
 const AuditLogsPage = lazy(() => import('../app/components/AuditLogsPage'));
 const AnnouncementsPage = lazy(() => import('../app/components/AnnouncementsPage'));
 
-// Placeholder pages for features under development
-const AiAssistant = lazy(() => import('../app/components/PlaceholderPage').then(m => ({ default: m.AiAssistantPage })));
+// AI Assistant - Decision Console
+const AiAssistantPageComponent = lazy(() => import('../app/components/AiAssistantPage'));
 const ReportManagement = lazy(() => import('../app/components/ReportManagement'));
 const PmoConsolePage = lazy(() => import('../app/components/PmoConsolePage'));
 const PartDashboard = lazy(() => import('../app/components/PartDashboard'));
@@ -98,6 +98,7 @@ const DecisionRiskPageWithRole = withUserRole(DecisionRiskPage);
 const AuditEvidencePageWithRole = withUserRole(AuditEvidencePage);
 const ProjectAccountabilityPageWithRole = withUserRole(ProjectAccountabilityPage);
 const RolePermissionPageWithRole = withUserRole(RolePermissionPage);
+const AiAssistantPageWithRole = withUserRole(AiAssistantPageComponent);
 
 function Loading() {
   return (
@@ -324,7 +325,7 @@ export const router = createBrowserRouter([
         path: 'ai-assistant',
         element: (
           <SuspenseWrapper>
-            <AiAssistant />
+            <AiAssistantPageWithRole />
           </SuspenseWrapper>
         ),
       },
