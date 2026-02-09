@@ -29,7 +29,7 @@ Project → Rfp → Requirement
 - TDD (pytest 우선)
 - 작은 단위 커밋 + PR 필수
 - Git Worktree 적극 활용
-- 한글 주석 금지 → 영어로 변환
+- 초등학생도 이해할 수 있게 코드 구현시 한글로 주석을 달것
 - API 호출은 /api 폴더에서만
 
 ## 6. 보안 & 권한 핵심
