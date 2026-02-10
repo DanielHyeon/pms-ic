@@ -35,6 +35,8 @@ public class ReactiveOriginService {
 
     @Transactional
     public Mono<OriginPolicyDto> setOrigin(String projectId, SetOriginRequest request, String userId) {
+        // Dev 프로필에서 JWT 없이 호출 시 userId가 null → "dev-user"로 대체
+        String safeActor = (userId != null && !userId.isBlank()) ? userId : "dev-user";
         return policyRepository.existsByProjectId(projectId)
                 .flatMap(exists -> {
                     if (exists) {
@@ -57,7 +59,7 @@ public class ReactiveOriginService {
                             .lineageEnforcement(preset.lineageEnforcement)
                             .createdAt(LocalDateTime.now())
                             .updatedAt(LocalDateTime.now())
-                            .createdBy(userId)
+                            .createdBy(safeActor)
                             .build();
 
                     return policyRepository.save(policy);
@@ -75,6 +77,7 @@ public class ReactiveOriginService {
 
     @Transactional
     public Mono<OriginPolicyDto> updateOrigin(String projectId, SetOriginRequest request, String userId) {
+        String safeActor = (userId != null && !userId.isBlank()) ? userId : "dev-user";
         return policyRepository.findByProjectId(projectId)
                 .switchIfEmpty(Mono.error(CustomException.notFound(
                         "Origin not set for project: " + projectId)))
@@ -90,7 +93,7 @@ public class ReactiveOriginService {
                     existing.setAutoAnalysisEnabled(preset.autoAnalysisEnabled);
                     existing.setLineageEnforcement(preset.lineageEnforcement);
                     existing.setUpdatedAt(LocalDateTime.now());
-                    existing.setUpdatedBy(userId);
+                    existing.setUpdatedBy(safeActor);
 
                     return policyRepository.save(existing);
                 })

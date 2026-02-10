@@ -151,6 +151,15 @@ export class ApiService {
       });
 
       if (!response.ok) {
+        // 401/403: 인증/권한 오류 → 절대 mock 금지, 반드시 throw
+        if (response.status === 401 || response.status === 403) {
+          throw new Error(`AUTH_ERROR:${response.status}`);
+        }
+        // 404: 데이터 없음 → mockData 반환 (정상적인 "없음")
+        if (response.status === 404) {
+          return mockData;
+        }
+        // 기타 (400, 409, 5xx): 일반 에러 throw
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
@@ -169,6 +178,10 @@ export class ApiService {
 
       return json;
     } catch (error) {
+      // 인증 오류는 반드시 상위로 전파 (절대 mock 금지)
+      if (error instanceof Error && error.message.startsWith('AUTH_ERROR:')) {
+        throw error;
+      }
       // 네트워크 에러인 경우에만 경고, 그 외는 조용히 처리
       if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
         console.warn(`API call failed for ${endpoint}: Backend may not be running. Using mock data.`);
@@ -1751,38 +1764,33 @@ export class ApiService {
   // ========== RFP Origin API (v2.2) ==========
 
   async getProjectOrigin(projectId: string) {
-    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/origin`, {}, { data: null });
-    const raw = response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
-    return raw;
+    // fetchWithFallback이 이미 ApiResponse.data를 추출하므로 이중 추출 불필요
+    // 404 시 mockData(null) 반환 → Origin 미설정 상태
+    return this.fetchWithFallback(`${V2}/projects/${projectId}/origin`, {}, null);
   }
 
   async setProjectOrigin(projectId: string, originType: string) {
-    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/origin`, {
+    // mock data는 fetchWithFallback 추출 후의 형태 (ApiResponse.data 이미 벗겨진 상태)
+    return this.fetchWithFallback(`${V2}/projects/${projectId}/origin`, {
       method: 'POST',
       body: JSON.stringify({ originType }),
     }, {
-      data: {
-        originType,
-        originTypeLabel: { EXTERNAL_RFP: '외부 고객 RFP 기반', INTERNAL_INITIATIVE: '내부 기획 프로젝트', MODERNIZATION: '기존 시스템 고도화', MIXED: '혼합' }[originType] || originType,
-        policy: { requireSourceRfpId: true, evidenceLevel: 'FULL', changeApprovalRequired: true, autoAnalysisEnabled: true, lineageEnforcement: 'STRICT' },
-        kpi: { activeRfpCount: 0, totalRequirements: 0, confirmedRequirements: 0, epicLinkRate: 0, lastChangeImpact: { level: 'NONE', impactedEpics: 0, impactedTasks: 0 } },
-        asOf: new Date().toISOString(),
-      }
+      originType,
+      originTypeLabel: { EXTERNAL_RFP: '외부 고객 RFP 기반', INTERNAL_INITIATIVE: '내부 기획 프로젝트', MODERNIZATION: '기존 시스템 고도화', MIXED: '혼합' }[originType] || originType,
+      policy: { requireSourceRfpId: true, evidenceLevel: 'FULL', changeApprovalRequired: true, autoAnalysisEnabled: true, lineageEnforcement: 'STRICT' },
+      kpi: { activeRfpCount: 0, totalRequirements: 0, confirmedRequirements: 0, epicLinkRate: 0, lastChangeImpact: { level: 'NONE', impactedEpics: 0, impactedTasks: 0 } },
+      asOf: new Date().toISOString(),
     });
-    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
   }
 
   async getOriginSummary(projectId: string) {
-    const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/origin/summary`, {}, {
-      data: {
-        originType: 'EXTERNAL_RFP',
-        originTypeLabel: '외부 고객 RFP 기반',
-        policy: { requireSourceRfpId: true, evidenceLevel: 'FULL', changeApprovalRequired: true, autoAnalysisEnabled: true, lineageEnforcement: 'STRICT' },
-        kpi: { activeRfpCount: 2, totalRequirements: 47, confirmedRequirements: 42, epicLinkRate: 0.89, lastChangeImpact: { level: 'MEDIUM', impactedEpics: 3, impactedTasks: 12 } },
-        asOf: new Date().toISOString(),
-      }
+    return this.fetchWithFallback(`${V2}/projects/${projectId}/origin/summary`, {}, {
+      originType: 'EXTERNAL_RFP',
+      originTypeLabel: '외부 고객 RFP 기반',
+      policy: { requireSourceRfpId: true, evidenceLevel: 'FULL', changeApprovalRequired: true, autoAnalysisEnabled: true, lineageEnforcement: 'STRICT' },
+      kpi: { activeRfpCount: 2, totalRequirements: 47, confirmedRequirements: 42, epicLinkRate: 0.89, lastChangeImpact: { level: 'MEDIUM', impactedEpics: 3, impactedTasks: 12 } },
+      asOf: new Date().toISOString(),
     });
-    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
   }
 
   // ========== RFP v2.2 Enhanced APIs ==========

@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.lang.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -31,8 +32,10 @@ public class ReactiveOriginController {
     public Mono<ResponseEntity<ApiResponse<OriginPolicyDto>>> setOrigin(
             @PathVariable String projectId,
             @Valid @RequestBody SetOriginRequest request,
-            @AuthenticationPrincipal UserDetails user) {
-        return originService.setOrigin(projectId, request, user.getUsername())
+            @AuthenticationPrincipal @Nullable UserDetails user) {
+        // Dev 프로필에서 JWT가 없으면 user가 null → NPE 방지
+        String actor = (user != null) ? user.getUsername() : null;
+        return originService.setOrigin(projectId, request, actor)
                 .map(dto -> ResponseEntity.status(HttpStatus.CREATED)
                         .body(ApiResponse.success("Origin set", dto)));
     }
@@ -52,8 +55,9 @@ public class ReactiveOriginController {
     public Mono<ResponseEntity<ApiResponse<OriginPolicyDto>>> updateOrigin(
             @PathVariable String projectId,
             @Valid @RequestBody SetOriginRequest request,
-            @AuthenticationPrincipal UserDetails user) {
-        return originService.updateOrigin(projectId, request, user.getUsername())
+            @AuthenticationPrincipal @Nullable UserDetails user) {
+        String actor = (user != null) ? user.getUsername() : null;
+        return originService.updateOrigin(projectId, request, actor)
                 .map(dto -> ResponseEntity.ok(ApiResponse.success("Origin updated", dto)));
     }
 

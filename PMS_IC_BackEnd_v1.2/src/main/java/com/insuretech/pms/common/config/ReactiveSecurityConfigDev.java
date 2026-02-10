@@ -1,12 +1,11 @@
 package com.insuretech.pms.common.config;
 
 import com.insuretech.pms.common.security.JwtWebFilter;
-import com.insuretech.pms.common.security.ReactiveJwtAuthenticationEntryPoint;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Profile;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
@@ -23,15 +22,19 @@ import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * 개발 환경 전용 보안 설정.
+ * RFP 관련 API를 인증 없이 접근 가능하게 하여 E2E 테스트를 용이하게 한다.
+ * 운영 환경에서는 ReactiveSecurityConfig(@Profile("!dev"))가 활성화된다.
+ */
 @Configuration
-@Profile("!dev")
+@Profile("dev")
 @EnableWebFluxSecurity
 @EnableReactiveMethodSecurity
 @RequiredArgsConstructor
-public class ReactiveSecurityConfig {
+public class ReactiveSecurityConfigDev {
 
     private final JwtWebFilter jwtWebFilter;
-    private final ReactiveJwtAuthenticationEntryPoint authenticationEntryPoint;
 
     @Value("${cors.allowed-origins:http://localhost:5173}")
     private String allowedOrigins;
@@ -40,18 +43,17 @@ public class ReactiveSecurityConfig {
     private String allowedMethods;
 
     @Bean
-    public SecurityWebFilterChain reactiveSecurityFilterChain(ServerHttpSecurity http) {
+    public SecurityWebFilterChain devSecurityFilterChain(ServerHttpSecurity http) {
         return http
-                .cors(cors -> cors.configurationSource(reactiveCorsConfigurationSource()))
+                .cors(cors -> cors.configurationSource(devCorsConfigurationSource()))
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
                 .securityContextRepository(NoOpServerSecurityContextRepository.getInstance())
-                .exceptionHandling(exception -> exception
-                        .authenticationEntryPoint(authenticationEntryPoint))
                 .authorizeExchange(exchanges -> exchanges
-                        // Public endpoints
+                        // OPTIONS 요청은 항상 허용
                         .pathMatchers(HttpMethod.OPTIONS).permitAll()
+                        // 기존 공개 엔드포인트
                         .pathMatchers(
                                 "/api/auth/login",
                                 "/api/auth/refresh",
@@ -68,9 +70,14 @@ public class ReactiveSecurityConfig {
                                 "/swagger-ui.html",
                                 "/webjars/**"
                         ).permitAll()
-                        // All other requests require authentication
+                        // 개발 환경: RFP 관련 API 인증 없이 허용
+                        .pathMatchers("/api/v2/projects/*/origin/**").permitAll()
+                        .pathMatchers("/api/v2/projects/*/rfps/**").permitAll()
+                        .pathMatchers("/api/v2/projects/*/requirements/**").permitAll()
+                        // 나머지는 인증 필요
                         .anyExchange().authenticated()
                 )
+                // JWT 필터는 등록하되, permitAll이므로 토큰 없어도 통과
                 .addFilterAt(jwtWebFilter, SecurityWebFiltersOrder.AUTHENTICATION)
                 .build();
     }
@@ -81,7 +88,7 @@ public class ReactiveSecurityConfig {
     }
 
     @Bean
-    public CorsConfigurationSource reactiveCorsConfigurationSource() {
+    public CorsConfigurationSource devCorsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
         configuration.setAllowedMethods(Arrays.asList(allowedMethods.split(",")));

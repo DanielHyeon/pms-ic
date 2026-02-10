@@ -1,6 +1,6 @@
 # RFP 메뉴 페이지 구성 계획
 
-> **문서 버전**: v2.2
+> **문서 버전**: v2.4
 > **작성일**: 2026-02-10
 > **기반 문서**: RFP 화면구성.pdf
 > **목적**: RFP 관리 화면을 "프로젝트 기원의 관문(Origin Console)"으로 재설계하기 위한 전체 구현 계획
@@ -8,6 +8,8 @@
 >
 > - v2.0 → v2.1 — 상태 모델, Origin 정책, API 계약, 권한 매트릭스, 스프린트 계획, 테스트 시나리오 추가
 > - v2.1 → v2.2 — 상태↔UI 매핑 추가, Wizard/Empty State 흐름 정합성 수정, API 응답 스키마 보강, Origin 진입 시나리오별 분기 명확화
+> - v2.2 → v2.3 — E2E 통합 장애 진단 추가, Frontend-Backend API 응답/에러 처리 정책 확정, Profile 기반 인증 전략, UI 상태 머신(loading/null/error/auth) 도입, 통합 테스트 시나리오 추가
+> - v2.3 → v2.4 — 구현 상태 재평가(가치 사슬 관점), E2E 회복 실행 계획(Sprint A/B/C), 끊김 지점 3곳 진단, Definition of Done + 관측/검증 포인트 추가, Deep-link 최소 구현 전략
 
 ---
 
@@ -28,6 +30,12 @@
 13. [FilterSpec / Deep-link 규칙](#13-filterspec--deep-link-규칙)
 14. [스프린트별 구현 계획](#14-스프린트별-구현-계획)
 15. [테스트 시나리오](#15-테스트-시나리오)
+16. [Frontend-Backend 통합 정책](#16-frontend-backend-통합-정책)
+17. [인증/보안 개발 전략](#17-인증보안-개발-전략)
+18. [E2E 통합 장애 진단 및 해결](#18-e2e-통합-장애-진단-및-해결)
+19. [구현 상태 재평가 (가치 사슬 관점)](#19-구현-상태-재평가-가치-사슬-관점)
+20. [E2E 회복 실행 계획 (체감 E2E 25% → 60%+)](#20-e2e-회복-실행-계획-체감-e2e-25--60)
+21. [관측/검증 포인트 및 의사결정 요약](#21-관측검증-포인트-및-의사결정-요약)
 
 ---
 
@@ -1479,6 +1487,838 @@ AI 어시스턴트에서 다음 질의 시 자동으로 딥링크 생성:
 | E-02 | 파싱 중 서버 재시작 → 상태 복구 | PARSING 상태인 RFP를 FAILED로 전환 + 재시도 |
 | E-03 | 100페이지 PDF 업로드 (대용량) | 비동기 처리 + 진행률 표시 |
 | E-04 | Origin 변경 (EXTERNAL → MODERNIZATION) | 승인 플로우 + 기존 데이터 유지 + 정책 전환 |
+
+### 15.4 통합 테스트 시나리오 (필수, 8개)
+
+> Frontend-Backend E2E 연결이 정확히 동작하는지 검증하는 시나리오.
+> "mock fallback에 의존하지 않고 실제 DB 데이터로 동작"하는 것이 핵심.
+
+| # | 시나리오 | 기대 결과 | 검증 포인트 |
+|---|---------|---------|-----------|
+| I-01 | Backend 정상, JWT 없음 → Origin GET 호출 | UI에 "인증 필요" 화면 표시 (Empty State가 아님) | 401이 mock/null로 흡수되지 않음 |
+| I-02 | Backend 정상, JWT 유효 → Origin GET (미설정 프로젝트) | 404 → UI에 Origin 선택 Empty State 표시 | 404만 "데이터 없음"으로 해석 |
+| I-03 | Origin 선택 → POST → GET 재호출 | DB에 저장 + GET이 저장된 값 반환 + UI 전환 | `rfp.origin_policies` 1행 생성, UI가 OriginSummaryStrip으로 전환 |
+| I-04 | Origin 설정 후 새로고침 | Origin 유지 (DB에서 조회) | mock이 아닌 실제 DB 데이터로 렌더링 |
+| I-05 | RFP 업로드 → DB 저장 → 카드 목록 표시 | `project.rfps` 1행 생성 + 카드 렌더링 | title, status, origin_type 일치 |
+| I-06 | Backend 다운 → Frontend mock 모드 전환 | "서버 연결 불가" 알림 + mock 데이터로 동작 | 5xx/네트워크 에러만 mock 허용 |
+| I-07 | Dev 프로필에서 permitAll → RFP CRUD 전체 동작 | 인증 없이 Origin/RFP/Requirement API 정상 | `SPRING_PROFILES_ACTIVE=dev` |
+| I-08 | Prod 프로필에서 JWT 없이 RFP API 호출 | 401 반환 + UI "인증 필요" | permitAll 적용 안 됨 확인 |
+
+---
+
+## 16. Frontend-Backend 통합 정책
+
+> 이 섹션은 v2.2까지 암묵적이었던 "Frontend가 Backend 응답을 어떻게 해석하는가"를 **명시적 계약**으로 확정한다.
+> 이 계약이 없으면 401/404/5xx가 모두 동일한 결과(null/mock)로 합쳐져서 UI가 "데이터 없음"과 "접근 차단"을 구분할 수 없다.
+
+### 16.1 장애의 본질 (v2.2까지의 구조적 결함)
+
+> "데이터가 없음(null)"과 "접근이 막힘(401)"이 동일한 결과(null)로 합쳐져서,
+> UI가 데이터 없음으로 오판하고 Empty State를 정상 플로우로 확정해버린 상태
+
+**구체적 발생 경로:**
+
+```
+1. getProjectOrigin() 호출
+2. Backend 401 반환 (JWT 없음)
+3. fetchWithFallback catch → mock fallback { data: null } 반환
+4. UI: origin === null → Empty State (Origin 선택 화면)
+5. 사용자 Origin 클릭 → setProjectOrigin() POST
+6. Backend 401 반환 → mock fallback (성공처럼 보이는 데이터) 반환
+7. onSuccess → invalidateQueries → getProjectOrigin() 재호출
+8. 다시 2번으로 → 무한 반복
+```
+
+**근본 원인**: `fetchWithFallback`의 catch 블록이 **모든 에러를 동일하게 mock으로 흡수**하는 구조
+
+### 16.2 API 응답 해석 정책 (HTTP Status → Frontend 행동)
+
+> 이 테이블은 `fetchWithFallback` (또는 후속 `fetchResult`)의 **정책 명세**다.
+
+| HTTP Status | 의미 | Frontend 행동 | mock fallback 허용 |
+|:-----------:|------|--------------|:-----------------:|
+| **200** | 정상 응답 | `ApiResponse.data` 추출 후 반환 | N/A |
+| **201** | 생성 성공 | `ApiResponse.data` 추출 후 반환 | N/A |
+| **204** | 성공 (본문 없음) | `null` 반환 | N/A |
+| **400** | 요청 오류 | **throw** — UI에서 입력 검증 에러로 표시 | **금지** |
+| **401** | 인증 필요 | **throw `AUTH_REQUIRED`** — UI에서 로그인 유도 | **금지** |
+| **403** | 권한 없음 | **throw `FORBIDDEN`** — UI에서 권한 부족 안내 | **금지** |
+| **404** | 데이터 없음 | **mockData 반환** (정상적인 "없음") | **허용** (유일하게) |
+| **409** | 충돌 | **throw** — 이미 존재 등 충돌 안내 | **금지** |
+| **5xx** | 서버 오류 | 개발: mock fallback + 경고 배너 / 운영: **throw** | **개발만 허용** |
+| 네트워크 에러 | 연결 불가 | 개발: mock fallback + 경고 배너 / 운영: **throw** | **개발만 허용** |
+
+### 16.3 `fetchWithFallback` 수정 명세
+
+**현재 (v2.2 — 문제 있는 구조):**
+
+```typescript
+// 모든 에러를 catch에서 mock으로 흡수 → 401도 null로 변환
+if (!response.ok) {
+  throw new Error(`HTTP error! status: ${response.status}`);
+}
+// ... catch → return mockData (모든 에러에 대해)
+```
+
+**변경 (v2.3):**
+
+```typescript
+if (!response.ok) {
+  // 404: 정상적인 "데이터 없음" → mock/null 반환 허용
+  if (response.status === 404) return mockData;
+
+  // 401/403: 인증/권한 문제 → 절대 mock 반환 금지, throw
+  if (response.status === 401 || response.status === 403) {
+    throw new Error(`AUTH_REQUIRED:${response.status}`);
+  }
+
+  // 그 외 (400, 409, 5xx): throw
+  throw new Error(`HTTP_ERROR:${response.status}`);
+}
+```
+
+**catch 블록도 수정:**
+
+```typescript
+catch (error) {
+  // AUTH 에러는 절대 mock으로 흡수하지 않음 → rethrow
+  if (error instanceof Error && error.message.startsWith('AUTH_REQUIRED:')) {
+    throw error;
+  }
+
+  // 네트워크/타임아웃/서버 에러만 mock fallback 허용
+  console.warn(`[API] ${endpoint}: fallback to mock`, error);
+  return mockData;
+}
+```
+
+### 16.4 Double Unwrapping 제거
+
+> `fetchWithFallback` 내부(line 166-168)에서 이미 `ApiResponse.data`를 추출하므로,
+> 개별 API 메서드에서 다시 `.data`를 꺼내면 **이중 추출** → 타입 붕괴.
+
+**제거 대상 (3개 메서드):**
+
+| 메서드 | 현재 (이중 추출) | 변경 (단일 반환) |
+|--------|---------------|----------------|
+| `getProjectOrigin()` | `response.data` 재추출 | `return await this.fetchWithFallback(..., null)` |
+| `setProjectOrigin()` | `response.data` 재추출 | `return await this.fetchWithFallback(...)` |
+| `getOriginSummary()` | `response.data` 재추출 | `return await this.fetchWithFallback(...)` |
+
+### 16.5 UI 상태 머신 (Origin 화면 4-상태)
+
+> 현재 `if (!origin)` 하나로 Empty State를 결정하는 구조는 너무 강력하다.
+> origin이 없는 정상 케이스, 로딩 중, 에러, 인증 문제가 전부 "Empty"로 고정되기 때문이다.
+
+**최소 4-상태 분기:**
+
+```
+┌──────────┐     ┌────────────────┐     ┌───────────────────┐
+│ loading  │     │ origin === null│     │ origin exists     │
+│ (로딩중) │     │ (진짜 Empty)   │     │ (정상 플로우)     │
+└──────────┘     └────────────────┘     └───────────────────┘
+
+┌──────────────────────────────────┐
+│ error / authRequired             │
+│ (인증 필요 / 서버 오류)          │
+└──────────────────────────────────┘
+```
+
+**컴포넌트 렌더링 분기:**
+
+```typescript
+function RfpManagement() {
+  const { data: origin, isLoading, error } = useProjectOrigin(projectId);
+
+  // 1. 로딩
+  if (isLoading) return <RfpSkeleton />;
+
+  // 2. 인증/권한 에러 (401/403이 throw되어 error에 담긴 경우)
+  if (error?.message?.startsWith('AUTH_REQUIRED:'))
+    return <AuthRequiredPanel returnTo="/rfp" />;
+
+  // 3. 기타 에러 (서버 오류 등)
+  if (error) return <ErrorState message={error.message} onRetry={refetch} />;
+
+  // 4. 데이터 없음 (404 → null) — 진짜 Empty State
+  if (!origin) return <OriginSelectionScreen onOriginSelected={handleSet} />;
+
+  // 5. 정상 — RFP 관리 화면
+  return <RfpMainContent origin={origin} />;
+}
+```
+
+**핵심 원칙**: "Empty State는 origin이 **정상적으로** 존재하지 않을 때만 표시한다"
+
+---
+
+## 17. 인증/보안 개발 전략
+
+> 개발 편의와 운영 안전을 동시에 잡기 위한 Profile 기반 분기 전략.
+
+### 17.1 Spring Profile 기반 보안 분기
+
+**문제**: `@PreAuthorize("isAuthenticated()")`가 모든 RFP 엔드포인트에 걸려 있어서,
+JWT 없이는 개발/테스트가 불가능하다.
+단순히 `@PreAuthorize`를 제거하면 운영에서 보안 회귀가 확정된다.
+
+**해결**: Spring Profile로 Dev/Prod 보안 설정을 분리한다.
+
+```
+                ┌─────────────────┐
+                │ SecurityConfig  │
+                └────────┬────────┘
+                         │
+           ┌─────────────┼─────────────┐
+           │                           │
+  ┌────────▼─────────┐   ┌────────────▼───────────┐
+  │ @Profile("dev")  │   │ @Profile("!dev")       │
+  │ DevSecurity      │   │ ProdSecurity           │
+  │                  │   │                        │
+  │ RFP API:         │   │ RFP API:               │
+  │   permitAll      │   │   authenticated +      │
+  │                  │   │   @PreAuthorize 유지    │
+  └──────────────────┘   └────────────────────────┘
+```
+
+### 17.2 Dev 프로필 SecurityConfig
+
+```java
+@Profile("dev")
+@Configuration
+@EnableWebFluxSecurity
+public class ReactiveSecurityConfigDev {
+
+    @Bean
+    public SecurityWebFilterChain devSecurityFilterChain(ServerHttpSecurity http) {
+        return http
+            .cors(/* ... */)
+            .csrf(ServerHttpSecurity.CsrfSpec::disable)
+            .authorizeExchange(exchanges -> exchanges
+                // 개발 환경: RFP 관련 API는 인증 없이 허용
+                .pathMatchers("/api/v2/projects/*/origin/**").permitAll()
+                .pathMatchers("/api/v2/projects/*/rfps/**").permitAll()
+                .pathMatchers("/api/v2/projects/*/requirements/**").permitAll()
+                // 나머지는 기존과 동일
+                .pathMatchers("/api/auth/**", "/api/config", "/api/chat/**").permitAll()
+                .anyExchange().authenticated()
+            )
+            .build();
+    }
+}
+```
+
+### 17.3 Prod 프로필 SecurityConfig
+
+```java
+@Profile("!dev")
+@Configuration
+@EnableWebFluxSecurity
+@EnableReactiveMethodSecurity
+public class ReactiveSecurityConfig {
+    // 기존 v2.2 그대로 유지
+    // anyExchange().authenticated()
+    // + JwtWebFilter
+    // + @PreAuthorize on controllers
+}
+```
+
+### 17.4 Controller @AuthenticationPrincipal null-safe 처리
+
+> Dev 프로필에서는 JWT가 없으므로 `@AuthenticationPrincipal UserDetails user`가 **null**이 된다.
+> Controller/Service 모두에서 NPE가 발생하지 않아야 한다.
+
+**정책:**
+
+| 환경 | `user` 값 | `createdBy`/`updatedBy` 저장값 |
+|------|----------|-------------------------------|
+| Dev (JWT 없음) | `null` | `"dev-user"` |
+| Prod (JWT 유효) | `UserDetails` | `user.getUsername()` |
+
+**Service 레이어에서 표준화:**
+
+```java
+// 모든 Service 메서드에서 actor 파라미터 처리
+public Mono<OriginPolicyDto> setOrigin(String projectId, SetOriginRequest req, String actor) {
+    String safeActor = (actor != null && !actor.isBlank()) ? actor : "dev-user";
+    // ... safeActor를 createdBy/updatedBy에 사용
+}
+```
+
+**Controller에서 null-safe 전달:**
+
+```java
+@PostMapping
+public Mono<ResponseEntity<ApiResponse<OriginPolicyDto>>> setOrigin(
+        @PathVariable String projectId,
+        @Valid @RequestBody SetOriginRequest request,
+        @AuthenticationPrincipal @Nullable UserDetails user) {
+    String actor = (user != null) ? user.getUsername() : null;
+    return originService.setOrigin(projectId, request, actor)
+            .map(dto -> ResponseEntity.status(HttpStatus.CREATED)
+                    .body(ApiResponse.success("Origin set", dto)));
+}
+```
+
+### 17.5 "dev-user" 데이터 오염 경계
+
+> Dev 환경에서 생성된 데이터가 운영으로 흘러가지 않도록 경계를 명확히 한다.
+
+| 항목 | 정책 |
+|------|------|
+| `createdBy = "dev-user"` 허용 범위 | 로컬 개발 DB, 테스트 환경만 |
+| 운영 배포 전 검증 | `SELECT COUNT(*) FROM rfp.origin_policies WHERE created_by = 'dev-user'` → 0이어야 함 |
+| 시드 데이터 | `dev-user`는 시드 데이터 전용으로만 사용, 운영 시드에는 실제 사용자 ID 사용 |
+
+### 17.6 Docker Compose 프로필 설정
+
+```yaml
+backend:
+  environment:
+    SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}   # 기본: dev
+    # 운영 배포 시: SPRING_PROFILES_ACTIVE=prod
+```
+
+---
+
+## 18. E2E 통합 장애 진단 및 해결
+
+> 이 섹션은 v2.2 기준 구현 상태를 진단하고, Backend E2E 연결을 위한 구체적 해결 절차를 기술한다.
+
+### 18.1 현재 구현 상태 요약
+
+| 영역 | 구현률 | 상태 |
+|------|:------:|------|
+| Frontend UI 컴포넌트 (14개) | ~85% | 전체 존재, mock fallback으로 동작 |
+| Backend API 레이어 (5 Controller + 7 Service) | ~75% | 전체 구현, 인증 벽으로 접근 불가 |
+| DB 스키마 (rfp.* + project.rfps) | ~80% | 마이그레이션 존재, 적용 여부 확인 필요 |
+| AI 추출 파이프라인 (LLM Service) | ~10% | `/api/rfp/extract` 엔드포인트 미구현 |
+| Neo4j Lineage 연동 | ~5% | 필드만 존재, 실제 그래프 연동 없음 |
+| **E2E 통합 (실제 동작)** | **~0%** | 401 → mock → null 순환으로 전체 차단 |
+
+### 18.2 해결 실행 순서 (승리 루트)
+
+> 시간을 최소화하면서 가장 빠르게 E2E 동작을 확인하는 순서.
+
+```
+Step 1. Frontend fetchWithFallback 401/403 rethrow + 404 null 처리
+        → "왜 Empty인지" 화면에서 구분 시작 (디버깅 속도 급상승)
+
+Step 2. Backend Dev Profile permitAll 적용
+        → 실제 DB로 origin 저장/조회 E2E 즉시 가능
+
+Step 3. Double unwrap 제거 (api.ts 3개 메서드)
+        → 데이터 구조 안정화, 이후 모든 RFP API도 동일 패턴
+
+Step 4. UI 4-상태 분기 (loading/auth/error/null)
+        → Empty State 무한 루프 구조적 차단
+
+Step 5. DB 마이그레이션/스키마 검증
+        → 로컬 환경 편차 제거
+```
+
+### 18.3 DB 스키마 검증 체크리스트
+
+**실행 명령:**
+
+```bash
+# 1. rfp 스키마 존재 확인
+docker exec pms-postgres psql -U pms_user -d pms_db -c "\dn rfp"
+
+# 2. 핵심 테이블 존재 확인
+docker exec pms-postgres psql -U pms_user -d pms_db -c "\dt rfp.*"
+docker exec pms-postgres psql -U pms_user -d pms_db -c "\dt project.rfps"
+
+# 3. origin_policies UNIQUE 제약 확인 (프로젝트당 1개 정책)
+docker exec pms-postgres psql -U pms_user -d pms_db -c "\d rfp.origin_policies"
+
+# 4. project.rfps에 v2.3 확장 컬럼 존재 확인
+docker exec pms-postgres psql -U pms_user -d pms_db \
+  -c "SELECT column_name FROM information_schema.columns
+      WHERE table_schema='project' AND table_name='rfps'
+      ORDER BY ordinal_position;"
+
+# 5. Flyway 마이그레이션 이력 확인 (사용 시)
+docker exec pms-postgres psql -U pms_user -d pms_db \
+  -c "SELECT version, description, success
+      FROM flyway_schema_history ORDER BY installed_rank DESC LIMIT 20;"
+```
+
+**필수 확인 항목:**
+
+| 항목 | 기대값 | 실패 시 조치 |
+|------|--------|------------|
+| `rfp` 스키마 존재 | EXISTS | `CREATE SCHEMA IF NOT EXISTS rfp;` |
+| `rfp.origin_policies` 테이블 | EXISTS | V20260236_05 마이그레이션 수동 실행 |
+| `origin_policies.project_id` UNIQUE 제약 | UNIQUE | `ALTER TABLE rfp.origin_policies ADD CONSTRAINT ... UNIQUE(project_id);` |
+| `project.rfps.origin_type` 컬럼 | EXISTS | V20260236_05 마이그레이션의 ALTER TABLE 부분 실행 |
+| `project.rfps.previous_status` 컬럼 | EXISTS | 동상 |
+| `project.rfps.failure_reason` 컬럼 | EXISTS | 동상 |
+
+### 18.4 Backend API 검증 순서
+
+```bash
+# 0. Backend 상태 확인
+curl -s http://localhost:8083/api/config | jq .
+# 기대: {"useMockData": false}
+
+# 1. Origin 미설정 상태 확인 (Dev 프로필 적용 후)
+curl -s http://localhost:8083/api/v2/projects/{projectId}/origin
+# 기대: 404 (origin 미설정)
+
+# 2. Origin 설정
+curl -s -X POST http://localhost:8083/api/v2/projects/{projectId}/origin \
+  -H "Content-Type: application/json" \
+  -d '{"originType":"EXTERNAL_RFP"}'
+# 기대: 201 + OriginPolicyDto
+
+# 3. Origin 재조회
+curl -s http://localhost:8083/api/v2/projects/{projectId}/origin
+# 기대: 200 + OriginPolicyDto (2번과 동일 데이터)
+
+# 4. Origin Summary
+curl -s http://localhost:8083/api/v2/projects/{projectId}/origin/summary
+# 기대: 200 + OriginSummaryDto (KPI 포함)
+
+# 5. RFP 생성
+curl -s -X POST http://localhost:8083/api/v2/projects/{projectId}/rfps \
+  -H "Content-Type: application/json" \
+  -d '{"title":"테스트 RFP","content":"테스트 내용","status":"UPLOADED"}'
+# 기대: 201 + RfpDetailDto
+
+# 6. RFP 목록 조회
+curl -s http://localhost:8083/api/v2/projects/{projectId}/rfps
+# 기대: 200 + [RfpDetailDto] (5번에서 생성한 RFP 포함)
+```
+
+### 18.5 수정 대상 파일 목록
+
+| 파일 | 수정 내용 | 영향 범위 |
+|------|---------|---------|
+| `ReactiveSecurityConfig.java` | Dev/Prod Profile 분기 | 전체 인증 |
+| `ReactiveOriginController.java` | `@AuthenticationPrincipal @Nullable` | Origin API |
+| `ReactiveRfpController.java` | 동일 | RFP CRUD API |
+| `ReactiveRfpExtractionController.java` | 동일 | 추출/리뷰 API |
+| `ReactiveRequirementController.java` | 동일 | 요구사항 API |
+| `ReactiveOriginService.java` | actor null-safe 처리 | Origin 비즈니스 로직 |
+| `api.ts` (Frontend) | 401/403 rethrow + 404 처리 + double unwrap 제거 | 전체 API 호출 |
+| `RfpManagement.tsx` (Frontend) | 4-상태 분기 (loading/auth/error/null) | RFP 메인 화면 |
+
+### 18.6 성공 기준
+
+**Phase 1 성공 (Origin 선택 E2E):**
+
+- [ ] RFP 관리 진입 → Origin 선택 화면 표시 (mock이 아닌 실제 404 기반)
+- [ ] "외부 고객 RFP 기반" 클릭 → DB 저장 (`rfp.origin_policies` 1행)
+- [ ] 화면 전환: OriginSummaryStrip + "RFP 업로드/등록" 버튼 표시
+- [ ] 새로고침 → Origin 유지 (DB 조회 기반)
+
+**Phase 2 성공 (RFP CRUD E2E):**
+
+- [ ] "RFP 업로드/등록" → Wizard → 등록 → DB 저장 (`project.rfps` 1행)
+- [ ] 카드 목록에 새 RFP 표시
+- [ ] 카드 클릭 → Right Panel 상세 표시
+
+**Phase 3 성공 (인증 복구 안전):**
+
+- [ ] Dev Profile → Prod Profile 전환 시, JWT 없는 요청에 401 반환
+- [ ] Frontend: 401 → "인증 필요" 화면 (Empty State가 아님)
+- [ ] 404 → 여전히 Origin 선택 Empty State (회귀 없음)
+
+---
+
+## 19. 구현 상태 재평가 (가치 사슬 관점)
+
+> 이 섹션은 v2.3까지의 "기능별 구현률" 평가를 넘어서, **가치 사슬(Value Chain) 관점**에서 "어디서 끊겼는지"를 분석하고 우선순위를 재정의한다.
+> "UI가 있다 ≠ 제품이 작동한다"는 착시를 숫자와 구조로 분해한다.
+
+### 19.1 구현의 3개 층위
+
+현재 RFP 모듈은 사실상 **3개의 서로 다른 제품**을 동시에 구축하고 있다:
+
+| 층위 | 정의 | 구현률 | 체감 기여도 |
+|------|------|:------:|:-----------:|
+| **UI 제품** (보여지는 것) | 화면, 컴포넌트, 위저드, RightPanel, 필터, 배지, 프리셋 분기 | ~85% | 높음 (시각적) |
+| **CRUD 제품** (저장/조회되는 것) | Origin/RFP/Requirement/Candidate/ExtractionRun 등 DB-backed API | ~75% | 중간 (데이터) |
+| **증거 기반 Source-of-Truth 제품** (핵심 가치) | AI 파이프라인 + Lineage + Impact + Audit Evidence | ~10% | **핵심 (가치)** |
+
+**결론**: 1)과 2)는 상당히 진척됐고, 3)이 비어 있어서 **"겉보기 60% / 체감 25%"**가 나오는 구조다.
+
+### 19.2 "RFP = Source of Truth"가 되려면 필요한 4축
+
+설계 문서의 핵심 메시지가 "RFP = 모든 요구사항의 원천(Source of Truth)"이라면, CRUD만으로는 부족하다.
+Source of Truth가 되려면 최소한 다음 4가지가 반드시 있어야 한다:
+
+| 축 | 정의 | 현재 상태 |
+|----|------|----------|
+| **Provenance (출처)** | 어떤 문서의 어느 부분에서 이 요구사항이 나왔는가 | chunk/evidence 구조 존재, 실제 생성 파이프라인 미연결 |
+| **Traceability (추적)** | 요구사항이 Epic/WBS/Test로 어떻게 이어졌는가 | Neo4j 스키마만 존재, 실제 그래프 연동 없음 |
+| **Impact (영향)** | 문서/요구사항 변경이 무엇을 흔드는가 | impact traversal 미구현 |
+| **Auditability (감사)** | 누가 언제 무엇을 확정/변경했는가 + 출력물 | audit export 미구현 |
+
+이 4축이 Section 14 Sprint 2~4의 "완전히 빠진 핵심 기능"에 해당하며, 여기서 끊겨 있어 E2E 체감이 낮다.
+
+### 19.3 가치 사슬 끊김 지점 3곳
+
+```
+RFP Origin ✅
+  ↓
+RFP Upload (PDF) ✅
+  ↓
+┌─── 끊김 A ──────────────────────────────────────────────┐
+│ Parsing → Chunk 생성                                      │
+│ UI 업로드 위저드 ✅ / Extraction controller ✅             │
+│ chunk 테이블/엔티티 ✅ / 파서 워커 트리거 ❌               │
+│ → "파일 업로드는 되는데 다음 단계로 아무 일도 안 일어남"   │
+└─────────────────────────────────────────────────────────┘
+  ↓
+┌─── 끊김 B ──────────────────────────────────────────────┐
+│ LLM Extraction → Candidate 생성                          │
+│ extraction_run/candidate 저장 구조 ✅ / Review UI ✅      │
+│ confirm/reject/update ✅ / LLM 추출 엔드포인트 ❌         │
+│ → "리뷰 테이블은 있는데 들어올 데이터가 없음"             │
+└─────────────────────────────────────────────────────────┘
+  ↓
+┌─── 끊김 C ──────────────────────────────────────────────┐
+│ Requirement → Evidence + Lineage                         │
+│ requirement 승격 로직 ✅ / Evidence View UI ✅            │
+│ diff/impact/audit 일부 UI ✅ / Neo4j 연동 ❌             │
+│ → "원천 문서 기반 전체 프로젝트 흐름 연결" 미실현         │
+└─────────────────────────────────────────────────────────┘
+  ↓
+Impact / Audit ❌
+```
+
+### 19.4 AI 파이프라인은 '부가 기능'이 아니라 '엔진'이다
+
+> **RFP 모듈에서 AI 파이프라인은 데이터가 흐르기 시작하게 만드는 '동력(엔진)'이다.
+> 엔진이 없으면 나머지는 전시용 UI가 된다.**
+
+현재 구조는 리뷰/확정/배지/전이/증빙이 모두 **"AI가 만든 후보가 존재한다"를 전제**로 설계돼 있다.
+따라서 AI 파이프라인이 없으면 Sprint 3~4의 상당 부분이 의미를 잃거나 데모에서 빈 화면으로 남는다.
+
+| 의존 관계 | AI 파이프라인 없을 때 |
+|-----------|---------------------|
+| ExtractionReviewTable | 빈 테이블 |
+| Candidate confirm/reject | 동작할 대상 없음 |
+| Requirement 승격 | 승격할 후보 없음 |
+| Evidence View | 증거 없음 |
+| Impact Analysis | 분석 대상 없음 |
+| NEEDS_REANALYSIS 전이 | 재분석할 기존 분석 없음 |
+
+### 19.5 "10% 미구현" 주장에 대한 올바른 프레임
+
+| 관점 | 평가 |
+|------|------|
+| UI/스캐폴딩 기준 | 이미 **60% 이상** |
+| 작동하는 E2E 기준 | **25~30%** 수준 |
+| "10%"의 출처 | E2E의 '핵심 가치 축(추출/라인리지/임팩트)'만 보고 전체를 평가한 오류 |
+
+**올바른 표현:**
+
+- "기반 구축은 상당히 완료 (Sprint 1 완료, Sprint 2~3도 다수 완료)"
+- "다만 엔진(추출)과 연결(라인리지/임팩트)이 빠져 체감 가치가 낮다"
+
+이 프레임은 상대의 문제의식(E2E가 안 돌아감)을 인정하면서도, 팀의 성과(UI/백엔드 레이어가 이미 존재)를 정당하게 평가한다.
+
+---
+
+## 20. E2E 회복 실행 계획 (체감 E2E 25% → 60%+)
+
+> **목표**: "RFP = 모든 요구사항의 Source of Truth"라는 설계 메시지를 사용자가 **실제로 체감**할 수 있는 E2E 흐름으로 복구
+>
+> **비목표**: UI 추가 구현 ❌ / 상태 모델 재설계 ❌ / 대규모 리팩토링 ❌
+>
+> 이미 있는 **UI/상태/스키마를 '살리는 연결'**에 집중한다.
+
+### 20.1 Sprint 재구성 원칙
+
+기존 Sprint 번호(Section 14)는 유지하되, **"체감 E2E 회복률" 기준**으로 실행 우선순위를 재배치한다.
+
+| 원칙 | 설명 |
+|------|------|
+| 엔진 우선 | AI 파이프라인은 부가 기능이 아니라 핵심 동력 — 가장 먼저 연결 |
+| 최소 연결 | 완전 구현보다 "한 줄이라도 흐르게" — MVP 연결 우선 |
+| 증명 가능 | 모든 단계는 로그/상태/ID로 증명 가능해야 함 — 구두 확인 금지 |
+
+### 20.2 Sprint A (최우선) — Upload → Chunk 자동 연결
+
+> **끊김 A 해소**: 업로드 후 아무 일도 안 일어나는 상태 제거
+> 사용자가 "문서를 넣으면 시스템이 움직인다"를 체감하게 만들기
+
+#### A-1. Parsing Worker Trigger 연결
+
+| 항목 | 내용 |
+|------|------|
+| 트리거 시점 | 파일 업로드 완료 시 파싱 워커 자동 트리거 |
+| 초기 방식 | 동기 호출 OK (후속: 비동기 큐로 전환 가능) |
+| 상태 전이 | `UPLOADED → PARSING (worker 시작) → PARSED (chunk 생성 완료)` |
+| 실패 시 | `→ FAILED (예외 발생 시)` + `failure_reason` 저장 |
+
+#### A-2. `rfp_document_chunk` 실제 생성
+
+| 컬럼 (기존 스키마) | 역할 |
+|---------------------|------|
+| `chunk_id` | PK |
+| `rfp_id` | FK → `project.rfps` |
+| `page_no` | 원문 페이지 번호 |
+| `content` | 청크 텍스트 |
+| `checksum` | 무결성 해시 |
+| `created_at` | 생성 시각 |
+
+**최소 로직**: PDF → page 단위 or N-token 단위 split → chunk 개수 ≥ 1이면 성공
+
+#### A-3. 실패/재시도 실동작 연결
+
+| API | 동작 |
+|-----|------|
+| `POST /rfps/{id}/fail` | 상태 → FAILED, `failure_reason` 저장 |
+| `POST /rfps/{id}/resume` | 이전 chunk 삭제 or 버전 분리 명확화 + 재파싱 |
+
+**재시도 조건**: resume 시 이전 chunk 정리 + 상태 로그 남김 (runId 추적 가능)
+
+#### Sprint A Definition of Done (강력)
+
+- [ ] PDF 1건 업로드
+- [ ] 1분 이내 `rfp_document_chunk` ≥ 1건 생성
+- [ ] 상태: `UPLOADED → PARSING → PARSED` 자동 전이
+- [ ] 실패 시 `FAILED` 전이 + resume로 재시도 가능
+- [ ] 로그로 `runId` / `chunkCount` 확인 가능
+- [ ] RightPanel/Evidence에서 "문서 조각이 보이는 상태"
+
+> **이 Sprint 하나만 끝나도 체감 E2E는 40% 이상 상승**
+
+### 20.3 Sprint B — Chunk → Candidate 생성 (LLM Extraction 최소 연결)
+
+> **끊김 B 해소**: ExtractionReviewTable에 실제 데이터가 나타나게 만들기
+> Sprint 3 UI/Service 구현물을 "살리는" 스프린트
+
+#### B-1. LLM Extraction 최소 엔드포인트 구현
+
+**LLM 서비스 (`/api/rfp/extract`)**
+
+입력:
+```json
+{
+  "rfpId": "...",
+  "chunks": [
+    { "chunkId": "...", "content": "..." }
+  ]
+}
+```
+
+출력 (최소):
+```json
+{
+  "candidates": [
+    {
+      "text": "요구사항 문장",
+      "confidence": 0.72,
+      "sourceChunkId": "..."
+    }
+  ]
+}
+```
+
+> 품질 중요도: **낮음** — 이 단계에서는 "동작 + 데이터 생성"이 목적
+
+#### B-2. Backend Extraction Worker 연결
+
+**처리 흐름:**
+
+```text
+PARSED
+ → extraction_run 생성 (runId, modelVersion, startedAt)
+ → LLM 호출 (chunks → candidates)
+ → candidate N건 저장 (rfp_requirement_candidates)
+ → 상태: PARSED → EXTRACTING → EXTRACTED
+```
+
+**저장 테이블:**
+
+- `rfp_extraction_runs` — run 메타데이터
+- `rfp_requirement_candidates` — AI가 추출한 후보 목록
+
+#### B-3. Wizard Step 3/4 실제 데이터 연결
+
+| UI 요소 | 연결 대상 |
+|---------|---------|
+| AI 미리보기 (Wizard Step 3) | `POST /api/rfp/extract` 결과 preview |
+| ExtractionReviewTable | `GET /extraction-runs/latest` → candidate 목록 |
+| bulk confirm/reject/edit | `POST /candidates/confirm`, `POST /candidates/reject` |
+
+#### Sprint B Definition of Done (강력)
+
+- [ ] 업로드한 문서 → candidate ≥ 10개 자동 생성
+- [ ] ExtractionReviewTable에 candidate 표시
+- [ ] confirm 시 `requirement` 생성 (DB에 1행 추가)
+- [ ] requirement 리스트에 즉시 반영
+- [ ] `extraction_run`에 runId, modelVersion, candidateCount 기록
+
+> **이 시점에서 "RFP는 그냥 문서가 아니다"가 체감됨**
+
+### 20.4 Sprint C — Requirement → Evidence + 최소 Lineage
+
+> **끊김 C 부분 해소**: "이 요구사항은 어디서 왔는가?"에 즉시 답할 수 있게 만들기
+> Source of Truth의 **최소 증명 완성**
+
+#### C-1. Requirement ↔ Chunk Evidence 연결 확정
+
+**데이터 계약:**
+
+- requirement에 `sourceChunkIds[]` + `extractionRunId` 필드 필수
+- confirm 시 자동 채움 (candidate의 sourceChunkId 상속)
+
+**UI 동작:**
+
+```text
+Requirement 클릭
+  → Evidence View 열림
+  → chunk 원문 표시
+  → page 번호 표시
+  → 원문 내 위치 하이라이트
+```
+
+#### C-2. Neo4j 최소 그래프 연결 (MVP)
+
+**최소 그래프 (기원 증명용):**
+```cypher
+(RFP)-[:DERIVES]->(Requirement)
+```
+
+> Epic/WBS/Test까지는 후순위 — "기원 증명"만으로도 충분한 가치
+
+**연결 시점:**
+- candidate confirm → requirement 생성과 동시에 Neo4j 노드/관계 생성
+- Section 10.6의 `(RFP)-[:DERIVES]->(REQ)` 패턴 그대로 적용
+
+#### C-3. Diff / NEEDS_REANALYSIS 실제 트리거
+
+| 이벤트 | 동작 |
+|--------|------|
+| 새 버전 업로드 (chunk 변경) | 관련 requirement → `NEEDS_REANALYSIS` 자동 전이 |
+| UI 배지 | NEEDS_REANALYSIS 배지 즉시 반영 |
+| Diff API | `GET /diff` 두 버전 간 변경사항 반환 |
+
+#### Sprint C Definition of Done (강력)
+
+- [ ] requirement 1건 클릭 → 출처 chunk 즉시 확인
+- [ ] Neo4j에서 `(RFP)-[:DERIVES]->(Requirement)` 그래프 조회 가능
+- [ ] 변경 시 `NEEDS_REANALYSIS` 자동 전이 + UI 배지
+- [ ] Lineage 화면에서 최소 그래프 탐색 가능 (초기 버전)
+
+> **이 시점에서 설계 문서의 핵심 메시지 "RFP = Source of Truth"가 현실화**
+
+### 20.5 Sprint 우선순위 vs 기존 Sprint 14 매핑
+
+| 회복 Sprint | 기존 Sprint 14 매핑 | 체감 E2E 상승 예상 |
+|:-----------:|:-------------------:|:------------------:|
+| **A** | Sprint 2 (2.3~2.6) | 25% → **40%** |
+| **B** | Sprint 3 (3.2~3.5) | 40% → **55%** |
+| **C** | Sprint 4 (4.2~4.4, 4.6) 일부 | 55% → **65%+** |
+
+> 3개 Sprint = **약 6주**면 체감 E2E를 2배 이상 올릴 수 있다.
+
+### 20.6 Deep-link 최소 구현 (후순위이나 빠른 이득)
+
+> 완전한 Deep-link + AI 어시스턴트 연동은 Sprint 4.8 범위이다.
+> 그러나 **최소 URL 파라미터 복원**은 중간에 넣는 것이 QA/디버깅/데모 효율을 급상승시킨다.
+
+**최소 Deep-link 예시:**
+```
+/rfp?projectId=...&rfpId=...&tab=requirements
+/rfp?projectId=...&origin=EXTERNAL_RFP
+/rfp?projectId=...&rfpId=...&panel=evidence
+```
+
+**가치:**
+- QA가 시나리오 재현을 즉시 수행
+- 버그 리포트에 URL 첨부 → 재현 비용 제로
+- AI 어시스턴트 연동의 사전 인프라
+
+**구현 시점:** Sprint B 완료 후 ~ Sprint C 시작 전 (1~2일 작업량)
+
+---
+
+## 21. 관측/검증 포인트 및 의사결정 요약
+
+> 각 Sprint마다 "됐다/안됐다"를 **논쟁하지 않기 위한 증거**를 남긴다.
+
+### 21.1 필수 로그/메트릭
+
+모든 파이프라인 단계에서 다음이 기록되어야 한다:
+
+| 메트릭 | 기록 위치 | 용도 |
+|--------|---------|------|
+| `runId` | extraction_run | 실행 추적 (어떤 분석 세션인가) |
+| 상태 전이 타임라인 | rfps.status + `updated_at` | 각 전이가 언제 발생했는가 |
+| `chunkCount` | extraction_run 또는 로그 | 파싱 결과 양 (0이면 실패) |
+| `candidateCount` | extraction_run | 추출 결과 양 |
+| `confirmCount` | extraction_run 또는 집계 | 확정된 요구사항 수 |
+| `failed/retry` 횟수 | 로그 + rfps.failure_reason | 장애 패턴 분석 |
+| `asOf` (타임스탬프) | 각 저장 시점 | 감사 시 시간 증명 |
+| `modelVersion` | extraction_run | AI 재현성 (어떤 모델로 추출했는가) |
+| `promptVersion` | extraction_run | AI 재현성 (어떤 프롬프트로 추출했는가) |
+| `warnings[]` | extraction_run | 품질 이슈 사전 기록 |
+
+### 21.2 Sprint별 QA 시나리오 (공통 패턴)
+
+모든 Sprint의 QA는 다음 5단계를 공통으로 포함한다:
+
+| Step | 검증 내용 | 실패 시 조치 |
+|------|---------|------------|
+| 1 | 입력 동작 (업로드/트리거/확정) | 에러 메시지 확인 → 로그 추적 |
+| 2 | 상태 변화 확인 (DB 직접 조회) | `SELECT status FROM project.rfps WHERE id = ?` |
+| 3 | 데이터 생성 확인 (chunk/candidate/requirement) | `SELECT count(*) FROM rfp.* WHERE rfp_id = ?` |
+| 4 | UI 반영 확인 (화면에 보이는가) | 브라우저 DevTools → Network tab 확인 |
+| 5 | 새로고침 후 상태 유지 확인 | F5 → 동일 화면 유지 (mock fallback이 아님) |
+
+### 21.3 "파싱/추출 워커가 실제로 돌았는가"의 증명 계약
+
+파이프라인의 각 단계가 "돌았음"을 증명하기 위한 최소 계약:
+
+```json
+{
+  "runId": "uuid",
+  "rfpId": "uuid",
+  "status": "COMPLETED | FAILED",
+  "startedAt": "ISO-8601",
+  "completedAt": "ISO-8601",
+  "asOf": "ISO-8601",
+  "metrics": {
+    "chunkCount": 42,
+    "candidateCount": 18,
+    "confirmCount": 0,
+    "failedRetryCount": 0
+  },
+  "model": {
+    "modelVersion": "gemma-3-12b-Q5_K_M",
+    "promptVersion": "rfp-extract-v1.0"
+  },
+  "warnings": [
+    "chunk #7: 텍스트 추출률 낮음 (이미지 페이지 추정)"
+  ],
+  "statusTimeline": [
+    { "status": "PARSING", "at": "..." },
+    { "status": "PARSED", "at": "..." },
+    { "status": "EXTRACTING", "at": "..." },
+    { "status": "EXTRACTED", "at": "..." }
+  ]
+}
+```
+
+> 이 계약을 `extraction_run` 테이블에 저장하면, 이후 "이 분석은 언제 어떤 모델로 돌렸고, 결과가 뭐였는가"를 논쟁 없이 증명 가능
+
+### 21.4 의사결정용 한 페이지 요약
+
+| 항목 | 내용 |
+|------|------|
+| **현 상태** | UI/상태/CRUD: **55~60%** 완료 / 체감 E2E: **25~30%** |
+| **문제 본질** | AI 파이프라인 + Lineage 미연결 — 설계는 살아 있으나 엔진이 멈춤 |
+| **해결 전략** | Sprint A: Upload→Chunk / Sprint B: Chunk→Candidate / Sprint C: Requirement→Evidence+최소Lineage |
+| **기대 효과** | 2~3 Sprint(약 6주) 내 체감 E2E **60% 이상** |
+| **핵심 메시지** | "RFP = Source of Truth"를 **실제로 증명 가능**하게 만드는 최소 연결 |
+| **10% 논쟁 결론** | "10%"는 핵심 엔진만 보고 전체를 평가한 **과소평가** — 정확한 평가는 "기반 구축은 상당히 완료, 핵심 가치 엔진이 미연결" |
 
 ---
 

@@ -3,6 +3,8 @@ import {
   FileText,
   Upload,
   Loader2,
+  Shield,
+  AlertTriangle,
 } from 'lucide-react';
 import { useProject } from '../../contexts/ProjectContext';
 import type { RfpPanelMode, RfpStatus, OriginType } from '../../types/rfp';
@@ -81,7 +83,7 @@ export default function RfpManagement({ userRole }: RfpManagementProps) {
   const { currentPreset, switchPreset } = usePreset(userRole);
 
   // Origin
-  const { data: origin, isLoading: originLoading } = useProjectOrigin(projectId);
+  const { data: origin, isLoading: originLoading, error: originError } = useProjectOrigin(projectId);
   const setOriginMutation = useSetProjectOrigin();
 
   // RFP list
@@ -216,7 +218,29 @@ export default function RfpManagement({ userRole }: RfpManagementProps) {
     );
   }
 
-  // Empty state: no origin defined
+  // 인증 오류 상태 (401/403이 fetchWithFallback에서 throw → React Query error에 담김)
+  if (originError && originError.message?.includes('AUTH_ERROR')) {
+    return (
+      <div className="p-6 text-center">
+        <Shield className="h-12 w-12 mx-auto mb-4 text-amber-400" />
+        <h2 className="text-lg font-semibold text-gray-800">인증이 필요합니다</h2>
+        <p className="text-gray-500 mt-2">RFP 관리에 접근하려면 로그인해주세요.</p>
+      </div>
+    );
+  }
+
+  // 일반 오류 상태 (서버 다운, 네트워크 오류 등)
+  if (originError) {
+    return (
+      <div className="p-6 text-center">
+        <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-red-400" />
+        <h2 className="text-lg font-semibold text-gray-800">데이터를 불러올 수 없습니다</h2>
+        <p className="text-gray-500 mt-2">{originError.message}</p>
+      </div>
+    );
+  }
+
+  // Empty state: no origin defined (404 → null, 정상적인 "Origin 미설정")
   if (!origin) {
     return (
       <OriginSelectionScreen
