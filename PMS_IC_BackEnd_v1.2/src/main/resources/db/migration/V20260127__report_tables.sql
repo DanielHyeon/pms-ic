@@ -51,6 +51,7 @@ CREATE TABLE report.reports (
     -- Audit
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_by VARCHAR(50),
     published_at TIMESTAMP,
 
     CONSTRAINT fk_report_project FOREIGN KEY (project_id)

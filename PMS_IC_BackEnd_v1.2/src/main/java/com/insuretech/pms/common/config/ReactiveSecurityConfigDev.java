@@ -68,11 +68,8 @@ public class ReactiveSecurityConfigDev {
                                 "/swagger-ui.html",
                                 "/webjars/**"
                         ).permitAll()
-                        // 개발 환경: RFP 관련 API 인증 없이 허용
-                        .pathMatchers("/api/v2/projects/*/origin/**").permitAll()
-                        .pathMatchers("/api/v2/projects/*/rfps/**").permitAll()
-                        .pathMatchers("/api/v2/projects/*/requirements/**").permitAll()
-                        .pathMatchers("/api/v2/projects/*/lineage/**").permitAll()
+                        // 개발 환경: 프로젝트 관련 API 인증 없이 허용
+                        .pathMatchers("/api/v2/projects/**").permitAll()
                         .pathMatchers("/api/v2/lineage/**").permitAll()
                         // 나머지는 인증 필요
                         .anyExchange().authenticated()
