@@ -53,10 +53,13 @@ public class ReactiveExtractionService {
 
         return runRepository.deactivateAllByRfpId(rfpId)
                 .then(Mono.defer(() -> {
+                    // model_name은 DB NOT NULL — 요청에서 지정하지 않으면 기본값 사용
+                    String modelName = (request != null && request.getModelName() != null)
+                            ? request.getModelName() : "auto";
                     R2dbcExtractionRun run = R2dbcExtractionRun.builder()
                             .id(runId)
                             .rfpId(rfpId)
-                            .modelName(request != null ? request.getModelName() : null)
+                            .modelName(modelName)
                             .promptVersion(request != null ? request.getPromptVersion() : null)
                             .generationParams(generationParamsJson)
                             .status("RUNNING")

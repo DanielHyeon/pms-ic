@@ -102,6 +102,26 @@ export interface ImportResult {
   errors: ImportError[];
 }
 
+/**
+ * 백엔드 flat RFP 응답 → 프론트 RfpDetail 형태로 정규화.
+ * kpi가 이미 있으면 그대로 사용, 없으면 flat 필드에서 생성.
+ */
+function normalizeRfpResponse(raw: any): any {
+  if (!raw || typeof raw !== 'object') return raw;
+  // kpi가 이미 nested로 존재하면 변환 불필요
+  if (raw.kpi) return raw;
+  // flat requirementCount → nested kpi 변환
+  return {
+    ...raw,
+    kpi: {
+      derivedRequirements: raw.requirementCount ?? 0,
+      confirmedRequirements: 0,
+      epicLinkRate: 0,
+      changeImpact: { level: 'NONE', impactedEpics: 0, impactedTasks: 0 },
+    },
+  };
+}
+
 export class ApiService {
   private token: string | null = null;
   private useMockData = false;
@@ -1688,35 +1708,29 @@ export class ApiService {
     formData.append('file', file);
     if (title) formData.append('title', title);
 
-    try {
-      const headers: HeadersInit = {};
-      if (this.token) headers.Authorization = `Bearer ${this.token}`;
+    const headers: HeadersInit = {};
+    if (this.token) headers.Authorization = `Bearer ${this.token}`;
 
-      // Use 5 minute timeout for file uploads (large files may take time)
-      const response = await fetch(`${API_BASE_URL}/projects/${projectId}/rfps/upload`, {
-        method: 'POST',
-        headers,
-        body: formData,
-        signal: AbortSignal.timeout(300000),
-      });
+    // 파일 업로드는 5분 타임아웃 (대용량 파일 대비)
+    const response = await fetch(`${API_BASE_URL}${V2}/projects/${projectId}/rfps/upload`, {
+      method: 'POST',
+      headers,
+      body: formData,
+      signal: AbortSignal.timeout(300000),
+    });
 
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const data = await response.json();
-      return data && typeof data === 'object' && 'data' in data ? data.data : data;
-    } catch (error) {
-      console.warn('RFP upload failed, using mock:', error);
-      return {
-        id: `rfp-${Date.now()}`,
-        projectId,
-        title: title || file.name.replace(/\.[^/.]+$/, ''),
-        fileName: file.name,
-        fileSize: file.size,
-        status: 'DRAFT',
-        processingStatus: 'PENDING',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      throw new Error(`업로드 실패 (${response.status}): ${errorText || response.statusText}`);
     }
+    const data = await response.json();
+    return data && typeof data === 'object' && 'data' in data ? data.data : data;
+  }
+
+  async retryRfpParse(projectId: string, rfpId: string) {
+    return this.fetchWithFallback(`${V2}/projects/${projectId}/rfps/${rfpId}/retry`, {
+      method: 'POST',
+    }, null);
   }
 
   async extractRequirements(projectId: string, rfpId: string, content?: string) {
@@ -1838,7 +1852,9 @@ export class ApiService {
     ];
 
     const response = await this.fetchWithFallback(`${V2}/projects/${projectId}/rfps${qs ? '?' + qs : ''}`, {}, { data: mockRfps });
-    return response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+    const list = response && typeof response === 'object' && 'data' in response ? (response as any).data : response;
+    // 백엔드 flat 응답 → 프론트 nested kpi 변환
+    return Array.isArray(list) ? list.map(normalizeRfpResponse) : list;
   }
 
   async triggerRfpAnalysis(projectId: string, rfpId: string) {

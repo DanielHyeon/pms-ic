@@ -2,7 +2,10 @@ package com.insuretech.pms.rfp.service;
 
 import com.insuretech.pms.common.exception.CustomException;
 import com.insuretech.pms.rfp.dto.RfpVersionDto;
+import com.insuretech.pms.rfp.reactive.entity.R2dbcRfpChangeEvent;
 import com.insuretech.pms.rfp.reactive.entity.R2dbcRfpVersion;
+import com.insuretech.pms.rfp.reactive.repository.ReactiveRfpChangeEventRepository;
+import com.insuretech.pms.rfp.reactive.repository.ReactiveRfpRepository;
 import com.insuretech.pms.rfp.reactive.repository.ReactiveRfpVersionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +23,8 @@ import java.util.UUID;
 public class ReactiveRfpVersionService {
 
     private final ReactiveRfpVersionRepository versionRepository;
+    private final ReactiveRfpRepository rfpRepository;
+    private final ReactiveRfpChangeEventRepository changeEventRepository;
 
     /**
      * List all versions for an RFP, ordered by upload date descending.
@@ -63,7 +68,46 @@ public class ReactiveRfpVersionService {
                     return versionRepository.save(version);
                 })
                 .map(RfpVersionDto::from)
+                .flatMap(dto -> triggerReanalysisIfConfirmed(rfpId, dto.getId()).thenReturn(dto))
                 .doOnSuccess(dto -> log.info("Created RFP version {} for rfp {}", dto.getVersionLabel(), rfpId));
+    }
+
+    /**
+     * CONFIRMED 상태의 RFP에 새 버전이 업로드되면 NEEDS_REANALYSIS로 자동 전이.
+     * 변경 이벤트도 함께 기록한다.
+     */
+    private Mono<Void> triggerReanalysisIfConfirmed(String rfpId, String newVersionId) {
+        return rfpRepository.findById(rfpId)
+                .flatMap(rfp -> {
+                    if (!"CONFIRMED".equals(rfp.getStatus())) {
+                        return Mono.empty();
+                    }
+                    // 상태 전이: CONFIRMED → NEEDS_REANALYSIS
+                    if (!RfpStateMachine.isTransitionAllowed(rfp.getStatus(), "NEEDS_REANALYSIS")) {
+                        return Mono.empty();
+                    }
+                    rfp.setPreviousStatus(rfp.getStatus());
+                    rfp.setStatus("NEEDS_REANALYSIS");
+                    return rfpRepository.save(rfp)
+                            .then(recordChangeEvent(rfpId, newVersionId));
+                })
+                .then();
+    }
+
+    /**
+     * 버전 변경에 의한 재분석 필요 이벤트를 rfp_change_events에 기록.
+     */
+    private Mono<Void> recordChangeEvent(String rfpId, String newVersionId) {
+        R2dbcRfpChangeEvent event = R2dbcRfpChangeEvent.builder()
+                .id(UUID.randomUUID().toString())
+                .rfpId(rfpId)
+                .changeType("VERSION_UPDATED")
+                .reason("새 버전 업로드로 인한 재분석 필요")
+                .toVersionId(newVersionId)
+                .changedBy("system")
+                .changedAt(LocalDateTime.now())
+                .build();
+        return changeEventRepository.save(event).then();
     }
 
     /**

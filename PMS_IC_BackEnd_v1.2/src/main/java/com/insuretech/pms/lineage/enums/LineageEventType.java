@@ -6,6 +6,11 @@ package com.insuretech.pms.lineage.enums;
  */
 public enum LineageEventType {
 
+    // ===== RFP Events =====
+    RFP_NODE_CREATED,
+    RFP_REQUIREMENT_LINKED,
+    CANDIDATES_CONFIRMED,
+
     // ===== Requirement Events =====
     REQUIREMENT_CREATED,
     REQUIREMENT_UPDATED,
@@ -38,7 +43,9 @@ public enum LineageEventType {
     SPRINT_COMPLETED;
 
     public String getAggregateType() {
-        if (name().startsWith("REQUIREMENT")) {
+        if (name().startsWith("RFP_") || name().startsWith("CANDIDATES_")) {
+            return "RFP";
+        } else if (name().startsWith("REQUIREMENT")) {
             return "REQUIREMENT";
         } else if (name().startsWith("STORY")) {
             return "USER_STORY";

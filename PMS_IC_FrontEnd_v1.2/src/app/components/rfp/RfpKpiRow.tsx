@@ -26,10 +26,10 @@ function computeKpis(rfps: RfpDetail[], origin?: OriginSummary | null) {
   const reviewing = rfps.filter((r) => ['EXTRACTED', 'REVIEWING'].includes(r.status)).length;
   const needsReanalysis = rfps.filter((r) => r.status === 'NEEDS_REANALYSIS').length;
   const failed = rfps.filter((r) => r.status === 'FAILED').length;
-  const totalReqs = rfps.reduce((sum, r) => sum + r.kpi.derivedRequirements, 0);
-  const confirmedReqs = rfps.reduce((sum, r) => sum + r.kpi.confirmedRequirements, 0);
+  const totalReqs = rfps.reduce((sum, r) => sum + (r.kpi?.derivedRequirements ?? 0), 0);
+  const confirmedReqs = rfps.reduce((sum, r) => sum + (r.kpi?.confirmedRequirements ?? 0), 0);
   const avgEpicRate = total > 0
-    ? Math.round(rfps.reduce((sum, r) => sum + r.kpi.epicLinkRate, 0) / total * 100)
+    ? Math.round(rfps.reduce((sum, r) => sum + (r.kpi?.epicLinkRate ?? 0), 0) / total * 100)
     : 0;
 
   return { total, confirmed, analyzing, reviewing, needsReanalysis, failed, totalReqs, confirmedReqs, avgEpicRate };

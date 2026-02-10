@@ -25,7 +25,7 @@ public final class RfpStateMachine {
             Map.entry("CONFIRMED", List.of("NEEDS_REANALYSIS", "ON_HOLD")),
             Map.entry("NEEDS_REANALYSIS", List.of("PARSING")),
             Map.entry("ON_HOLD", List.of("REVIEWING", "CONFIRMED", "EXTRACTED")),
-            Map.entry("FAILED", List.of("UPLOADED")),
+            Map.entry("FAILED", List.of("UPLOADED", "PARSING")),
             // Legacy backward-compat transitions
             Map.entry("DRAFT", List.of("SUBMITTED", "UPLOADED", "ORIGIN_DEFINED")),
             Map.entry("SUBMITTED", List.of("UNDER_REVIEW", "UPLOADED")),

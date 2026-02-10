@@ -9,6 +9,7 @@ import com.insuretech.pms.lineage.enums.LineageEventType;
 import com.insuretech.pms.lineage.reactive.entity.R2dbcOutboxEvent;
 import com.insuretech.pms.lineage.reactive.repository.ReactiveOutboxEventRepository;
 import com.insuretech.pms.rfp.reactive.repository.ReactiveRequirementRepository;
+import com.insuretech.pms.rfp.reactive.repository.ReactiveRfpRepository;
 import com.insuretech.pms.task.reactive.repository.ReactiveUserStoryRepository;
 import com.insuretech.pms.task.reactive.repository.ReactiveTaskRepository;
 import com.insuretech.pms.task.reactive.repository.ReactiveSprintRepository;
@@ -30,6 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ReactiveLineageService {
 
     private final ReactiveOutboxEventRepository outboxRepository;
+    private final ReactiveRfpRepository rfpRepository;
     private final ReactiveRequirementRepository requirementRepository;
     private final ReactiveUserStoryRepository userStoryRepository;
     private final ReactiveTaskRepository taskRepository;
@@ -127,9 +129,39 @@ public class ReactiveLineageService {
     }
 
     /**
-     * Build lineage graph from requirements, stories, tasks, sprints, and their trace links.
+     * Build lineage graph from RFPs, requirements, stories, tasks, sprints, and their trace links.
+     * RFP 노드와 RFP→Requirement 관계도 포함하여 완전한 추적성 그래프를 구성한다.
      */
     public Mono<LineageGraphDto> buildLineageGraph(String projectId) {
+        // RFP 노드 수집
+        Mono<List<LineageNodeDto>> rfpNodes = rfpRepository
+                .findByProjectIdOrderByCreatedAtDesc(projectId)
+                .map(rfp -> LineageNodeDto.builder()
+                        .id(rfp.getId())
+                        .type(LineageNodeType.RFP)
+                        .code(rfp.getId())
+                        .title(rfp.getTitle())
+                        .status(rfp.getStatus())
+                        .metadata(Map.of("originType", rfp.getOriginType() != null ? rfp.getOriginType() : "",
+                                         "versionLabel", rfp.getVersionLabel() != null ? rfp.getVersionLabel() : ""))
+                        .build())
+                .collectList();
+
+        // RFP → Requirement 엣지 (rfp_id FK 기반)
+        Mono<List<LineageEdgeDto>> rfpRequirementEdges = databaseClient
+                .sql("SELECT r.id AS req_id, r.rfp_id " +
+                     "FROM project.requirements r " +
+                     "WHERE r.project_id = :projectId AND r.rfp_id IS NOT NULL")
+                .bind("projectId", projectId)
+                .map((row, meta) -> LineageEdgeDto.builder()
+                        .id("rfp-req-" + row.get("req_id", String.class))
+                        .source(row.get("rfp_id", String.class))
+                        .target(row.get("req_id", String.class))
+                        .relationship(LineageRelationship.DERIVES)
+                        .build())
+                .all()
+                .collectList();
+
         // Collect all nodes in parallel
         Mono<List<LineageNodeDto>> requirementNodes = requirementRepository
                 .findByProjectIdOrderByCodeAsc(projectId)
@@ -239,17 +271,32 @@ public class ReactiveLineageService {
                 .all()
                 .collectList();
 
+        // RFP 데이터를 하나의 Mono로 묶음 (기존 8개 zip 슬롯 한도 초과 방지)
+        Mono<List<List<?>>> rfpData = Mono.zip(rfpNodes, rfpRequirementEdges)
+                .map(t -> List.of(t.getT1(), t.getT2()));
+
         // Combine all data into the graph
         return Mono.zip(requirementNodes, storyNodes, taskNodes, sprintNodes,
                         traceEdges, storyMappingEdges, taskStoryEdges, taskSprintEdges)
-                .map(tuple -> {
+                .zipWith(rfpData)
+                .map(combined -> {
+                    var tuple = combined.getT1();
+                    List<List<?>> rfp = combined.getT2();
+
+                    @SuppressWarnings("unchecked")
+                    List<LineageNodeDto> rfpNodeList = (List<LineageNodeDto>) rfp.get(0);
+                    @SuppressWarnings("unchecked")
+                    List<LineageEdgeDto> rfpReqEdgeList = (List<LineageEdgeDto>) rfp.get(1);
+
                     List<LineageNodeDto> allNodes = new ArrayList<>();
+                    allNodes.addAll(rfpNodeList);              // RFPs
                     allNodes.addAll(tuple.getT1()); // requirements
                     allNodes.addAll(tuple.getT2()); // stories
                     allNodes.addAll(tuple.getT3()); // tasks
                     allNodes.addAll(tuple.getT4()); // sprints
 
                     List<LineageEdgeDto> allEdges = new ArrayList<>();
+                    allEdges.addAll(rfpReqEdgeList);            // RFP → Requirement
                     allEdges.addAll(tuple.getT5()); // trace links
                     allEdges.addAll(tuple.getT6()); // story mappings
                     allEdges.addAll(tuple.getT7()); // task-story

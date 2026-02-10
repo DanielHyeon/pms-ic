@@ -14,6 +14,7 @@ import { UserRole } from '../App';
 import {
   useRfps,
   useProjectOrigin,
+  useOriginSummary,
   useSetProjectOrigin,
   useCreateRfp,
   useUploadRfpFile,
@@ -26,6 +27,8 @@ import {
   useRfpImpact,
   useRfpEvidence,
   useRfpDiff,
+  useRfpStatusTransitionToasts,
+  useRetryRfpParse,
 } from '../../hooks/api/useRfps';
 import { usePreset } from '../../hooks/usePreset';
 import { PresetSwitcher } from './common/PresetSwitcher';
@@ -82,8 +85,9 @@ export default function RfpManagement({ userRole }: RfpManagementProps) {
   // Preset
   const { currentPreset, switchPreset } = usePreset(userRole);
 
-  // Origin
+  // Origin: 존재 여부 확인용 + KPI 포함 summary용 분리
   const { data: origin, isLoading: originLoading, error: originError } = useProjectOrigin(projectId);
+  const { data: originSummary } = useOriginSummary(projectId);
   const setOriginMutation = useSetProjectOrigin();
 
   // RFP list
@@ -93,6 +97,12 @@ export default function RfpManagement({ userRole }: RfpManagementProps) {
     sort: 'updatedAt:desc',
   });
   const { data: rfps = [], isLoading: rfpsLoading, refetch: refetchRfps } = useRfps(projectId);
+
+  // [상태 전이 감지] processing → EXTRACTED/FAILED 시 토스트 1회 발생
+  useRfpStatusTransitionToasts(rfps);
+
+  // Retry mutation (FAILED + retryable=true인 RFP용)
+  const retryParseMutation = useRetryRfpParse();
 
   // Filtered list
   const filteredRfps = useMemo(() => {
@@ -113,9 +123,9 @@ export default function RfpManagement({ userRole }: RfpManagementProps) {
       if (sortKey === 'updatedAt') cmp = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
       else if (sortKey === 'impactLevel') {
         const levels: Record<string, number> = { NONE: 0, LOW: 1, MEDIUM: 2, HIGH: 3 };
-        cmp = (levels[b.kpi.changeImpact.level] || 0) - (levels[a.kpi.changeImpact.level] || 0);
+        cmp = (levels[b.kpi?.changeImpact?.level ?? 'NONE'] || 0) - (levels[a.kpi?.changeImpact?.level ?? 'NONE'] || 0);
       }
-      else if (sortKey === 'requirementCount') cmp = b.kpi.derivedRequirements - a.kpi.derivedRequirements;
+      else if (sortKey === 'requirementCount') cmp = (b.kpi?.derivedRequirements ?? 0) - (a.kpi?.derivedRequirements ?? 0);
       return sortDir === 'asc' ? -cmp : cmp;
     });
 
@@ -170,16 +180,14 @@ export default function RfpManagement({ userRole }: RfpManagementProps) {
   const handleWizardComplete = useCallback(
     (data: { title: string; publisher: string; rfpType: string; file?: File; content?: string }) => {
       if (!projectId) return;
+      // 중복 제출 방지: 이미 업로드/생성 진행 중이면 무시
+      if (uploadFileMutation.isPending || createRfpMutation.isPending) return;
+      // 위자드는 즉시 닫기 (blocking하지 않음) — 토스트가 결과를 알려줌
+      setWizardOpen(false);
       if (data.file) {
-        uploadFileMutation.mutate(
-          { projectId, file: data.file, title: data.title },
-          { onSuccess: () => setWizardOpen(false) }
-        );
+        uploadFileMutation.mutate({ projectId, file: data.file, title: data.title });
       } else {
-        createRfpMutation.mutate(
-          { projectId, data: { title: data.title, content: data.content } },
-          { onSuccess: () => setWizardOpen(false) }
-        );
+        createRfpMutation.mutate({ projectId, data: { title: data.title, content: data.content } });
       }
     },
     [projectId, uploadFileMutation, createRfpMutation]
@@ -197,6 +205,14 @@ export default function RfpManagement({ userRole }: RfpManagementProps) {
     setSelectedRfpId(rfpId);
     setPanelMode('overview');
   }, []);
+
+  const handleRetry = useCallback(
+    (rfpId: string) => {
+      if (!projectId) return;
+      retryParseMutation.mutate({ projectId, rfpId });
+    },
+    [projectId, retryParseMutation]
+  );
 
   // No project selected
   if (!currentProject) {
@@ -286,12 +302,14 @@ export default function RfpManagement({ userRole }: RfpManagementProps) {
           </div>
         </div>
 
-        {/* Origin Summary Strip */}
-        <OriginSummaryStrip
-          summary={origin}
-          onViewEvidence={() => setEvidenceRfpId(rfps[0]?.id || null)}
-          onViewImpact={() => { if (selectedRfp) setPanelMode('impact'); }}
-        />
+        {/* Origin Summary Strip — KPI 포함 summary가 로드된 경우만 렌더 */}
+        {originSummary && (
+          <OriginSummaryStrip
+            summary={originSummary}
+            onViewEvidence={() => setEvidenceRfpId(rfps[0]?.id || null)}
+            onViewImpact={() => { if (selectedRfp) setPanelMode('impact'); }}
+          />
+        )}
 
         {/* KPI Row */}
         {showKpiRow && <RfpKpiRow rfps={rfps} origin={origin} preset={currentPreset} />}
@@ -345,6 +363,7 @@ export default function RfpManagement({ userRole }: RfpManagementProps) {
                 onViewDiff={showCardActions && rfp.versionCount > 1 ? () => setDiffRfpId(rfp.id) : undefined}
                 onViewEvidence={() => setEvidenceRfpId(rfp.id)}
                 onViewLineage={showCardActions ? () => {} : undefined}
+                onRetry={showCardActions ? handleRetry : undefined}
               />
             ))}
           </div>

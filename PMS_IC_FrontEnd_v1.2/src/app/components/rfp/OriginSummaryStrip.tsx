@@ -27,7 +27,8 @@ interface OriginSummaryStripProps {
 
 export function OriginSummaryStrip({ summary, onViewEvidence, onViewImpact }: OriginSummaryStripProps) {
   const { kpi, originTypeLabel, policy } = summary;
-  const impact = kpi.lastChangeImpact;
+  // kpi가 아직 로드되지 않은 경우 방어 처리
+  const impact = kpi?.lastChangeImpact ?? { level: 'NONE' as ChangeImpactLevel, impactedEpics: 0, impactedTasks: 0 };
 
   return (
     <Card className="border-l-4 border-l-blue-500">
@@ -46,17 +47,17 @@ export function OriginSummaryStrip({ summary, onViewEvidence, onViewImpact }: Or
 
           {/* KPI cards */}
           <div className="flex items-center gap-6">
-            <KpiItem icon={FileText} label="Active RFP" value={kpi.activeRfpCount} />
+            <KpiItem icon={FileText} label="Active RFP" value={kpi?.activeRfpCount ?? 0} />
             <KpiItem
               icon={FileText}
               label="Requirements"
-              value={`${kpi.confirmedRequirements}/${kpi.totalRequirements}`}
+              value={`${kpi?.confirmedRequirements ?? 0}/${kpi?.totalRequirements ?? 0}`}
             />
             <KpiItem
               icon={Link2}
               label="Epic Link"
-              value={`${Math.round(kpi.epicLinkRate * 100)}%`}
-              highlight={kpi.epicLinkRate < 0.7}
+              value={`${Math.round((kpi?.epicLinkRate ?? 0) * 100)}%`}
+              highlight={(kpi?.epicLinkRate ?? 0) < 0.7}
             />
           </div>
 

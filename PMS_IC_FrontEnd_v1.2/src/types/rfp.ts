@@ -129,11 +129,15 @@ export interface RfpDetail {
   status: RfpStatus;
   statusLabel: string;
   previousStatus?: RfpStatus;
-  failureReason?: string;
+  failureReason?: string;      // 사용자 친화 메시지
+  failureReasonDev?: string;   // 개발자 디버그 메시지
+  retryable?: boolean;         // 재시도 가능 여부
   content?: string;
   currentVersion?: RfpVersion;
   versionCount: number;
-  kpi: {
+  // kpi는 백엔드에서 아직 nested 형태로 내려오지 않을 수 있음 (flat requirementCount만 존재)
+  // 프론트엔드 normalizeRfp()에서 flat → nested 변환 처리
+  kpi?: {
     derivedRequirements: number;
     confirmedRequirements: number;
     epicLinkRate: number;

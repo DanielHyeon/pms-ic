@@ -32,7 +32,9 @@ public class RfpDto {
     private String originType;
     private String versionLabel;
     private String previousStatus;
-    private String failureReason;
+    private String failureReason;      // 사용자 친화 메시지
+    private String failureReasonDev;   // 개발자 디버그 메시지
+    private Boolean retryable;         // 재시도 가능 여부
     private String sourceName;
     private String rfpType;
 
@@ -64,6 +66,8 @@ public class RfpDto {
                 .versionLabel(rfp.getVersionLabel())
                 .previousStatus(rfp.getPreviousStatus())
                 .failureReason(rfp.getFailureReason())
+                .failureReasonDev(rfp.getFailureReasonDev())
+                .retryable(rfp.getRetryable())
                 .sourceName(rfp.getSourceName())
                 .rfpType(rfp.getRfpType())
                 .build();

@@ -7,7 +7,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpMethod;
-import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
@@ -30,7 +29,6 @@ import java.util.List;
 @Configuration
 @Profile("dev")
 @EnableWebFluxSecurity
-@EnableReactiveMethodSecurity
 @RequiredArgsConstructor
 public class ReactiveSecurityConfigDev {
 
@@ -74,6 +72,8 @@ public class ReactiveSecurityConfigDev {
                         .pathMatchers("/api/v2/projects/*/origin/**").permitAll()
                         .pathMatchers("/api/v2/projects/*/rfps/**").permitAll()
                         .pathMatchers("/api/v2/projects/*/requirements/**").permitAll()
+                        .pathMatchers("/api/v2/projects/*/lineage/**").permitAll()
+                        .pathMatchers("/api/v2/lineage/**").permitAll()
                         // 나머지는 인증 필요
                         .anyExchange().authenticated()
                 )

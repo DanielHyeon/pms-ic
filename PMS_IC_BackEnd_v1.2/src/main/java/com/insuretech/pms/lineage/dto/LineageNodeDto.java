@@ -30,6 +30,7 @@ public class LineageNodeDto {
     private Map<String, Object> metadata;
 
     public enum LineageNodeType {
+        RFP,
         REQUIREMENT,
         USER_STORY,
         TASK,

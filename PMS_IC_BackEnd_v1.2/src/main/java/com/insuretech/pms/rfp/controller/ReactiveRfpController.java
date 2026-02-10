@@ -1,15 +1,16 @@
 package com.insuretech.pms.rfp.controller;
 
 import com.insuretech.pms.common.dto.ApiResponse;
-import com.insuretech.pms.rfp.dto.CreateRfpRequest;
-import com.insuretech.pms.rfp.dto.RfpDto;
-import com.insuretech.pms.rfp.dto.UpdateRfpRequest;
+import com.insuretech.pms.rfp.dto.*;
+import com.insuretech.pms.rfp.service.ReactiveRfpEvidenceService;
 import com.insuretech.pms.rfp.service.ReactiveRfpService;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
@@ -24,6 +25,7 @@ import java.util.Map;
 public class ReactiveRfpController {
 
     private final ReactiveRfpService rfpService;
+    private final ReactiveRfpEvidenceService evidenceService;
 
     @GetMapping
     public Mono<ResponseEntity<ApiResponse<List<RfpDto>>>> getRfpsByProject(
@@ -64,6 +66,16 @@ public class ReactiveRfpController {
             @PathVariable String rfpId) {
         return rfpService.deleteRfp(rfpId)
                 .then(Mono.just(ResponseEntity.ok(ApiResponse.success("RFP deleted", null))));
+    }
+
+    @Operation(summary = "Upload RFP file (multipart) — 파일 업로드 후 자동 파싱 트리거")
+    @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Mono<ResponseEntity<ApiResponse<RfpDto>>> uploadRfp(
+            @PathVariable String projectId,
+            @RequestPart("file") FilePart file,
+            @RequestPart(value = "title", required = false) String title) {
+        return rfpService.uploadRfp(projectId, file, title)
+                .map(rfp -> ResponseEntity.ok(ApiResponse.success("RFP uploaded", rfp)));
     }
 
     @Operation(summary = "Transition RFP status (state machine validated)")
@@ -107,5 +119,46 @@ public class ReactiveRfpController {
             @PathVariable String rfpId) {
         return rfpService.resumeFromHold(rfpId)
                 .then(Mono.just(ResponseEntity.ok(ApiResponse.success("RFP resumed", null))));
+    }
+
+    @Operation(summary = "Retry failed RFP parsing (retryable=true인 경우만)")
+    @PostMapping("/{rfpId}/retry")
+    public Mono<ResponseEntity<ApiResponse<Void>>> retryParse(
+            @PathVariable String projectId,
+            @PathVariable String rfpId) {
+        return rfpService.retryParse(rfpId)
+                .then(Mono.just(ResponseEntity.ok(ApiResponse.success("재시도 시작됨", null))));
+    }
+
+    // ==================== Evidence / Impact / Diff (Sprint C) ====================
+
+    @Operation(summary = "요구사항 근거(Evidence) 추적 조회")
+    @GetMapping("/{rfpId}/evidence")
+    public Mono<ResponseEntity<ApiResponse<List<EvidenceDto>>>> getEvidence(
+            @PathVariable String projectId,
+            @PathVariable String rfpId,
+            @RequestParam(required = false) String requirementId) {
+        return evidenceService.getEvidence(rfpId, requirementId)
+                .map(list -> ResponseEntity.ok(ApiResponse.success(list)));
+    }
+
+    @Operation(summary = "RFP 변경 영향 분석 조회")
+    @GetMapping("/{rfpId}/impact")
+    public Mono<ResponseEntity<ApiResponse<ImpactDto>>> getImpact(
+            @PathVariable String projectId,
+            @PathVariable String rfpId) {
+        return evidenceService.getImpact(rfpId)
+                .map(impact -> ResponseEntity.ok(ApiResponse.success(impact)));
+    }
+
+    @Operation(summary = "RFP 버전 간 요구사항 차이 비교")
+    @GetMapping("/{rfpId}/diff")
+    public Mono<ResponseEntity<ApiResponse<DiffDto>>> getDiff(
+            @PathVariable String projectId,
+            @PathVariable String rfpId,
+            @RequestParam(defaultValue = "v1.0") String from,
+            @RequestParam(defaultValue = "v2.0") String to) {
+        return evidenceService.getDiff(rfpId, from, to)
+                .map(diff -> ResponseEntity.ok(ApiResponse.success(diff)));
     }
 }

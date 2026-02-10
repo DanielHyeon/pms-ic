@@ -2,6 +2,8 @@ package com.insuretech.pms.rfp.reactive.entity;
 
 import lombok.*;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Transient;
+import org.springframework.data.domain.Persistable;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 import org.springframework.lang.Nullable;
@@ -14,10 +16,20 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class R2dbcOriginPolicy {
+public class R2dbcOriginPolicy implements Persistable<String> {
 
     @Id
     private String id;
+
+    // save() 호출 시 INSERT/UPDATE 판단용 플래그 (DB에 저장되지 않음)
+    @Transient
+    @Builder.Default
+    private boolean isNew = true;
+
+    @Override
+    public boolean isNew() {
+        return isNew;
+    }
 
     @Column("project_id")
     private String projectId;

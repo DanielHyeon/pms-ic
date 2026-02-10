@@ -9,6 +9,8 @@ import {
   Download,
   FileText,
   Link2,
+  RefreshCw,
+  AlertTriangle,
 } from 'lucide-react';
 import { Card, CardContent } from '../ui/card';
 import { Button } from '../ui/button';
@@ -35,6 +37,7 @@ interface RfpCardProps {
   onViewDiff?: (rfpId: string) => void;
   onViewEvidence?: (rfpId: string) => void;
   onViewLineage?: (rfpId: string) => void;
+  onRetry?: (rfpId: string) => void;
 }
 
 export function RfpCard({
@@ -46,10 +49,12 @@ export function RfpCard({
   onViewDiff,
   onViewEvidence,
   onViewLineage,
+  onRetry,
 }: RfpCardProps) {
   const showActions = preset !== 'EXEC_SUMMARY';
   const showKpi = preset !== 'AUDIT_EVIDENCE';
   const showAnalyzeBtn = preset === 'PM_WORK' && ['UPLOADED', 'NEEDS_REANALYSIS', 'CONFIRMED'].includes(rfp.status);
+  const showRetryBtn = rfp.status === 'FAILED' && rfp.retryable && onRetry;
 
   return (
     <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => onView(rfp.id)}>
@@ -125,37 +130,62 @@ export function RfpCard({
           )}
         </div>
 
-        {/* KPIs */}
-        {showKpi && (
+        {/* KPIs — kpi가 없는 경우(백엔드 flat 응답) 안전하게 기본값 사용 */}
+        {showKpi && rfp.kpi && (
           <div className="space-y-2 mb-3">
             <div className="flex items-center justify-between text-xs">
               <span className="text-gray-500 flex items-center gap-1">
                 <FileText className="h-3 w-3" /> Requirements
               </span>
               <span className="font-medium">
-                {rfp.kpi.confirmedRequirements}/{rfp.kpi.derivedRequirements}
+                {rfp.kpi.confirmedRequirements ?? 0}/{rfp.kpi.derivedRequirements ?? 0}
               </span>
             </div>
             <div className="flex items-center justify-between text-xs">
               <span className="text-gray-500 flex items-center gap-1">
                 <Link2 className="h-3 w-3" /> Epic Link
               </span>
-              <span className="font-medium">{Math.round(rfp.kpi.epicLinkRate * 100)}%</span>
+              <span className="font-medium">{Math.round((rfp.kpi.epicLinkRate ?? 0) * 100)}%</span>
             </div>
-            <Progress value={rfp.kpi.epicLinkRate * 100} className="h-1.5" />
+            <Progress value={(rfp.kpi.epicLinkRate ?? 0) * 100} className="h-1.5" />
           </div>
         )}
 
         {/* Bottom: Impact + Run badge */}
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <ImpactChip
-            level={rfp.kpi.changeImpact.level}
-            count={rfp.kpi.changeImpact.impactedEpics}
-          />
+          {rfp.kpi?.changeImpact && (
+            <ImpactChip
+              level={rfp.kpi.changeImpact.level}
+              count={rfp.kpi.changeImpact.impactedEpics}
+            />
+          )}
           <ExtractionRunBadge run={rfp.latestRun} />
         </div>
 
-        {/* Quick action */}
+        {/* FAILED 상태: 실패 사유 + 재시도 버튼 */}
+        {rfp.status === 'FAILED' && (
+          <div className="mt-3 pt-3 border-t">
+            {rfp.failureReason && (
+              <div className="flex items-start gap-1.5 mb-2 text-xs text-red-600">
+                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                <span className="line-clamp-2">{rfp.failureReason}</span>
+              </div>
+            )}
+            {showRetryBtn && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full text-xs text-red-600 border-red-200 hover:bg-red-50"
+                onClick={(e) => { e.stopPropagation(); onRetry!(rfp.id); }}
+              >
+                <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                다시 시도
+              </Button>
+            )}
+          </div>
+        )}
+
+        {/* Quick action: 분석 시작 */}
         {showAnalyzeBtn && (
           <div className="mt-3 pt-3 border-t">
             <Button

@@ -7,6 +7,7 @@ import com.insuretech.pms.rfp.reactive.entity.R2dbcRequirement;
 import com.insuretech.pms.rfp.reactive.entity.R2dbcRequirementCandidate;
 import com.insuretech.pms.rfp.reactive.repository.ReactiveRequirementCandidateRepository;
 import com.insuretech.pms.rfp.reactive.repository.ReactiveRequirementRepository;
+import com.insuretech.pms.rfp.reactive.repository.ReactiveRfpRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -25,6 +26,8 @@ public class ReactiveCandidateService {
 
     private final ReactiveRequirementCandidateRepository candidateRepository;
     private final ReactiveRequirementRepository requirementRepository;
+    private final ReactiveRfpRepository rfpRepository;
+    private final ReactiveRfpNeo4jLineageService lineageService;
 
     /**
      * List all candidates for an extraction run, ordered by requirement key.
@@ -49,7 +52,9 @@ public class ReactiveCandidateService {
                 .flatMap(candidateId -> confirmSingleCandidate(candidateId, rfpId, projectId))
                 .collectList()
                 .doOnSuccess(list -> log.info("Confirmed {} candidates for rfp {} in project {}",
-                        list.size(), rfpId, projectId));
+                        list.size(), rfpId, projectId))
+                .flatMap(confirmedList -> syncLineageGraph(rfpId, projectId, confirmedList)
+                        .thenReturn(confirmedList));
     }
 
     /**
@@ -192,6 +197,36 @@ public class ReactiveCandidateService {
             case "COULD" -> "LOW";
             default -> "MEDIUM";
         };
+    }
+
+    /**
+     * 확정된 후보 목록을 기반으로 Neo4j 리니지 그래프를 비동기 동기화한다.
+     * RFP 제목을 조회한 뒤 lineageService.onCandidatesConfirmed()를 호출한다.
+     * Neo4j 동기화 실패 시에도 비즈니스 로직은 정상 완료된다 (fire-and-forget 성격).
+     */
+    private Mono<Void> syncLineageGraph(String rfpId, String projectId,
+                                         List<RequirementCandidateDto> confirmedList) {
+        // ACCEPTED 상태이면서 confirmedRequirementId가 있는 후보만 리니지 대상
+        List<ReactiveRfpNeo4jLineageService.RequirementInfo> reqInfos = confirmedList.stream()
+                .filter(dto -> "ACCEPTED".equals(dto.getStatus()) && dto.getConfirmedRequirementId() != null)
+                .map(dto -> new ReactiveRfpNeo4jLineageService.RequirementInfo(
+                        dto.getConfirmedRequirementId(),
+                        dto.getReqKey(),       // 후보의 reqKey를 code로 활용
+                        truncateTitle(dto.getText())
+                ))
+                .toList();
+
+        if (reqInfos.isEmpty()) {
+            return Mono.empty();
+        }
+
+        // RFP 제목 조회 → Neo4j 리니지 동기화
+        return rfpRepository.findById(rfpId)
+                .map(rfp -> rfp.getTitle() != null ? rfp.getTitle() : "Untitled RFP")
+                .defaultIfEmpty("Untitled RFP")
+                .flatMap(rfpTitle -> lineageService.onCandidatesConfirmed(rfpId, rfpTitle, projectId, reqInfos))
+                .doOnError(e -> log.warn("리니지 그래프 동기화 중 오류 발생 (무시됨): {}", e.getMessage()))
+                .onErrorResume(e -> Mono.empty());
     }
 
     /**
