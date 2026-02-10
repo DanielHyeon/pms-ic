@@ -91,9 +91,12 @@ function getStatusLabel(status?: string): string {
   return STATUS_LABELS[status] || status;
 }
 
+// 알 수 없는 노드 타입에 대한 기본 설정 (crash 방지)
+const DEFAULT_NODE_CONFIG = { label: 'Unknown', color: '#6b7280', bgColor: '#f3f4f6', icon: 'HelpCircle' };
+
 // Custom node component
 function LineageNode({ data }: { data: { label: string; nodeType: LineageNodeType; status?: string; code?: string } }) {
-  const config = NODE_TYPE_CONFIG[data.nodeType];
+  const config = NODE_TYPE_CONFIG[data.nodeType] || DEFAULT_NODE_CONFIG;
 
   return (
     <div

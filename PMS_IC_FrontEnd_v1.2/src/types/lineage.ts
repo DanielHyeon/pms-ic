@@ -1,6 +1,6 @@
 // Lineage visualization and timeline types
 
-export type LineageNodeType = 'REQUIREMENT' | 'USER_STORY' | 'TASK' | 'SPRINT';
+export type LineageNodeType = 'RFP' | 'REQUIREMENT' | 'USER_STORY' | 'TASK' | 'SPRINT';
 
 export type LineageRelationship =
   | 'DERIVES'
@@ -148,6 +148,12 @@ export const NODE_TYPE_CONFIG: Record<LineageNodeType, {
   bgColor: string;
   icon: string;
 }> = {
+  RFP: {
+    label: 'RFP',
+    color: '#d97706',
+    bgColor: '#fef3c7',
+    icon: 'FileInput',
+  },
   REQUIREMENT: {
     label: '요구사항',
     color: '#2563eb',
