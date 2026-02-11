@@ -184,6 +184,7 @@ export function ProjectPermissionsTab({ userRole, canManage }: ProjectPermission
             icon={<Crown className="text-yellow-500" size={18} />}
             members={groupedMembers.leadership}
             canManage={canManage && userRole === 'admin'}
+            projectId={selectedProjectId || undefined}
             gradientClass="from-blue-50"
             getRoleIcon={getRoleIcon}
             getRoleColor={getRoleColor}
@@ -198,6 +199,7 @@ export function ProjectPermissionsTab({ userRole, canManage }: ProjectPermission
               icon={<Users className="text-purple-500" size={18} />}
               members={groupedMembers.partLeaders}
               canManage={canManage}
+              projectId={selectedProjectId || undefined}
               gradientClass="from-purple-50"
               getRoleIcon={getRoleIcon}
               getRoleColor={getRoleColor}
@@ -213,6 +215,7 @@ export function ProjectPermissionsTab({ userRole, canManage }: ProjectPermission
               icon={<User className="text-green-500" size={18} />}
               members={groupedMembers.specialists}
               canManage={canManage}
+              projectId={selectedProjectId || undefined}
               gradientClass="from-green-50"
               getRoleIcon={getRoleIcon}
               getRoleColor={getRoleColor}
@@ -228,6 +231,7 @@ export function ProjectPermissionsTab({ userRole, canManage }: ProjectPermission
               icon={<User className="text-gray-500" size={18} />}
               members={groupedMembers.members}
               canManage={canManage}
+              projectId={selectedProjectId || undefined}
               gradientClass="from-gray-50"
               getRoleIcon={getRoleIcon}
               getRoleColor={getRoleColor}
@@ -331,6 +335,9 @@ function DelegationStructureInfo() {
           <p className="text-sm text-gray-700 mt-1">
             {'시스템 관리자 → PM 지정 | PM → 파트장/담당자 지정 | 파트장 → 구성원 추가'}
           </p>
+          <p className="text-xs text-gray-500 mt-1">
+            구성원을 클릭하면 보유 역할, 직접 권한, 위임 권한, 유효 권한 등 상세 정보를 확인할 수 있습니다.
+          </p>
         </div>
       </div>
     </div>
@@ -342,6 +349,7 @@ interface MemberGroupProps {
   icon: React.ReactNode;
   members: ProjectMember[];
   canManage: boolean;
+  projectId?: string; // 권한 상세 조회를 위한 프로젝트 ID
   gradientClass: string;
   getRoleIcon: (role: ProjectRole) => React.ReactNode;
   getRoleColor: (role: ProjectRole) => string;
@@ -354,6 +362,7 @@ function MemberGroup({
   icon,
   members,
   canManage,
+  projectId,
   gradientClass,
   getRoleIcon,
   getRoleColor,
@@ -376,6 +385,7 @@ function MemberGroup({
             key={member.id}
             member={member}
             canManage={canManage}
+            projectId={projectId}
             getRoleIcon={getRoleIcon}
             getRoleColor={getRoleColor}
             onChangeRole={onChangeRole}
