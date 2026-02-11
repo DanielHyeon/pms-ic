@@ -159,12 +159,40 @@ export function useUpdateRolePermission() {
 
 // ========== Project Member Hooks ==========
 
+/** 백엔드 역할명(대문자)을 프론트엔드 ProjectRole(소문자)로 변환 */
+function normalizeProjectRole(backendRole: string): ProjectRole {
+  const mapping: Record<string, ProjectRole> = {
+    SPONSOR: 'owner',
+    PM: 'pm',
+    PMO_HEAD: 'pm',       // PMO_HEAD는 리더십 그룹으로
+    DEVELOPER: 'member',
+    QA: 'qa_lead',
+    BUSINESS_ANALYST: 'ba',
+    AUDITOR: 'member',
+    MEMBER: 'member',
+    PART_LEADER: 'part_leader',
+    EDUCATION_MGR: 'education_mgr',
+    QA_LEAD: 'qa_lead',
+  };
+  // 이미 소문자면 그대로, 대문자면 매핑
+  const lower = backendRole.toLowerCase();
+  if (['owner', 'pm', 'part_leader', 'education_mgr', 'qa_lead', 'ba', 'member'].includes(lower)) {
+    return lower as ProjectRole;
+  }
+  return mapping[backendRole.toUpperCase()] || 'member';
+}
+
 export function useProjectMembers(projectId?: string) {
   return useQuery<ProjectMember[]>({
     queryKey: roleKeys.projectMembersList(projectId!),
     queryFn: async () => {
       const result = await apiService.getProjectMembersResult(projectId!);
-      return unwrapOrThrow(result) as ProjectMember[];
+      const raw = unwrapOrThrow(result) as any[];
+      // 백엔드 역할명 정규화
+      return raw.map(m => ({
+        ...m,
+        role: normalizeProjectRole(m.role || 'member'),
+      })) as ProjectMember[];
     },
     enabled: !!projectId,
   });
