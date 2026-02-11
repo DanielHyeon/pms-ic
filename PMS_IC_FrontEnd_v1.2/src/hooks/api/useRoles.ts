@@ -127,9 +127,13 @@ export function usePermissions() {
   return useQuery<Permission[]>({
     queryKey: roleKeys.permissionsList(),
     queryFn: async () => {
-      const result = await apiService.getPermissionsResult();
-      const data = unwrapOrThrow(result);
-      return Array.isArray(data) ? data : [];
+      // getPermissions()는 백엔드 미존재 시 하드코딩된 권한 매트릭스를 fallback으로 반환
+      const data = await apiService.getPermissions();
+      if (Array.isArray(data)) {
+        // roles 필드가 있는 항목만 필터링 (API 응답 형식 불일치 방어)
+        return data.filter((p: Permission) => p.roles && typeof p.roles === 'object');
+      }
+      return [];
     },
   });
 }

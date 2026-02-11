@@ -22,6 +22,24 @@ export interface CapabilityDto {
   allowRedelegation: boolean;
 }
 
+export interface SodWarningDto {
+  ruleId: string;
+  capabilityAId: string;
+  capabilityACode: string;
+  capabilityBId: string;
+  capabilityBCode: string;
+  severity: string;
+  blocking: boolean;
+  description: string;
+}
+
+export interface RecommendedActionDto {
+  actionType: string;
+  targetId: string;
+  description: string;
+  priority: string;
+}
+
 export interface UserRoleDto {
   id: string;
   projectId: string;
@@ -33,6 +51,7 @@ export interface UserRoleDto {
   grantedByName: string;
   grantedAt: string;
   reason?: string;
+  sodWarnings?: SodWarningDto[];
 }
 
 export interface UserCapabilityDto {
@@ -83,6 +102,7 @@ export interface DelegationMapNodeDto {
   roleName: string;
   delegations: DelegationDto[];
   children: DelegationMapNodeDto[];
+  effectiveCapabilities?: EffectiveCapabilityDto[];
 }
 
 export interface EffectiveCapabilityDto {
@@ -103,10 +123,12 @@ export interface GovernanceFindingDto {
   findingType: string;
   severity: string;
   userId: string;
+  userName?: string;
   delegationId?: string;
   message: string;
   detailsJson: string;
   createdAt: string;
+  recommendedActions?: RecommendedActionDto[];
 }
 
 export interface GovernanceCheckRunDto {
@@ -115,6 +137,82 @@ export interface GovernanceCheckRunDto {
   checkedAt: string;
   checkedBy: string;
   summaryJson: string;
+  findings?: GovernanceFindingDto[];
+}
+
+// ==================== User Authority (User 360) Types ====================
+
+export interface UserAuthorityDto {
+  userId: string;
+  userName: string;
+  partMemberships: PartMembershipInfo[];
+  roles: RoleInfoDto[];
+  directCapabilities: DirectCapabilityInfo[];
+  delegatedCapabilities: DelegatedCapabilityInfo[];
+  effectiveCapabilities: EffectiveCapabilityInfoDto[];
+}
+
+export interface PartMembershipInfo {
+  partId: string;
+  partName: string;
+  membershipType: string;
+}
+
+export interface RoleInfoDto {
+  roleId: string;
+  roleCode: string;
+  roleName: string;
+  grantedBy: string;
+  grantedByName: string;
+  grantedAt: string;
+  presetCapabilities: string[];
+}
+
+export interface DirectCapabilityInfo {
+  capabilityId: string;
+  capabilityCode: string;
+  capabilityName: string;
+  grantedBy: string;
+  grantedByName: string;
+  grantedAt: string;
+}
+
+export interface DelegatedCapabilityInfo {
+  delegationId: string;
+  capabilityCode: string;
+  capabilityName: string;
+  delegator: string;
+  approver: string;
+  scope: ScopeInfo;
+  durationType: string;
+  endDate?: string;
+  daysRemaining?: number;
+  parentDelegationId?: string;
+}
+
+export interface ScopeInfo {
+  type: string;
+  partName?: string;
+  functionDescription?: string;
+}
+
+export interface EffectiveCapabilityInfoDto {
+  capabilityId: string;
+  code: string;
+  name: string;
+  source: string;
+  priority: number;
+  roleName?: string;
+  delegatorName?: string;
+  scope?: ScopeInfo;
+  duplicateSources?: DuplicateSourceInfo[];
+}
+
+export interface DuplicateSourceInfo {
+  source: string;
+  priority: number;
+  roleName?: string;
+  delegatorName?: string;
 }
 
 // ==================== Query Keys ====================
@@ -128,6 +226,7 @@ export const authorityKeys = {
   delegations: (projectId: string) => [...authorityKeys.all, 'delegations', projectId] as const,
   delegationMap: (projectId: string) => [...authorityKeys.all, 'delegation-map', projectId] as const,
   effectiveCapabilities: (projectId: string, userId: string) => [...authorityKeys.all, 'effective-caps', projectId, userId] as const,
+  userAuthority: (projectId: string, userId: string) => [...authorityKeys.all, 'user-authority', projectId, userId] as const,
   findings: (projectId: string) => [...authorityKeys.all, 'findings', projectId] as const,
   checkRuns: (projectId: string) => [...authorityKeys.all, 'check-runs', projectId] as const,
 };
@@ -174,10 +273,10 @@ export function useDelegationsQuery(projectId: string | undefined) {
   });
 }
 
-export function useDelegationMapQuery(projectId: string | undefined) {
+export function useDelegationMapQuery(projectId: string | undefined, includeEffectiveCapabilities = false) {
   return useQuery({
-    queryKey: authorityKeys.delegationMap(projectId || ''),
-    queryFn: () => apiService.getDelegationMap(projectId!),
+    queryKey: [...authorityKeys.delegationMap(projectId || ''), includeEffectiveCapabilities],
+    queryFn: () => apiService.getDelegationMap(projectId!, includeEffectiveCapabilities),
     enabled: !!projectId,
   });
 }
@@ -186,6 +285,15 @@ export function useEffectiveCapabilitiesQuery(projectId: string | undefined, use
   return useQuery({
     queryKey: authorityKeys.effectiveCapabilities(projectId || '', userId || ''),
     queryFn: () => apiService.getEffectiveCapabilities(projectId!, userId!),
+    enabled: !!projectId && !!userId,
+  });
+}
+
+/** 사용자 권한 상세 조회 (User 360) — 소속, 역할, 직접권한, 위임권한, 유효권한 통합 */
+export function useUserAuthorityQuery(projectId: string | undefined, userId: string | undefined) {
+  return useQuery({
+    queryKey: authorityKeys.userAuthority(projectId || '', userId || ''),
+    queryFn: () => apiService.getUserAuthority(projectId!, userId!),
     enabled: !!projectId && !!userId,
   });
 }

@@ -14,9 +14,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.OffsetDateTime;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 @Slf4j
 @Service
@@ -64,22 +62,29 @@ public class ReactiveRoleService {
         return roleRepository.findById(request.getRoleId())
                 .switchIfEmpty(Mono.error(CustomException.notFound("Role not found: " + request.getRoleId())))
                 .flatMap(role -> {
-                    R2dbcUserRole userRole = R2dbcUserRole.builder()
-                            .id(UUID.randomUUID().toString())
-                            .projectId(projectId)
-                            .userId(request.getUserId())
-                            .roleId(request.getRoleId())
-                            .grantedBy(actorUserId)
-                            .grantedAt(OffsetDateTime.now())
-                            .reason(request.getReason())
-                            .isNew(true)
-                            .build();
+                    // 역할의 preset 권한 vs 사용자의 기존 유효 권한 → SoD 사전 검증
+                    return checkSodForRoleGrant(projectId, request.getUserId(), request.getRoleId())
+                            .<UserRoleDto>flatMap(sodWarnings -> {
+                                R2dbcUserRole userRole = R2dbcUserRole.builder()
+                                        .id(UUID.randomUUID().toString())
+                                        .projectId(projectId)
+                                        .userId(request.getUserId())
+                                        .roleId(request.getRoleId())
+                                        .grantedBy(actorUserId)
+                                        .grantedAt(OffsetDateTime.now())
+                                        .reason(request.getReason())
+                                        .isNew(true)
+                                        .build();
 
-                    return userRoleRepository.save(userRole)
-                            .map(saved -> {
-                                UserRoleDto dto = UserRoleDto.from(saved);
-                                dto.setRoleName(role.getName());
-                                return dto;
+                                return userRoleRepository.save(userRole)
+                                        .map(saved -> {
+                                            UserRoleDto dto = UserRoleDto.from(saved);
+                                            dto.setRoleName(role.getName());
+                                            if (!sodWarnings.isEmpty()) {
+                                                dto.setSodWarnings(sodWarnings);
+                                            }
+                                            return dto;
+                                        });
                             });
                 })
                 .doOnSuccess(dto -> log.info("Granted role {} to user {} in project {}", request.getRoleId(), request.getUserId(), projectId));
@@ -123,6 +128,69 @@ public class ReactiveRoleService {
     public Mono<Void> revokeUserCapability(String userCapId) {
         return userCapabilityRepository.deleteById(userCapId)
                 .doOnSuccess(v -> log.info("Revoked user capability {}", userCapId));
+    }
+
+    // --- SoD 사전 검증 ---
+
+    /**
+     * 역할 부여 시 SoD 사전 검증.
+     * 역할의 preset 권한과 사용자의 기존 유효 권한이 SoD 규칙에 위반되는지 검사.
+     * - HIGH + blocking → 409 Conflict 차단
+     * - 나머지 → 경고 목록 반환
+     */
+    private Mono<List<SodWarningDto>> checkSodForRoleGrant(String projectId, String userId, String roleId) {
+        String sql = """
+                SELECT DISTINCT sr.id AS rule_id,
+                       sr.capability_a_id, ca.code AS cap_a_code,
+                       sr.capability_b_id, cb.code AS cap_b_code,
+                       sr.severity, sr.is_blocking, sr.description
+                FROM governance.role_capabilities rc
+                JOIN governance.sod_rules sr
+                  ON (rc.capability_id = sr.capability_a_id OR rc.capability_id = sr.capability_b_id)
+                JOIN governance.capabilities ca ON ca.id = sr.capability_a_id
+                JOIN governance.capabilities cb ON cb.id = sr.capability_b_id
+                WHERE rc.role_id = :roleId
+                  AND EXISTS (
+                    SELECT 1 FROM governance.v_effective_caps ec
+                    WHERE ec.project_id = :projectId
+                      AND ec.user_id = :userId
+                      AND ec.capability_id = CASE
+                          WHEN rc.capability_id = sr.capability_a_id THEN sr.capability_b_id
+                          ELSE sr.capability_a_id
+                      END
+                  )
+                """;
+
+        return databaseClient.sql(sql)
+                .bind("roleId", roleId)
+                .bind("projectId", projectId)
+                .bind("userId", userId)
+                .map(row -> SodWarningDto.builder()
+                        .ruleId(row.get("rule_id", String.class))
+                        .capabilityAId(row.get("capability_a_id", String.class))
+                        .capabilityACode(row.get("cap_a_code", String.class))
+                        .capabilityBId(row.get("capability_b_id", String.class))
+                        .capabilityBCode(row.get("cap_b_code", String.class))
+                        .severity(row.get("severity", String.class))
+                        .blocking(Boolean.TRUE.equals(row.get("is_blocking", Boolean.class)))
+                        .description(row.get("description", String.class))
+                        .build())
+                .all()
+                .collectList()
+                .flatMap(warnings -> {
+                    Optional<SodWarningDto> blockingWarning = warnings.stream()
+                            .filter(w -> "HIGH".equals(w.getSeverity()) && w.isBlocking())
+                            .findFirst();
+
+                    if (blockingWarning.isPresent()) {
+                        SodWarningDto bw = blockingWarning.get();
+                        return Mono.error(CustomException.conflict(
+                                "SoD 위반으로 역할 부여가 차단되었습니다: " + bw.getDescription()
+                                        + " (" + bw.getCapabilityACode() + " ↔ " + bw.getCapabilityBCode() + ")"));
+                    }
+
+                    return Mono.just(warnings);
+                });
     }
 
     // --- Enrichment ---

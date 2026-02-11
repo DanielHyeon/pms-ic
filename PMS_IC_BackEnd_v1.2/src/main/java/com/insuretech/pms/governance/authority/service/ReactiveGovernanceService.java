@@ -2,6 +2,7 @@ package com.insuretech.pms.governance.authority.service;
 
 import com.insuretech.pms.governance.authority.dto.GovernanceCheckRunDto;
 import com.insuretech.pms.governance.authority.dto.GovernanceFindingDto;
+import com.insuretech.pms.governance.authority.dto.RecommendedActionDto;
 import com.insuretech.pms.governance.authority.entity.R2dbcGovernanceCheckRun;
 import com.insuretech.pms.governance.authority.entity.R2dbcGovernanceFinding;
 import com.insuretech.pms.governance.authority.entity.R2dbcSodRule;
@@ -50,7 +51,9 @@ public class ReactiveGovernanceService {
                         // Check 3: Already expired delegations
                         checkExpiredDelegations(projectId, runId).doOnNext(allFindings::add).then(),
                         // Check 4: Duplicate capabilities (same cap from multiple sources)
-                        checkDuplicateCapabilities(projectId, runId).doOnNext(allFindings::add).then()
+                        checkDuplicateCapabilities(projectId, runId).doOnNext(allFindings::add).then(),
+                        // Check 5: Self-approval (위임자가 자신을 승인자로 지정한 위임)
+                        checkSelfApprovals(projectId, runId).doOnNext(allFindings::add).then()
                 )
                 .then(Mono.defer(() -> {
                     Map<String, Long> summary = new LinkedHashMap<>();
@@ -73,7 +76,15 @@ public class ReactiveGovernanceService {
                             .then(Mono.just(checkRun))
                             .map(run -> {
                                 GovernanceCheckRunDto dto = GovernanceCheckRunDto.from(run);
-                                dto.setFindings(allFindings.stream().map(GovernanceFindingDto::from).toList());
+                                // 각 finding에 권장 조치 생성
+                                List<GovernanceFindingDto> findingDtos = allFindings.stream()
+                                        .map(f -> {
+                                            GovernanceFindingDto fd = GovernanceFindingDto.from(f);
+                                            fd.setRecommendedActions(generateRecommendedActions(f));
+                                            return fd;
+                                        })
+                                        .toList();
+                                dto.setFindings(findingDtos);
                                 return dto;
                             });
                 }))
@@ -204,6 +215,84 @@ public class ReactiveGovernanceService {
                         .isNew(true)
                         .build())
                 .all();
+    }
+
+    /**
+     * Check 5: 자기승인 검출 — delegator_id == approver_id인 위임
+     */
+    private Flux<R2dbcGovernanceFinding> checkSelfApprovals(String projectId, String runId) {
+        String sql = """
+                SELECT * FROM governance.delegations
+                WHERE project_id = :projectId
+                  AND delegator_id = approver_id
+                  AND status IN ('ACTIVE', 'PENDING')
+                """;
+
+        return databaseClient.sql(sql)
+                .bind("projectId", projectId)
+                .map(row -> R2dbcGovernanceFinding.builder()
+                        .id(UUID.randomUUID().toString())
+                        .runId(runId)
+                        .projectId(projectId)
+                        .findingType("SELF_APPROVAL")
+                        .severity("HIGH")
+                        .userId(row.get("delegator_id", String.class))
+                        .delegationId(row.get("id", String.class))
+                        .message("위임자가 자신을 승인자로 지정한 위임이 존재합니다")
+                        .detailsJson("{\"delegateeId\":\"" + row.get("delegatee_id", String.class)
+                                + "\",\"capabilityId\":\"" + row.get("capability_id", String.class) + "\"}")
+                        .createdAt(OffsetDateTime.now())
+                        .isNew(true)
+                        .build())
+                .all();
+    }
+
+    /**
+     * finding 유형별 권장 조치 생성.
+     */
+    private List<RecommendedActionDto> generateRecommendedActions(R2dbcGovernanceFinding finding) {
+        List<RecommendedActionDto> actions = new ArrayList<>();
+
+        switch (finding.getFindingType()) {
+            case "SOD_VIOLATION" -> actions.add(RecommendedActionDto.builder()
+                    .actionType("REASSIGN_ROLE")
+                    .targetId(finding.getUserId())
+                    .description("SoD 충돌 권한 중 하나를 제거하거나 다른 사용자에게 재할당하세요")
+                    .priority("HIGH")
+                    .build());
+
+            case "EXPIRED" -> actions.add(RecommendedActionDto.builder()
+                    .actionType("REVOKE_DELEGATION")
+                    .targetId(finding.getDelegationId())
+                    .description("만료된 위임을 즉시 폐기하세요")
+                    .priority("HIGH")
+                    .build());
+
+            case "EXPIRING_SOON" -> actions.add(RecommendedActionDto.builder()
+                    .actionType("EXTEND_OR_REVOKE")
+                    .targetId(finding.getDelegationId())
+                    .description("만료 임박 위임을 연장하거나 폐기 여부를 결정하세요")
+                    .priority("MEDIUM")
+                    .build());
+
+            case "DUPLICATE_CAP" -> actions.add(RecommendedActionDto.builder()
+                    .actionType("REMOVE_DUPLICATE")
+                    .targetId(finding.getUserId())
+                    .description("중복 부여된 권한의 불필요한 경로를 정리하세요")
+                    .priority("LOW")
+                    .build());
+
+            case "SELF_APPROVAL" -> actions.add(RecommendedActionDto.builder()
+                    .actionType("CHANGE_APPROVER")
+                    .targetId(finding.getDelegationId())
+                    .description("자기승인 위임의 승인자를 다른 사람으로 변경하세요")
+                    .priority("HIGH")
+                    .build());
+
+            default -> { /* 알 수 없는 유형은 조치 없음 */ }
+        }
+
+        return actions;
     }
 
     private Mono<Void> saveCheckRun(R2dbcGovernanceCheckRun run) {

@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 
 /**
  * DTO representing a single finding from a governance compliance check.
@@ -28,6 +29,9 @@ public class GovernanceFindingDto {
     private String message;
     private String detailsJson;
     private OffsetDateTime createdAt;
+
+    /** 이 finding에 대한 권장 조치 목록 (거버넌스 엔진이 생성) */
+    private List<RecommendedActionDto> recommendedActions;
 
     /**
      * Factory method to create a GovernanceFindingDto from an R2dbcGovernanceFinding entity.

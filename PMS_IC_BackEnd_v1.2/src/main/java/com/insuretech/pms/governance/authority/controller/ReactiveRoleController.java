@@ -4,6 +4,7 @@ import com.insuretech.pms.common.dto.ApiResponse;
 import com.insuretech.pms.governance.authority.dto.*;
 import com.insuretech.pms.governance.authority.service.ReactiveEffectiveCapService;
 import com.insuretech.pms.governance.authority.service.ReactiveRoleService;
+import com.insuretech.pms.governance.authority.service.ReactiveUserAuthorityService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -25,6 +26,7 @@ public class ReactiveRoleController {
 
     private final ReactiveRoleService roleService;
     private final ReactiveEffectiveCapService effectiveCapService;
+    private final ReactiveUserAuthorityService userAuthorityService;
 
     @Operation(summary = "List all roles for a project (includes global roles)")
     @GetMapping("/api/v2/projects/{projectId}/roles")
@@ -117,5 +119,14 @@ public class ReactiveRoleController {
         return effectiveCapService.getEffectiveCapabilities(projectId, userId)
                 .collectList()
                 .map(caps -> ResponseEntity.ok(ApiResponse.success(caps)));
+    }
+
+    @Operation(summary = "사용자 권한 상세 조회 (User 360) — 소속, 역할, 직접권한, 위임권한, 유효권한 통합")
+    @GetMapping("/api/v2/projects/{projectId}/users/{userId}/authority")
+    public Mono<ResponseEntity<ApiResponse<UserAuthorityDto>>> getUserAuthority(
+            @PathVariable String projectId,
+            @PathVariable String userId) {
+        return userAuthorityService.getUserAuthority(projectId, userId)
+                .map(dto -> ResponseEntity.ok(ApiResponse.success(dto)));
     }
 }

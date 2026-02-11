@@ -17,7 +17,8 @@ interface SystemPermissionsTabProps {
 export function SystemPermissionsTab({ userRole }: SystemPermissionsTabProps) {
   const [selectedRole, setSelectedRole] = useState<string>(userRole);
   const [message, setMessage] = useState<Message | null>(null);
-  const canManageRoles = userRole === 'admin';
+  // admin, pmo_head, pm 역할이 권한 매트릭스 수정 가능
+  const canManageRoles = ['admin', 'pmo_head', 'pm'].includes(userRole);
 
   // TanStack Query hooks
   const { data: permissions = [], isLoading: loading } = usePermissions();
@@ -29,7 +30,7 @@ export function SystemPermissionsTab({ userRole }: SystemPermissionsTabProps) {
     if (!canManageRoles) {
       setMessage({
         type: 'error',
-        text: '권한이 없습니다. 시스템 관리자만 권한을 수정할 수 있습니다.',
+        text: '권한이 없습니다. 관리자, PMO 총괄, PM만 권한을 수정할 수 있습니다.',
       });
       return;
     }
@@ -97,7 +98,7 @@ function AdminPermissionNotice() {
       <div className="flex items-start gap-3">
         <Shield className="text-amber-600 mt-0.5" size={24} />
         <div>
-          <h3 className="font-semibold text-gray-900">시스템 관리자 권한</h3>
+          <h3 className="font-semibold text-gray-900">권한 관리 모드</h3>
           <p className="text-sm text-gray-700 mt-1">
             권한 매트릭스에서 각 권한을 클릭하여 역할별 접근 권한을 허용하거나 거부할 수
             있습니다.
@@ -255,7 +256,7 @@ function PermissionRow({
   saving,
   onToggle,
 }: PermissionRowProps) {
-  const hasPermission = permission.roles[selectedRole as keyof typeof permission.roles];
+  const hasPermission = permission.roles?.[selectedRole as keyof typeof permission.roles] ?? false;
 
   return (
     <tr className={hasPermission ? 'bg-green-50' : ''}>

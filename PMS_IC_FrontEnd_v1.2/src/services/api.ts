@@ -4323,9 +4323,10 @@ export class ApiService {
     );
   }
 
-  async getDelegationMap(projectId: string) {
+  async getDelegationMap(projectId: string, includeEffectiveCapabilities = false) {
+    const params = includeEffectiveCapabilities ? '?includeEffectiveCapabilities=true' : '';
     return this.fetchWithFallback<any[]>(
-      `${V2}/projects/${projectId}/delegation-map`,
+      `${V2}/projects/${projectId}/delegation-map${params}`,
       {},
       []
     );
@@ -4337,6 +4338,15 @@ export class ApiService {
       `${V2}/projects/${projectId}/users/${userId}/effective-capabilities`,
       {},
       []
+    );
+  }
+
+  // User Authority (User 360) — 소속, 역할, 직접권한, 위임권한, 유효권한 통합 조회
+  async getUserAuthority(projectId: string, userId: string) {
+    return this.fetchWithFallback<any>(
+      `${V2}/projects/${projectId}/users/${userId}/authority`,
+      {},
+      null
     );
   }
 

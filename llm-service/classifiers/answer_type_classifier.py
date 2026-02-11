@@ -51,6 +51,13 @@ class AnswerType(Enum):
     KANBAN_OVERVIEW = "kanban_overview"        # Kanban board summary
     ENTITY_PROGRESS = "entity_progress"      # Specific entity progress query
 
+    # Priority 1: Governance intents (역할/권한/위임)
+    ROLE_LIST = "role_list"                   # 역할 목록/멤버 조회
+    CAPABILITY_CHECK = "capability_check"     # 권한 확인/보유자 조회
+    DELEGATION_LIST = "delegation_list"       # 위임 현황/목록 조회
+    DELEGATION_MAP = "delegation_map"         # 위임 맵/권한 흐름
+    GOVERNANCE_CHECK = "governance_check"     # 거버넌스 검증/SoD 위반
+
     # Priority 2: General status (constrained)
     STATUS_METRIC = "status_metric"           # Numbers, percentages, counts
     STATUS_LIST = "status_list"               # Task lists, issue lists, blockers
@@ -164,6 +171,45 @@ INTENT_PATTERNS = {
         "requires_any": [
             "현황", "상태", "태스크", "보여", "알려", "몇", "요약",
             "보여줘", "알려줘",
+        ],
+        "priority": 1,
+    },
+
+    # ----- Governance intents (역할/권한/위임) -----
+    AnswerType.ROLE_LIST: {
+        "keywords": ["역할", "role", "역할 목록", "역할 현황"],
+        "requires_any": [
+            "목록", "뭐", "보여", "알려", "누구", "멤버", "몇",
+            "뭐야", "있", "리스트",
+        ],
+        "priority": 1,
+    },
+    AnswerType.DELEGATION_MAP: {
+        # compound keyword가 더 구체적 → CAPABILITY_CHECK/DELEGATION_LIST보다 먼저 검사
+        "keywords": ["위임 맵", "위임맵", "권한 흐름", "위임 트리", "delegation map"],
+        "priority": 1,
+    },
+    AnswerType.CAPABILITY_CHECK: {
+        "keywords": ["권한", "capability", "승인 권한", "유효 권한", "effective"],
+        "requires_any": [
+            "뭐", "누가", "확인", "보여", "알려", "가지고",
+            "보유", "있", "조회",
+        ],
+        "priority": 1,
+    },
+    AnswerType.DELEGATION_LIST: {
+        "keywords": ["위임", "delegation", "위임 현황", "위임 목록"],
+        "requires_any": [
+            "현황", "목록", "보여", "리스트", "누가", "누구",
+            "있", "알려", "몇",
+        ],
+        "priority": 1,
+    },
+    AnswerType.GOVERNANCE_CHECK: {
+        "keywords": ["거버넌스", "SoD", "sod", "직무분리", "거버넌스 검증", "governance"],
+        "requires_any": [
+            "위반", "검증", "점검", "확인", "결과", "현황",
+            "보여", "알려",
         ],
         "priority": 1,
     },
@@ -853,6 +899,12 @@ class AnswerTypeClassifier:
             AnswerType.TASKS_BY_STATUS,
             AnswerType.KANBAN_OVERVIEW,
             AnswerType.ENTITY_PROGRESS,
+            # Governance intents
+            AnswerType.ROLE_LIST,
+            AnswerType.CAPABILITY_CHECK,
+            AnswerType.DELEGATION_LIST,
+            AnswerType.DELEGATION_MAP,
+            AnswerType.GOVERNANCE_CHECK,
         }
 
     def should_use_rag(self, answer_type: AnswerType) -> bool:

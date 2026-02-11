@@ -72,8 +72,9 @@ public class ReactiveDelegationController {
     @Operation(summary = "Get delegation map (tree structure) for a project")
     @GetMapping("/api/v2/projects/{projectId}/delegation-map")
     public Mono<ResponseEntity<ApiResponse<List<DelegationMapNodeDto>>>> getDelegationMap(
-            @PathVariable String projectId) {
-        return delegationService.getDelegationMap(projectId)
+            @PathVariable String projectId,
+            @RequestParam(defaultValue = "false") boolean includeEffectiveCapabilities) {
+        return delegationService.getDelegationMap(projectId, includeEffectiveCapabilities)
                 .collectList()
                 .map(nodes -> ResponseEntity.ok(ApiResponse.success(nodes)));
     }

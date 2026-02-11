@@ -22,6 +22,9 @@ public class DelegationMapNodeDto {
     private String role;
     private List<DelegationEdgeDto> delegations;
 
+    /** 사용자의 유효 권한 목록 (includeEffectiveCapabilities=true 일 때만 포함) */
+    private List<EffectiveCapabilityDto> effectiveCapabilities;
+
     /**
      * Represents a directed edge from the delegator to a delegatee
      * for a specific capability.

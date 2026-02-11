@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.List;
 
 /**
  * DTO representing a capability delegation from one user to another.
@@ -54,6 +55,9 @@ public class DelegationDto {
     private String revokeReason;
 
     private String parentDelegationId;
+
+    /** 위임 생성 시 SoD 사전 검증에서 발견된 경고 목록 */
+    private List<SodWarningDto> sodWarnings;
 
     /**
      * Factory method to create a DelegationDto from an R2dbcDelegation entity.

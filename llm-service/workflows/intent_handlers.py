@@ -28,6 +28,13 @@ from dataclasses import dataclass
 
 from contracts.response_contract import ResponseContract, ErrorCode
 from query.db_query import execute_query, execute_query_with_fallback, QueryResult
+from query.governance_query_templates import (
+    ROLE_LIST_QUERY,
+    CAPABILITY_CHECK_BY_USER, CAPABILITY_CHECK_ALL,
+    DELEGATION_LIST_QUERY, DELEGATION_STATS_QUERY,
+    DELEGATION_MAP_QUERY,
+    GOVERNANCE_FINDINGS_QUERY, SOD_VIOLATION_CHECK_QUERY,
+)
 from query.query_templates import (
     BACKLOG_LIST_QUERY, BACKLOG_LIST_FALLBACK_QUERY, BACKLOG_SUMMARY_QUERY,
     ACTIVE_SPRINT_QUERY, SPRINT_STORIES_QUERY, SPRINT_METRICS_QUERY,
@@ -1236,6 +1243,292 @@ def handle_unknown(ctx: HandlerContext) -> ResponseContract:
 
 
 # =============================================================================
+# ROLE_LIST Handler (거버넌스: 역할 목록)
+# =============================================================================
+
+def handle_role_list(ctx: HandlerContext) -> ResponseContract:
+    """역할 목록 + 멤버 수 조회. 미할당 역할 경고 포함."""
+    logger.info(f"[ROLE_LIST] project={ctx.project_id}")
+
+    roles = []
+    db_failed = False
+    warnings = []
+
+    try:
+        result = execute_query(
+            ROLE_LIST_QUERY,
+            {"project_id": ctx.project_id},
+            limit=50,
+        )
+        if not result.success:
+            db_failed = True
+            logger.error(f"Role list query failed: {result.error}")
+        else:
+            roles = result.data
+            # 멤버 미할당 역할 경고
+            empty_roles = [r for r in roles if r.get("member_count", 0) == 0]
+            if empty_roles:
+                names = ", ".join(r.get("role_name", "") for r in empty_roles)
+                warnings.append(f"멤버가 미할당된 역할: {names}")
+    except Exception as e:
+        logger.exception(f"Unexpected error in handle_role_list: {e}")
+        db_failed = True
+
+    if db_failed:
+        return _create_error_response("role_list", ctx.project_id, "역할 목록 조회 실패", ErrorCode.DB_QUERY_FAILED, ["프로젝트 DB 연결 상태를 확인하세요"])
+
+    return ResponseContract(
+        intent="role_list",
+        reference_time=get_kst_reference_time(),
+        scope=f"Project: {ctx.project_id}",
+        data={"roles": roles, "count": len(roles)},
+        warnings=warnings,
+        tips=[],
+        error_code=None,
+        provenance="realtime",
+    )
+
+
+# =============================================================================
+# CAPABILITY_CHECK Handler (거버넌스: 권한 확인)
+# =============================================================================
+
+def handle_capability_check(ctx: HandlerContext) -> ResponseContract:
+    """
+    사용자별 유효 권한 조회.
+    메시지에서 사용자 이름/ID 추출 시도 → 실패하면 전체 현황 반환.
+    """
+    logger.info(f"[CAPABILITY_CHECK] project={ctx.project_id}")
+
+    items = []
+    db_failed = False
+    mode = "all"  # 기본: 전체 현황
+
+    try:
+        # 전체 현황 조회 (사용자별 그룹)
+        result = execute_query(
+            CAPABILITY_CHECK_ALL,
+            {"project_id": ctx.project_id},
+            limit=100,
+        )
+        if not result.success:
+            db_failed = True
+            logger.error(f"Capability check query failed: {result.error}")
+        else:
+            items = result.data
+    except Exception as e:
+        logger.exception(f"Unexpected error in handle_capability_check: {e}")
+        db_failed = True
+
+    if db_failed:
+        return _create_error_response("capability_check", ctx.project_id, "권한 조회 실패", ErrorCode.DB_QUERY_FAILED, ["거버넌스 스키마 상태를 확인하세요"])
+
+    warnings = []
+    if not items:
+        warnings.append("프로젝트에 할당된 유효 권한이 없습니다")
+
+    return ResponseContract(
+        intent="capability_check",
+        reference_time=get_kst_reference_time(),
+        scope=f"Project: {ctx.project_id}",
+        data={"items": items, "count": len(items), "mode": mode},
+        warnings=warnings,
+        tips=[],
+        error_code=None,
+        provenance="realtime",
+    )
+
+
+# =============================================================================
+# DELEGATION_LIST Handler (거버넌스: 위임 현황)
+# =============================================================================
+
+def handle_delegation_list(ctx: HandlerContext) -> ResponseContract:
+    """활성 위임 목록 + 통계 + 만료 임박 경고."""
+    logger.info(f"[DELEGATION_LIST] project={ctx.project_id}")
+
+    delegations = []
+    stats = []
+    db_failed = False
+    warnings = []
+
+    try:
+        result = execute_query(
+            DELEGATION_LIST_QUERY,
+            {"project_id": ctx.project_id},
+            limit=50,
+        )
+        if not result.success:
+            db_failed = True
+            logger.error(f"Delegation list query failed: {result.error}")
+        else:
+            delegations = result.data
+
+        # 통계 조회
+        if not db_failed:
+            stats_result = execute_query(
+                DELEGATION_STATS_QUERY,
+                {"project_id": ctx.project_id},
+                limit=10,
+            )
+            if stats_result.success:
+                stats = stats_result.data
+                # 만료 임박 경고
+                for s in stats:
+                    expiring = s.get("expiring_soon_count", 0)
+                    if expiring and expiring > 0:
+                        warnings.append(f"7일 이내 만료 예정 위임: {expiring}건")
+
+    except Exception as e:
+        logger.exception(f"Unexpected error in handle_delegation_list: {e}")
+        db_failed = True
+
+    if db_failed:
+        return _create_error_response("delegation_list", ctx.project_id, "위임 현황 조회 실패", ErrorCode.DB_QUERY_FAILED, ["거버넌스 스키마 상태를 확인하세요"])
+
+    if not delegations:
+        warnings.append("활성 또는 대기 중인 위임이 없습니다")
+
+    return ResponseContract(
+        intent="delegation_list",
+        reference_time=get_kst_reference_time(),
+        scope=f"Project: {ctx.project_id}",
+        data={
+            "delegations": delegations,
+            "count": len(delegations),
+            "stats": stats,
+        },
+        warnings=warnings,
+        tips=[],
+        error_code=None,
+        provenance="realtime",
+    )
+
+
+# =============================================================================
+# DELEGATION_MAP Handler (거버넌스: 위임 맵/트리)
+# =============================================================================
+
+def handle_delegation_map(ctx: HandlerContext) -> ResponseContract:
+    """재귀 CTE 위임 트리 조회 + 재위임 깊이 경고."""
+    logger.info(f"[DELEGATION_MAP] project={ctx.project_id}")
+
+    edges = []
+    db_failed = False
+    warnings = []
+
+    try:
+        result = execute_query(
+            DELEGATION_MAP_QUERY,
+            {"project_id": ctx.project_id},
+            limit=200,
+        )
+        if not result.success:
+            db_failed = True
+            logger.error(f"Delegation map query failed: {result.error}")
+        else:
+            edges = result.data
+            # 재위임 깊이 경고 (depth >= 2)
+            deep_chains = [e for e in edges if e.get("depth", 1) >= 2]
+            if deep_chains:
+                warnings.append(f"재위임 체인 깊이 2 이상: {len(deep_chains)}건 — 체인 관리에 주의가 필요합니다")
+    except Exception as e:
+        logger.exception(f"Unexpected error in handle_delegation_map: {e}")
+        db_failed = True
+
+    if db_failed:
+        return _create_error_response("delegation_map", ctx.project_id, "위임 맵 조회 실패", ErrorCode.DB_QUERY_FAILED, ["거버넌스 스키마 상태를 확인하세요"])
+
+    if not edges:
+        warnings.append("활성 위임이 없어 위임 맵이 비어 있습니다")
+
+    return ResponseContract(
+        intent="delegation_map",
+        reference_time=get_kst_reference_time(),
+        scope=f"Project: {ctx.project_id}",
+        data={"edges": edges, "count": len(edges)},
+        warnings=warnings,
+        tips=[],
+        error_code=None,
+        provenance="realtime",
+    )
+
+
+# =============================================================================
+# GOVERNANCE_CHECK Handler (거버넌스: 검증 결과)
+# =============================================================================
+
+def handle_governance_check(ctx: HandlerContext) -> ResponseContract:
+    """최근 거버넌스 검증 결과 + 실시간 SoD 검사 + 심각도별 그룹화."""
+    logger.info(f"[GOVERNANCE_CHECK] project={ctx.project_id}")
+
+    findings = []
+    sod_violations = []
+    db_failed = False
+    warnings = []
+
+    try:
+        # 최근 검증 결과 조회
+        result = execute_query(
+            GOVERNANCE_FINDINGS_QUERY,
+            {"project_id": ctx.project_id},
+            limit=100,
+        )
+        if not result.success:
+            db_failed = True
+            logger.error(f"Governance findings query failed: {result.error}")
+        else:
+            findings = result.data
+
+        # 실시간 SoD 위반 검사
+        if not db_failed:
+            sod_result = execute_query(
+                SOD_VIOLATION_CHECK_QUERY,
+                {"project_id": ctx.project_id},
+                limit=50,
+            )
+            if sod_result.success:
+                sod_violations = sod_result.data
+                if sod_violations:
+                    blocking = [v for v in sod_violations if v.get("is_blocking")]
+                    if blocking:
+                        warnings.append(f"차단 수준 SoD 위반: {len(blocking)}건 — 즉시 조치가 필요합니다")
+
+    except Exception as e:
+        logger.exception(f"Unexpected error in handle_governance_check: {e}")
+        db_failed = True
+
+    if db_failed:
+        return _create_error_response("governance_check", ctx.project_id, "거버넌스 검증 조회 실패", ErrorCode.DB_QUERY_FAILED, ["거버넌스 스키마 상태를 확인하세요"])
+
+    # 심각도별 그룹화
+    severity_groups = {}
+    for f in findings:
+        sev = f.get("severity", "INFO")
+        severity_groups.setdefault(sev, []).append(f)
+
+    if not findings and not sod_violations:
+        warnings.append("거버넌스 검증 결과가 없습니다. 검증을 실행해 주세요.")
+
+    return ResponseContract(
+        intent="governance_check",
+        reference_time=get_kst_reference_time(),
+        scope=f"Project: {ctx.project_id}",
+        data={
+            "findings": findings,
+            "findings_count": len(findings),
+            "sod_violations": sod_violations,
+            "sod_count": len(sod_violations),
+            "severity_groups": severity_groups,
+        },
+        warnings=warnings,
+        tips=[],
+        error_code=None,
+        provenance="realtime",
+    )
+
+
+# =============================================================================
 # Handler Registry
 # =============================================================================
 
@@ -1251,6 +1544,12 @@ INTENT_HANDLERS = {
     "entity_progress": handle_entity_progress,
     "casual": handle_casual,
     "unknown": handle_unknown,
+    # Governance intents
+    "role_list": handle_role_list,
+    "capability_check": handle_capability_check,
+    "delegation_list": handle_delegation_list,
+    "delegation_map": handle_delegation_map,
+    "governance_check": handle_governance_check,
     # STATUS_* intents are NOT in this registry
     # They use existing StatusResponseContract path
 }

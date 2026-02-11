@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Shield,
   Users,
@@ -17,17 +17,24 @@ import {
   useUpdateUserSystemRole,
   useAssignPM,
   useRevokePM,
+  useProjectMembers,
 } from '../../../../hooks/api/useRoles';
 import { MessageAlert, LoadingSpinner } from '../shared';
 import { AssignPMDialog } from '../dialogs';
 import type { SystemUser, Message } from '../types';
+import type { UserRole } from '../../../App';
+
+interface UserManagementTabProps {
+  userRole: UserRole;
+}
 
 /**
- * User management tab for system administrators
- * Allows changing system roles and assigning PM roles to projects
+ * 사용자 관리 탭
+ * - admin: 전체 사용자 표시 + 시스템 역할 변경 가능
+ * - pmo_head / pm: 현재 프로젝트의 구성원만 표시 (시스템 역할 변경 불가)
  */
-export function UserManagementTab() {
-  const { projects } = useProject();
+export function UserManagementTab({ userRole }: UserManagementTabProps) {
+  const { projects, currentProject } = useProject();
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [message, setMessage] = useState<Message | null>(null);
@@ -35,23 +42,37 @@ export function UserManagementTab() {
   const [showAssignPMDialog, setShowAssignPMDialog] = useState(false);
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
 
+  const isAdmin = userRole === 'admin';
+
   // TanStack Query hooks
   const { data: users = [], isLoading: loading } = useUsers();
+  const { data: projectMembers = [] } = useProjectMembers(currentProject?.id);
   const updateSystemRoleMutation = useUpdateUserSystemRole();
   const assignPMMutation = useAssignPM();
   const revokePMMutation = useRevokePM();
 
-  // Filter users
-  const filteredUsers = users.filter((user) => {
-    const matchesSearch =
-      user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.department.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = roleFilter === 'all' || user.systemRole === roleFilter;
-    return matchesSearch && matchesRole;
-  });
+  // PMO/PM은 현재 프로젝트 구성원만 표시
+  const projectMemberIds = useMemo(() => {
+    if (isAdmin) return null; // admin은 필터링 안 함
+    return new Set(projectMembers.map((m) => m.userId));
+  }, [isAdmin, projectMembers]);
 
-  // Change system role
+  // 사용자 필터링: 검색 + 역할 + (PMO/PM일 때) 프로젝트 구성원 필터
+  const filteredUsers = useMemo(() => {
+    return users.filter((user) => {
+      // PMO/PM: 현재 프로젝트 구성원만
+      if (projectMemberIds && !projectMemberIds.has(user.id)) return false;
+
+      const matchesSearch =
+        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.department.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesRole = roleFilter === 'all' || user.systemRole === roleFilter;
+      return matchesSearch && matchesRole;
+    });
+  }, [users, projectMemberIds, searchTerm, roleFilter]);
+
+  // 시스템 역할 변경 (admin 전용)
   const handleChangeSystemRole = async (userId: string, newRole: SystemRole) => {
     try {
       await updateSystemRoleMutation.mutateAsync({ userId, role: newRole });
@@ -66,7 +87,7 @@ export function UserManagementTab() {
     }
   };
 
-  // Assign PM to project
+  // PM 지정
   const handleAssignPM = async (userId: string, projectIds: string[]) => {
     try {
       await assignPMMutation.mutateAsync({ userId, projectIds });
@@ -79,7 +100,7 @@ export function UserManagementTab() {
     }
   };
 
-  // Revoke PM from project
+  // PM 해제
   const handleRevokePM = async (userId: string, projectId: string) => {
     if (!confirm('이 사용자의 PM 역할을 해제하시겠습니까?')) return;
 
@@ -93,7 +114,6 @@ export function UserManagementTab() {
     }
   };
 
-  // Get role badge style
   const getSystemRoleBadge = (role: SystemRole) => {
     switch (role) {
       case 'admin':
@@ -111,8 +131,8 @@ export function UserManagementTab() {
 
   return (
     <div className="space-y-6">
-      {/* Admin notice */}
-      <AdminNotice />
+      {/* 역할별 안내 */}
+      <RoleNotice isAdmin={isAdmin} projectName={currentProject?.name} />
 
       {/* Message */}
       {message && <MessageAlert message={message} />}
@@ -132,7 +152,9 @@ export function UserManagementTab() {
             <div className="flex items-center gap-3">
               <Users className="text-blue-600" size={24} />
               <div>
-                <h3 className="font-semibold text-gray-900">전체 사용자</h3>
+                <h3 className="font-semibold text-gray-900">
+                  {isAdmin ? '전체 사용자' : `${currentProject?.name ?? '프로젝트'} 구성원`}
+                </h3>
                 <p className="text-sm text-gray-500">{filteredUsers.length}명</p>
               </div>
             </div>
@@ -140,28 +162,37 @@ export function UserManagementTab() {
         </div>
 
         <div className="divide-y divide-gray-100">
-          {filteredUsers.map((user) => (
-            <UserRow
-              key={user.id}
-              user={user}
-              isExpanded={expandedUserId === user.id}
-              onToggleExpand={() =>
-                setExpandedUserId(expandedUserId === user.id ? null : user.id)
-              }
-              onChangeSystemRole={handleChangeSystemRole}
-              onAssignPMClick={() => {
-                setSelectedUser(user);
-                setShowAssignPMDialog(true);
-              }}
-              onRevokePM={handleRevokePM}
-              getSystemRoleBadge={getSystemRoleBadge}
-            />
-          ))}
+          {filteredUsers.length === 0 ? (
+            <div className="px-6 py-8 text-center text-gray-500">
+              {searchTerm || roleFilter !== 'all'
+                ? '검색 조건에 맞는 사용자가 없습니다'
+                : '표시할 사용자가 없습니다'}
+            </div>
+          ) : (
+            filteredUsers.map((user) => (
+              <UserRow
+                key={user.id}
+                user={user}
+                isAdmin={isAdmin}
+                isExpanded={expandedUserId === user.id}
+                onToggleExpand={() =>
+                  setExpandedUserId(expandedUserId === user.id ? null : user.id)
+                }
+                onChangeSystemRole={handleChangeSystemRole}
+                onAssignPMClick={() => {
+                  setSelectedUser(user);
+                  setShowAssignPMDialog(true);
+                }}
+                onRevokePM={handleRevokePM}
+                getSystemRoleBadge={getSystemRoleBadge}
+              />
+            ))
+          )}
         </div>
       </div>
 
       {/* Role Statistics */}
-      <RoleStatistics users={users} />
+      <RoleStatistics users={filteredUsers} isAdmin={isAdmin} />
 
       {/* Assign PM Dialog */}
       {showAssignPMDialog && selectedUser && (
@@ -180,18 +211,37 @@ export function UserManagementTab() {
   );
 }
 
-// Sub-components
+// ================ Sub-components ================
 
-function AdminNotice() {
+/** 역할에 따른 안내 메시지 */
+function RoleNotice({ isAdmin, projectName }: { isAdmin: boolean; projectName?: string }) {
+  if (isAdmin) {
+    return (
+      <div className="bg-gradient-to-r from-red-50 to-orange-50 border-2 border-red-200 rounded-xl p-4">
+        <div className="flex items-start gap-3">
+          <Shield className="text-red-600 mt-0.5" size={24} />
+          <div>
+            <h3 className="font-semibold text-gray-900">시스템 관리자 전용</h3>
+            <p className="text-sm text-gray-700 mt-1">
+              이 화면에서 사용자의 시스템 역할(Admin, PMO, 일반)을 변경하고, PM 역할을
+              지정할 수 있습니다.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-gradient-to-r from-red-50 to-orange-50 border-2 border-red-200 rounded-xl p-4">
+    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl p-4">
       <div className="flex items-start gap-3">
-        <Shield className="text-red-600 mt-0.5" size={24} />
+        <Users className="text-blue-600 mt-0.5" size={24} />
         <div>
-          <h3 className="font-semibold text-gray-900">시스템 관리자 전용</h3>
+          <h3 className="font-semibold text-gray-900">내 프로젝트 구성원 관리</h3>
           <p className="text-sm text-gray-700 mt-1">
-            이 화면에서 사용자의 시스템 역할(Admin, PMO, 일반)을 변경하고, PM 역할을
-            지정할 수 있습니다.
+            {projectName
+              ? `"${projectName}" 프로젝트의 구성원만 표시됩니다. PM 역할 지정이 가능합니다.`
+              : '현재 프로젝트의 구성원만 표시됩니다.'}
           </p>
         </div>
       </div>
@@ -246,6 +296,7 @@ function SearchFilter({
 
 interface UserRowProps {
   user: SystemUser;
+  isAdmin: boolean;
   isExpanded: boolean;
   onToggleExpand: () => void;
   onChangeSystemRole: (userId: string, role: SystemRole) => void;
@@ -256,6 +307,7 @@ interface UserRowProps {
 
 function UserRow({
   user,
+  isAdmin,
   isExpanded,
   onToggleExpand,
   onChangeSystemRole,
@@ -291,20 +343,23 @@ function UserRow({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <select
-            value={user.systemRole ?? 'user'}
-            onChange={(e) => {
-              e.stopPropagation();
-              onChangeSystemRole(user.id, e.target.value as SystemRole);
-            }}
-            onClick={(e) => e.stopPropagation()}
-            aria-label={`${user.name} 시스템 역할 변경`}
-            className="text-sm px-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="admin">시스템 관리자</option>
-            <option value="pmo">PMO</option>
-            <option value="user">일반 사용자</option>
-          </select>
+          {/* 시스템 역할 변경: admin만 가능 */}
+          {isAdmin && (
+            <select
+              value={user.systemRole ?? 'user'}
+              onChange={(e) => {
+                e.stopPropagation();
+                onChangeSystemRole(user.id, e.target.value as SystemRole);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              aria-label={`${user.name} 시스템 역할 변경`}
+              className="text-sm px-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="admin">시스템 관리자</option>
+              <option value="pmo">PMO</option>
+              <option value="user">일반 사용자</option>
+            </select>
+          )}
           <button
             type="button"
             onClick={(e) => {
@@ -329,6 +384,7 @@ function UserRow({
       {isExpanded && (
         <ExpandedProjectRoles
           user={user}
+          isAdmin={isAdmin}
           onRevokePM={onRevokePM}
         />
       )}
@@ -338,10 +394,11 @@ function UserRow({
 
 interface ExpandedProjectRolesProps {
   user: SystemUser;
+  isAdmin: boolean;
   onRevokePM: (userId: string, projectId: string) => void;
 }
 
-function ExpandedProjectRoles({ user, onRevokePM }: ExpandedProjectRolesProps) {
+function ExpandedProjectRoles({ user, isAdmin, onRevokePM }: ExpandedProjectRolesProps) {
   return (
     <div className="px-6 pb-4 bg-gray-50">
       <div className="ml-14 border-l-2 border-gray-200 pl-4">
@@ -360,14 +417,16 @@ function ExpandedProjectRoles({ user, onRevokePM }: ExpandedProjectRolesProps) {
                     {PROJECT_ROLE_LABELS[pr.role]}
                   </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => onRevokePM(user.id, pr.projectId)}
-                  className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
-                  title="PM 해제"
-                >
-                  <Trash2 size={14} />
-                </button>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => onRevokePM(user.id, pr.projectId)}
+                    className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                    title="PM 해제"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -381,9 +440,10 @@ function ExpandedProjectRoles({ user, onRevokePM }: ExpandedProjectRolesProps) {
 
 interface RoleStatisticsProps {
   users: SystemUser[];
+  isAdmin: boolean;
 }
 
-function RoleStatistics({ users }: RoleStatisticsProps) {
+function RoleStatistics({ users, isAdmin }: RoleStatisticsProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
@@ -421,7 +481,9 @@ function RoleStatistics({ users }: RoleStatisticsProps) {
             <div className="text-2xl font-bold text-gray-900">
               {users.filter((u) => u.projectRoles && u.projectRoles.some((r) => r.role === 'pm')).length}
             </div>
-            <div className="text-sm text-gray-500">PM (프로젝트 관리자)</div>
+            <div className="text-sm text-gray-500">
+              {isAdmin ? 'PM (프로젝트 관리자)' : 'PM (현재 프로젝트)'}
+            </div>
           </div>
         </div>
       </div>

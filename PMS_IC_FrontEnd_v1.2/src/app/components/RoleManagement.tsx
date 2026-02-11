@@ -20,12 +20,12 @@ import type { TabType } from './roles';
  */
 export default function RoleManagement({ userRole }: { userRole: UserRole }) {
   const [activeTab, setActiveTab] = useState<TabType>('users');
-  const canManageProjectRoles = ['admin', 'pm'].includes(userRole);
-
-  // Admin only tabs
+  // 사용자 관리 / 시스템 권한 탭: admin 전용
   const isAdmin = userRole === 'admin';
+  // 프로젝트 권한 관리: admin, pmo_head, pm
+  const canManageProjectRoles = ['admin', 'pmo_head', 'pm'].includes(userRole);
 
-  // If not admin, default to project tab
+  // admin이 아니면 프로젝트 탭만 표시
   useEffect(() => {
     if (!isAdmin) {
       setActiveTab('project');
@@ -123,7 +123,7 @@ interface TabContentProps {
 
 function TabContent({ activeTab, isAdmin, userRole, canManageProjectRoles }: TabContentProps) {
   if (activeTab === 'users' && isAdmin) {
-    return <UserManagementTab />;
+    return <UserManagementTab userRole={userRole} />;
   }
 
   if (activeTab === 'system' && isAdmin) {

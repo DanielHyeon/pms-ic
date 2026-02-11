@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 
 /**
  * DTO representing a user-to-role assignment within a project.
@@ -28,6 +29,9 @@ public class UserRoleDto {
     private String grantedByName;
     private OffsetDateTime grantedAt;
     private String reason;
+
+    /** 역할 부여 시 SoD 사전 검증에서 발견된 경고 목록 */
+    private List<SodWarningDto> sodWarnings;
 
     /**
      * Factory method to create a UserRoleDto from an R2dbcUserRole entity.

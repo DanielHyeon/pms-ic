@@ -45,6 +45,12 @@ def render(contract: ResponseContract) -> str:
         "entity_progress": render_entity_progress,
         "casual": render_casual,
         "status_list": render_status_list,
+        # Governance intents
+        "role_list": render_role_list,
+        "capability_check": render_capability_check,
+        "delegation_list": render_delegation_list,
+        "delegation_map": render_delegation_map,
+        "governance_check": render_governance_check,
     }
 
     renderer = renderers.get(intent, render_default)
@@ -901,6 +907,422 @@ def render_status_list(contract: ResponseContract) -> str:
     _append_tips(lines, contract.tips)
     lines.append(f"_데이터 출처: {contract.provenance}_")
     return "\n".join(lines)
+
+
+def render_role_list(contract: ResponseContract) -> str:
+    """
+    역할 목록 렌더러.
+
+    역할별 멤버 수, 시스템 역할 구분, 미할당 역할 경고 표시.
+    """
+    lines = []
+
+    lines.append(f"👥 **역할 목록** (기준: {contract.reference_time})")
+    if contract.scope:
+        lines.append(f"📍 {contract.scope}")
+    lines.append("")
+
+    if contract.has_error():
+        for warning in contract.warnings:
+            lines.append(f"⚠️ {warning}")
+        lines.append("")
+        _append_tips(lines, contract.tips)
+        lines.append(f"_데이터 출처: {contract.provenance}_")
+        return "\n".join(lines)
+
+    data = contract.data
+    roles = data.get("roles", [])
+    count = data.get("count", len(roles))
+    unassigned_count = data.get("unassigned_count", 0)
+
+    if roles:
+        lines.append(f"**전체 역할**: {count}개")
+        if unassigned_count > 0:
+            lines.append(f"⚠️ **미할당 역할**: {unassigned_count}개 — 멤버 배정이 필요합니다")
+        lines.append("")
+
+        # 시스템 역할과 프로젝트 역할 분리
+        system_roles = [r for r in roles if r.get("is_system")]
+        project_roles = [r for r in roles if not r.get("is_system")]
+
+        if system_roles:
+            lines.append("🔧 **시스템 역할**")
+            for role in system_roles:
+                name = role.get("role_name", "?")
+                member_count = int(role.get("member_count", 0) or 0)
+                desc = role.get("description", "")
+                members = role.get("member_names", "")
+                member_info = f" — {members}" if members else ""
+                lines.append(f"  - **{name}** ({member_count}명){member_info}")
+                if desc:
+                    lines.append(f"    └─ {desc[:60]}")
+            lines.append("")
+
+        if project_roles:
+            lines.append("📁 **프로젝트 역할**")
+            for role in project_roles:
+                name = role.get("role_name", "?")
+                member_count = int(role.get("member_count", 0) or 0)
+                desc = role.get("description", "")
+                members = role.get("member_names", "")
+                # 멤버 없는 역할은 경고 표시
+                if member_count == 0:
+                    lines.append(f"  - ⚠️ **{name}** (미할당)")
+                else:
+                    member_info = f" — {members}" if members else ""
+                    lines.append(f"  - **{name}** ({member_count}명){member_info}")
+                if desc:
+                    lines.append(f"    └─ {desc[:60]}")
+            lines.append("")
+    else:
+        for warning in contract.warnings:
+            lines.append(f"ℹ️ {warning}")
+        lines.append("")
+
+    _append_tips(lines, contract.tips)
+    lines.append(f"_데이터 출처: {contract.provenance}_")
+    return "\n".join(lines)
+
+
+def render_capability_check(contract: ResponseContract) -> str:
+    """
+    권한 현황 렌더러.
+
+    3가지 모드: 사용자별 권한, 특정 권한 보유자, 전체 현황.
+    """
+    lines = []
+
+    lines.append(f"🔐 **권한 현황** (기준: {contract.reference_time})")
+    if contract.scope:
+        lines.append(f"📍 {contract.scope}")
+    lines.append("")
+
+    if contract.has_error():
+        for warning in contract.warnings:
+            lines.append(f"⚠️ {warning}")
+        lines.append("")
+        _append_tips(lines, contract.tips)
+        lines.append(f"_데이터 출처: {contract.provenance}_")
+        return "\n".join(lines)
+
+    data = contract.data
+    mode = data.get("mode", "all")
+
+    if mode == "by_user":
+        # 사용자별 유효 권한
+        user_name = data.get("user_name", "?")
+        capabilities = data.get("capabilities", [])
+        cap_count = data.get("cap_count", len(capabilities))
+
+        lines.append(f"**{user_name}**의 유효 권한: {cap_count}개")
+        lines.append("")
+
+        # 카테고리별 그룹화
+        by_category = {}
+        for cap in capabilities:
+            category = cap.get("category", "기타")
+            if category not in by_category:
+                by_category[category] = []
+            by_category[category].append(cap)
+
+        for category, caps in sorted(by_category.items()):
+            lines.append(f"**{category}** ({len(caps)}개)")
+            for cap in caps:
+                code = cap.get("capability_code", "")
+                name = cap.get("capability_name", "")
+                source = cap.get("source_type", "")
+                source_label = {"ROLE": "역할", "DELEGATION": "위임"}.get(source, source)
+                lines.append(f"  - `{code}` {name} ({source_label})")
+            lines.append("")
+
+    elif mode == "by_cap":
+        # 특정 권한 보유자
+        cap_name = data.get("capability_name", "?")
+        holders = data.get("holders", [])
+
+        lines.append(f"**{cap_name}** 보유자: {len(holders)}명")
+        lines.append("")
+
+        for holder in holders:
+            name = holder.get("user_name", "?")
+            source = holder.get("source_type", "")
+            source_label = {"ROLE": "역할", "DELEGATION": "위임"}.get(source, source)
+            lines.append(f"  - {name} ({source_label})")
+        lines.append("")
+
+    else:
+        # 전체 현황 (사용자별 그룹)
+        users = data.get("users", [])
+        lines.append(f"**전체 권한 현황**: {len(users)}명")
+        lines.append("")
+
+        for user in users:
+            name = user.get("user_name", "?")
+            cap_count = int(user.get("cap_count", 0) or 0)
+            codes = user.get("capability_codes", "")
+            lines.append(f"  - **{name}** — {cap_count}개 권한")
+            if codes:
+                lines.append(f"    └─ {codes[:80]}")
+        lines.append("")
+
+    _append_tips(lines, contract.tips)
+    lines.append(f"_데이터 출처: {contract.provenance}_")
+    return "\n".join(lines)
+
+
+def render_delegation_list(contract: ResponseContract) -> str:
+    """
+    위임 현황 렌더러.
+
+    활성/대기 위임 목록 + 통계 + 만료 임박 경고.
+    """
+    lines = []
+
+    lines.append(f"📤 **위임 현황** (기준: {contract.reference_time})")
+    if contract.scope:
+        lines.append(f"📍 {contract.scope}")
+    lines.append("")
+
+    if contract.has_error():
+        for warning in contract.warnings:
+            lines.append(f"⚠️ {warning}")
+        lines.append("")
+        _append_tips(lines, contract.tips)
+        lines.append(f"_데이터 출처: {contract.provenance}_")
+        return "\n".join(lines)
+
+    data = contract.data
+    delegations = data.get("delegations", [])
+    stats = data.get("stats", {})
+    expiring_soon = data.get("expiring_soon_count", 0)
+
+    # 통계 요약
+    active_count = int(stats.get("ACTIVE", 0) or 0)
+    pending_count = int(stats.get("PENDING", 0) or 0)
+
+    lines.append(f"**활성 위임**: {active_count}건 | **승인 대기**: {pending_count}건")
+    if expiring_soon > 0:
+        lines.append(f"⏰ **7일 내 만료 예정**: {expiring_soon}건")
+    lines.append("")
+
+    if delegations:
+        # 상태별 분리
+        active = [d for d in delegations if d.get("status") == "ACTIVE"]
+        pending = [d for d in delegations if d.get("status") == "PENDING"]
+
+        if active:
+            lines.append("✅ **활성 위임**")
+            for d in active[:10]:
+                delegator = d.get("delegator_name", "?")
+                delegatee = d.get("delegatee_name", "?")
+                cap = d.get("capability_name") or d.get("capability_code", "?")
+                scope = d.get("scope_type", "")
+                duration = d.get("duration_type", "")
+                end_at = d.get("end_at", "")
+
+                scope_label = {"FULL": "전체", "FUNCTION": "기능별"}.get(scope, scope)
+                duration_info = ""
+                if duration == "TEMPORARY" and end_at:
+                    duration_info = f" (~{str(end_at)[:10]})"
+
+                lines.append(f"  - {delegator} → {delegatee}: **{cap}** ({scope_label}{duration_info})")
+            if len(active) > 10:
+                lines.append(f"  - ... 외 {len(active) - 10}건")
+            lines.append("")
+
+        if pending:
+            lines.append("⏳ **승인 대기 중**")
+            for d in pending[:5]:
+                delegator = d.get("delegator_name", "?")
+                delegatee = d.get("delegatee_name", "?")
+                cap = d.get("capability_name") or d.get("capability_code", "?")
+                lines.append(f"  - {delegator} → {delegatee}: **{cap}**")
+            if len(pending) > 5:
+                lines.append(f"  - ... 외 {len(pending) - 5}건")
+            lines.append("")
+    else:
+        lines.append("등록된 위임이 없습니다.")
+        lines.append("")
+
+    for warning in contract.warnings:
+        lines.append(f"⚠️ {warning}")
+    if contract.warnings:
+        lines.append("")
+
+    _append_tips(lines, contract.tips)
+    lines.append(f"_데이터 출처: {contract.provenance}_")
+    return "\n".join(lines)
+
+
+def render_delegation_map(contract: ResponseContract) -> str:
+    """
+    위임 맵 렌더러.
+
+    재귀 위임 트리를 시각적으로 표현 + 깊이 경고.
+    """
+    lines = []
+
+    lines.append(f"🗺️ **위임 맵** (기준: {contract.reference_time})")
+    if contract.scope:
+        lines.append(f"📍 {contract.scope}")
+    lines.append("")
+
+    if contract.has_error():
+        for warning in contract.warnings:
+            lines.append(f"⚠️ {warning}")
+        lines.append("")
+        _append_tips(lines, contract.tips)
+        lines.append(f"_데이터 출처: {contract.provenance}_")
+        return "\n".join(lines)
+
+    data = contract.data
+    edges = data.get("edges", [])
+    max_depth = int(data.get("max_depth", 0) or 0)
+    root_count = int(data.get("root_count", 0) or 0)
+
+    lines.append(f"**위임 체인**: {root_count}개 루트 | 최대 깊이: {max_depth}")
+    if max_depth >= 3:
+        lines.append("⚠️ **재위임 깊이 경고** — 위임 체인이 깊어 관리에 주의가 필요합니다")
+    lines.append("")
+
+    if edges:
+        # 루트별 그룹화
+        by_root = {}
+        for edge in edges:
+            root = edge.get("root_delegator_name", "?")
+            if root not in by_root:
+                by_root[root] = []
+            by_root[root].append(edge)
+
+        for root_name, root_edges in by_root.items():
+            lines.append(f"🔹 **{root_name}** (원본 권한 보유자)")
+            for edge in root_edges:
+                depth = int(edge.get("depth", 1) or 1)
+                delegator = edge.get("delegator_name", "?")
+                delegatee = edge.get("delegatee_name", "?")
+                cap = edge.get("capability_code", "?")
+                indent = "  " * depth
+                arrow = "→" if depth == 1 else "↪"
+                lines.append(f"{indent}{arrow} {delegator} → {delegatee} (`{cap}`)")
+            lines.append("")
+    else:
+        lines.append("활성 위임 체인이 없습니다.")
+        lines.append("")
+
+    for warning in contract.warnings:
+        lines.append(f"⚠️ {warning}")
+    if contract.warnings:
+        lines.append("")
+
+    _append_tips(lines, contract.tips)
+    lines.append(f"_데이터 출처: {contract.provenance}_")
+    return "\n".join(lines)
+
+
+def render_governance_check(contract: ResponseContract) -> str:
+    """
+    거버넌스 검증 결과 렌더러.
+
+    findings 심각도별 그룹화 + 실시간 SoD 위반 + 권장 조치.
+    """
+    lines = []
+
+    lines.append(f"🛡️ **거버넌스 검증 결과** (기준: {contract.reference_time})")
+    if contract.scope:
+        lines.append(f"📍 {contract.scope}")
+    lines.append("")
+
+    if contract.has_error():
+        for warning in contract.warnings:
+            lines.append(f"⚠️ {warning}")
+        lines.append("")
+        _append_tips(lines, contract.tips)
+        lines.append(f"_데이터 출처: {contract.provenance}_")
+        return "\n".join(lines)
+
+    data = contract.data
+    findings = data.get("findings", [])
+    sod_violations = data.get("sod_violations", [])
+    finding_count = data.get("finding_count", len(findings))
+    sod_count = data.get("sod_count", len(sod_violations))
+
+    # 요약
+    lines.append(f"**검증 결과**: {finding_count}건 | **실시간 SoD 위반**: {sod_count}건")
+    lines.append("")
+
+    # findings 심각도별 그룹화
+    if findings:
+        severity_emoji = {"HIGH": "🔴", "MEDIUM": "🟠", "LOW": "🟡", "INFO": "🔵"}
+        severity_order = ["HIGH", "MEDIUM", "LOW", "INFO"]
+
+        by_severity = {}
+        for f in findings:
+            sev = f.get("severity", "INFO")
+            if sev not in by_severity:
+                by_severity[sev] = []
+            by_severity[sev].append(f)
+
+        for sev in severity_order:
+            if sev not in by_severity:
+                continue
+            sev_findings = by_severity[sev]
+            emoji = severity_emoji.get(sev, "⚪")
+            lines.append(f"{emoji} **{sev}** ({len(sev_findings)}건)")
+            for f in sev_findings[:5]:
+                finding_type = f.get("finding_type", "")
+                message = f.get("message", "")
+                user_name = f.get("user_name", "")
+                user_info = f" — {user_name}" if user_name else ""
+                type_label = _translate_finding_type(finding_type)
+                lines.append(f"  - [{type_label}]{user_info} {message[:80]}")
+            if len(sev_findings) > 5:
+                lines.append(f"  - ... 외 {len(sev_findings) - 5}건")
+            lines.append("")
+
+    # 실시간 SoD 위반
+    if sod_violations:
+        lines.append("🚨 **실시간 SoD(직무분리) 위반**")
+        for v in sod_violations[:10]:
+            user_name = v.get("user_name", "?")
+            cap_a = v.get("cap_a_code", "?")
+            cap_b = v.get("cap_b_code", "?")
+            severity = v.get("severity", "")
+            blocking = v.get("is_blocking", False)
+            block_label = " [차단]" if blocking else ""
+            lines.append(f"  - **{user_name}**: `{cap_a}` + `{cap_b}` ({severity}{block_label})")
+            desc = v.get("rule_description", "")
+            if desc:
+                lines.append(f"    └─ {desc[:60]}")
+        if len(sod_violations) > 10:
+            lines.append(f"  - ... 외 {len(sod_violations) - 10}건")
+        lines.append("")
+
+    if not findings and not sod_violations:
+        lines.append("✅ 검출된 거버넌스 이슈가 없습니다.")
+        lines.append("")
+
+    for warning in contract.warnings:
+        lines.append(f"⚠️ {warning}")
+    if contract.warnings:
+        lines.append("")
+
+    _append_tips(lines, contract.tips)
+    lines.append(f"_데이터 출처: {contract.provenance}_")
+    return "\n".join(lines)
+
+
+def _translate_finding_type(finding_type: str | None) -> str:
+    """거버넌스 검증 유형을 한글로 변환"""
+    if not finding_type:
+        return "기타"
+    translations = {
+        "SOD_VIOLATION": "SoD 위반",
+        "EXPIRED_DELEGATION": "만료 위임",
+        "EXPIRING_SOON": "만료 임박",
+        "DUPLICATE_CAPABILITY": "중복 권한",
+        "SELF_APPROVAL": "자기 승인",
+    }
+    return translations.get(finding_type, finding_type)
 
 
 def render_default(contract: ResponseContract) -> str:
